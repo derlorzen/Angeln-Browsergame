@@ -13,7 +13,7 @@ import {
 import { BaseRenderer, UNIT_SCALE, playerColor, type UIOverlay } from './view';
 
 const HW = TW / 2, HH = TH / 2;
-const CHUNK = 16;
+const CHUNK = 8;
 const isoX = (x: number, y: number) => (x - y) * HW;
 const isoY = (x: number, y: number) => (x + y) * HH;
 
@@ -432,9 +432,12 @@ export class PixiRenderer extends BaseRenderer {
       const rx = Math.min(r.x0, r.x1), ry = Math.min(r.y0, r.y1), rw = Math.abs(r.x1 - r.x0), rh = Math.abs(r.y1 - r.y0);
       sg.rect(rx, ry, rw, rh).fill({ color: 0xc8f096, alpha: 0.08 }).stroke({ width: 1, color: 0xd8f0a0 });
     }
+    const t1 = performance.now();
     this.app.render();
     this.stats.drawn = drawnTiles;
     this.stats.frameMs = performance.now() - t0;
+    this.stats.sceneMs = t1 - t0;
+    this.stats.submitMs = performance.now() - t1;
   }
 
   private drawMoor(now: number): void {

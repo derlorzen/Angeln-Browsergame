@@ -10,7 +10,7 @@ const check = (name, ok, info = '') => {
   results.push({ name, ok });
   console.log(`${ok ? '✔' : '✘'} ${name}${info ? ' – ' + info : ''}`);
 };
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium', args: process.env.NO_SWS ? [] : ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
@@ -183,7 +183,8 @@ try {
     const f = (t) => { d.push(t - last); last = t; if (t - t0 < 6000) requestAnimationFrame(f); else {
       d.sort((a, b) => a - b);
       const w = window.__game.driver.world;
-      res({ label, fps: d.length / 6, p50: d[Math.floor(d.length * 0.5)], p95: d[Math.floor(d.length * 0.95)], max: d[d.length - 1],
+      const st = window.__game.renderer.stats;
+      res({ label, scene: st.sceneMs, submit: st.submitMs, fps: d.length / 6, p50: d[Math.floor(d.length * 0.5)], p95: d[Math.floor(d.length * 0.95)], max: d[d.length - 1],
         render: window.__game.perfStats(), units: [...w.ents.values()].filter((e) => e.kind === 'u').length, visible: window.__game.client.units.size, tiles: window.__game.renderer.stats.drawn });
     } };
     requestAnimationFrame(f);
@@ -205,7 +206,7 @@ try {
     for (let i = 0; i < 50; i++) w.step();
     return (performance.now() - t0) / 50;
   });
-  for (const r of perf) check(`Leistung: ${r.label}`, true, `${r.units} Einheiten aktiv (${r.visible} sichtbar), ${r.fps.toFixed(0)} fps, Frameabstand p50 ${r.p50.toFixed(1)} / p95 ${r.p95.toFixed(1)} / max ${r.max.toFixed(1)} ms, JS-Zeichenzeit Ø ${r.render.avg.toFixed(1)} ms, ${r.tiles} Kacheln`);
+  for (const r of perf) check(`Leistung: ${r.label}`, true, `${r.units} Einheiten aktiv (${r.visible} sichtbar), ${r.fps.toFixed(0)} fps, Frameabstand p50 ${r.p50.toFixed(1)} / p95 ${r.p95.toFixed(1)} / max ${r.max.toFixed(1)} ms, JS-Zeichenzeit Ø ${r.render.avg.toFixed(1)} ms (davon Szenenaufbau ${r.scene.toFixed(1)} ms, WebGL-Übergabe ${r.submit.toFixed(1)} ms), ${r.tiles} Kacheln`);
   check('Simulation pro Takt', simMs < 10, `${simMs.toFixed(2)} ms/Takt (Budget 100 ms)`);
   check('Keine Skriptfehler', errors.length === 0, errors.join(' | '));
 } catch (e) {

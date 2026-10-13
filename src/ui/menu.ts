@@ -259,6 +259,15 @@ export class Menu {
     return i.mode === 'stun' ? `STUN: ${esc(i.stunUrl)}${i.turnUrl ? ' · eigener TURN' : ' · kein TURN'}` : `ohne ICE-Dienste (nur lokales Netz)${i.turnUrl ? ' · eigener TURN' : ''}`;
   }
 
+  /** Hinweis, wenn nur lokale Verbindungswege gefunden wurden. */
+  private reachNote(link: PeerLink): string {
+    const t = link.candidateTypes;
+    if (t.has('srflx') || t.has('relay')) return '';
+    return this.settings.ice.mode === 'stun'
+      ? ' Hinweis: Der STUN-Dienst war nicht erreichbar – vermutlich klappt die Verbindung nur im selben lokalen Netz.'
+      : ' Hinweis: ohne ICE-Dienste – nur im selben lokalen Netz bzw. auf demselben Gerät.';
+  }
+
   private closeLink(): void {
     if (this.link) {
       this.link.send({ t: 'bye', reason: 'Der Mitspieler hat abgebrochen.' });
@@ -305,7 +314,7 @@ export class Menu {
         this.link = link;
         box.querySelector<HTMLTextAreaElement>('[data-f=offer]')!.value = code;
         box.querySelector('[data-step2]')!.classList.remove('hidden');
-        st.textContent = `Einladung bereit (${code.length} Zeichen, Wege: ${[...link.candidateTypes].join(', ') || '–'}). Wartet auf Antwortcode …`;
+        st.textContent = `Einladung bereit (${code.length} Zeichen, Wege: ${[...link.candidateTypes].join(', ') || '–'}). Wartet auf Antwortcode …${this.reachNote(link)}`;
         link.onClose = (reason) => {
           if (this.link === link) setMsg(reason);
         };
@@ -398,7 +407,7 @@ export class Menu {
           lastOffer = offer;
           box.querySelector<HTMLTextAreaElement>('[data-f=ans]')!.value = code;
           box.querySelector('[data-step2]')!.classList.remove('hidden');
-          st.textContent = `Einladung von „${o.name ?? 'Host'}“ gültig. Antwortcode bereit (${code.length} Zeichen). Warte auf Verbindung …`;
+          st.textContent = `Einladung von „${o.name ?? 'Host'}“ gültig. Antwortcode bereit (${code.length} Zeichen). Warte auf Verbindung …${this.reachNote(link)}`;
           link.onClose = (reason) => {
             if (this.link === link) {
               setMsg(reason);

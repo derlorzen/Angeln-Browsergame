@@ -68,7 +68,7 @@ export abstract class BaseRenderer {
   private fogG: CanvasRenderingContext2D;
   private fogImg: ImageData;
   protected fogVersion = -1;
-  stats = { frameMs: 0, drawn: 0 };
+  stats = { frameMs: 0, drawn: 0, sceneMs: 0, submitMs: 0 };
   abstract readonly kind: 'canvas' | 'webgl';
 
   constructor(readonly canvas: HTMLCanvasElement, readonly c: ClientState) {

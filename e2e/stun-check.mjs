@@ -1,0 +1,10 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--disable-features=WebRtcHideLocalIpsWithMdns'] });
+const p = await b.newPage();
+await p.goto(process.env.BASE_URL ?? 'http://localhost:4173/');
+await p.click('[data-a=host]');
+const t0 = Date.now();
+await p.click('[data-a=make]');
+await p.waitForFunction(() => document.querySelector('[data-f=offer]')?.value.length > 50, null, { timeout: 30000 });
+console.log('Einladung nach', Date.now() - t0, 'ms;', await p.textContent('[data-st]'));
+await b.close();
