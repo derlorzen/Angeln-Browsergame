@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Angeln – Fürsten der Schlei</title>
+  <meta name="description" content="Echtzeit-Strategiespiel im Browser: Siedlungsbau, Fischfang und Handel in der Landschaft Angeln um 1600." />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="screen-menu" class="screen"></div>
+    <div id="screen-game" class="screen hidden">
+      <canvas id="view"></canvas>
+      <div id="topbar"></div>
+      <div id="msglog"></div>
+      <div id="tutorial" class="panel hidden"></div>
+      <div id="bottom">
+        <div id="mini-wrap" class="panel"><canvas id="minimap" width="236" height="118"></canvas></div>
+        <div id="selinfo" class="panel"></div>
+        <div id="cmdcard" class="panel"></div>
+      </div>
+      <div id="tooltip" class="hidden"></div>
+      <div id="dialog" class="hidden"></div>
+      <div id="perf" class="hidden"></div>
+    </div>
+  </div>
+  <noscript>Dieses Spiel benötigt JavaScript.</noscript>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
