@@ -9,7 +9,7 @@ const EXE = process.env.CHROME ?? '/opt/pw-browsers/chromium';
 const OUT = new URL('./out/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 // mDNS-Verschleierung lokaler Adressen abschalten, sonst können zwei Prozesse auf einem Rechner einander nicht auflösen
-const ARGS = ['--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-ui-for-media-stream'];
+const ARGS = ['--disable-features=WebRtcHideLocalIpsWithMdns', '--enable-unsafe-swiftshader', '--use-angle=swiftshader'];
 
 const results = [];
 const check = (name, ok, info = '') => {
@@ -26,7 +26,7 @@ async function newPlayer(label) {
   await page.goto(BASE);
   // ICE-Modus „ohne ICE-Dienste“ (kein externer STUN nötig, Test läuft lokal)
   await page.evaluate(() => {
-    localStorage.setItem('angeln-settings-v1', JSON.stringify({ name: 'x', ice: { mode: 'none', stunUrl: 'stun:stun.l.google.com:19302', turnUrl: '', turnUser: '', turnPass: '' }, tutorialDone: true }));
+    localStorage.setItem('angeln-settings-v1', JSON.stringify({ name: 'x', ice: { mode: 'none', stunUrl: 'stun:stun.l.google.com:19302', turnUrl: '', turnUser: '', turnPass: '' }, tutorialDone: true, renderer: 'auto' }));
   });
   await page.reload();
   return { browser, page, errors, label };

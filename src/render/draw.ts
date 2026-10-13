@@ -241,6 +241,15 @@ export function roof(
         g.lineTo(x + (r() - 0.5) * 2, y + 4 + r() * 3);
         g.stroke();
       }
+      // Moosflecken und Traufkante
+      for (let k = 0; k < 4; k++) {
+        const x = minX + r() * (maxX - minX), y = minY + (0.3 + r() * 0.6) * (maxY - minY);
+        const gr = g.createRadialGradient(x, y, 0, x, y, 7 + r() * 6);
+        gr.addColorStop(0, 'rgba(78,102,44,0.5)');
+        gr.addColorStop(1, 'rgba(78,102,44,0)');
+        g.fillStyle = gr;
+        g.fillRect(x - 14, y - 14, 28, 28);
+      }
     } else {
       // Ziegel/Schindeln: Reihen
       g.strokeStyle = shade(base, pl.light - 0.3);

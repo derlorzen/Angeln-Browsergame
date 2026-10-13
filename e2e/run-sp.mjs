@@ -10,19 +10,20 @@ const check = (name, ok, info = '') => {
   results.push({ name, ok });
   console.log(`${ok ? '✔' : '✘'} ${name}${info ? ' – ' + info : ''}`);
 };
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium', args: process.env.GPU ? [] : [] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium', args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 await page.goto(BASE);
-await page.evaluate(() => localStorage.clear());
+await page.evaluate((r) => { localStorage.clear(); localStorage.setItem('angeln-settings-v1', JSON.stringify({ name: 'Tester', tutorialDone: false, renderer: r })); }, process.env.RENDERER ?? 'auto');
 await page.reload();
 try {
   await page.click('[data-a=sp]');
   await page.click('[data-a=go]');
   await page.waitForFunction(() => window.__game?.client?.units?.size >= 5);
   await page.waitForTimeout(500);
+  check('Renderer', true, await page.evaluate(() => window.__game.renderer.kind));
   const g = () => page.evaluate(() => {
     const c = window.__game.client;
     return { res: c.players[c.me].res, pop: c.players[c.me].pop, tick: c.tick };

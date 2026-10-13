@@ -1,95 +1,34 @@
 // Canvas-2D-Darstellung. Liest nur den ClientState und Oberflächenzustand; verändert keine Simulation.
-import { BUILDINGS, RULES, UNITS, type BuildingType } from '../data/defs';
+import { BUILDINGS, RULES, UNITS } from '../data/defs';
 import type { CBuilding, CUnit, ClientState } from '../game/client';
-import { T, isWater } from '../sim/map';
+import { T } from '../sim/map';
+import { BaseRenderer, OK, UNIT_SCALE, playerColor, type Placement, type UIOverlay } from './view';
 import { S, TH, TW } from './draw';
 import {
-  NEUTRAL_COLOR, PLAYER_COLORS, buildingSprite, drawScaffold, foundationSprite, makeGate, makeKnicks, makeTerrain,
-  makeTrees, unitSprites, type BuildingSprite, type Sprite, type TerrainSprites,
+  buildingSprite, drawScaffold, foundationSprite, makeGate, makeKnicks, makeTerrain,
+  makeTrees, unitFrame, unitSprites, type BuildingSprite, type Sprite, type TerrainSprites,
 } from './sprites';
 
-export interface Camera {
-  x: number; // Bildmitte in Iso-Pixeln (Zoom 1)
-  y: number;
-  z: number;
-}
+export { playerColor };
+export type { Placement, UIOverlay };
 
-export interface Placement {
-  type: BuildingType;
-  x: number;
-  y: number;
-  valid: boolean;
-}
-
-export interface UIOverlay {
-  selected: Set<number>;
-  placement: Placement | null;
-  drag: { x0: number; y0: number; x1: number; y1: number } | null;
-  hover: number;
-}
-
-interface Effect {
-  k: 'shot' | 'ring' | 'die' | 'text' | 'dust';
-  x: number;
-  y: number;
-  tx?: number;
-  ty?: number;
-  t0: number;
-  dur: number;
-  color?: string;
-  text?: string;
-  r?: number;
-}
-
-const enum OK {
-  Tree,
-  Knick,
-  Gate,
-  Building,
-  Unit,
-  MoorSite,
-}
-
-const UNIT_SCALE = 1.25;
-
-export function playerColor(c: ClientState, owner: number): string {
-  if (owner < 0) return NEUTRAL_COLOR;
-  const p = c.players[owner];
-  return PLAYER_COLORS[(p?.color ?? owner) % PLAYER_COLORS.length];
-}
-
-export class Renderer {
+export class CanvasRenderer extends BaseRenderer {
+  readonly kind = 'canvas' as const;
   readonly g: CanvasRenderingContext2D;
-  cam: Camera = { x: 0, y: 0, z: 1 };
-  vw = 0;
-  vh = 0;
-  dpr = 1;
   private terrain: TerrainSprites;
   private trees: Sprite[];
   private knicks: Sprite[];
   private gates: Sprite[];
-  private fog: HTMLCanvasElement;
-  private fogG: CanvasRenderingContext2D;
-  private fogImg: ImageData;
-  private fogVersion = -1;
-  private effects: Effect[] = [];
   private objs: Float64Array = new Float64Array(0);
   private objCount = 0;
-  private fenceCache = new Map<number, [number, number, number, number][]>();
-  stats = { frameMs: 0, drawn: 0 };
 
-  constructor(readonly canvas: HTMLCanvasElement, readonly c: ClientState) {
+  constructor(canvas: HTMLCanvasElement, c: ClientState) {
+    super(canvas, c);
     this.g = canvas.getContext('2d', { alpha: false })!;
     this.terrain = makeTerrain();
     this.trees = makeTrees();
     this.knicks = makeKnicks();
     this.gates = [makeGate('x'), makeGate('y')];
-    const { w, h } = c.map;
-    this.fog = document.createElement('canvas');
-    this.fog.width = w;
-    this.fog.height = h;
-    this.fogG = this.fog.getContext('2d')!;
-    this.fogImg = this.fogG.createImageData(w, h);
   }
 
   resize(w: number, h: number): void {
@@ -100,53 +39,6 @@ export class Renderer {
     this.canvas.height = Math.round(h * this.dpr);
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
-  }
-
-  // ---------------------------------------------------------------- Koordinaten
-  toScreen(tx: number, ty: number): [number, number] {
-    const ix = (tx - ty) * (TW / 2), iy = (tx + ty) * (TH / 2);
-    return [(ix - this.cam.x) * this.cam.z + this.vw / 2, (iy - this.cam.y) * this.cam.z + this.vh / 2];
-  }
-  toTile(sx: number, sy: number): [number, number] {
-    const ix = (sx - this.vw / 2) / this.cam.z + this.cam.x;
-    const iy = (sy - this.vh / 2) / this.cam.z + this.cam.y;
-    return [(ix / (TW / 2) + iy / (TH / 2)) / 2, (iy / (TH / 2) - ix / (TW / 2)) / 2];
-  }
-  centerOn(tx: number, ty: number): void {
-    this.cam.x = (tx - ty) * (TW / 2);
-    this.cam.y = (tx + ty) * (TH / 2);
-    this.clampCam();
-  }
-  clampCam(): void {
-    const { w, h } = this.c.map;
-    this.cam.x = Math.max(-h * (TW / 2), Math.min(w * (TW / 2), this.cam.x));
-    this.cam.y = Math.max(0, Math.min((w + h) * (TH / 2), this.cam.y));
-  }
-  zoomAt(sx: number, sy: number, factor: number): void {
-    const [tx, ty] = this.toTile(sx, sy);
-    this.cam.z = Math.max(0.5, Math.min(2, this.cam.z * factor));
-    const [nx, ny] = this.toTile(sx, sy);
-    this.cam.x += ((tx - ty) - (nx - ny)) * (TW / 2);
-    this.cam.y += ((tx + ty) - (nx + ny)) * (TH / 2);
-    this.clampCam();
-  }
-
-  // ---------------------------------------------------------------- Effekte
-  addEffect(e: Effect): void {
-    if (this.effects.length < 400) this.effects.push(e);
-  }
-  marker(x: number, y: number, color: string, now: number): void {
-    this.addEffect({ k: 'ring', x, y, t0: now, dur: 600, color });
-  }
-  floatText(x: number, y: number, text: string, color: string, now: number): void {
-    this.addEffect({ k: 'text', x, y, t0: now, dur: 1800, text, color });
-  }
-  shot(x: number, y: number, tx: number, ty: number, now: number, arrow: boolean): void {
-    const d = Math.hypot(tx - x, ty - y);
-    this.addEffect({ k: 'shot', x, y, tx, ty, t0: now, dur: 120 + d * 60, r: arrow ? 1 : 0 });
-  }
-  death(x: number, y: number, unit: boolean, now: number): void {
-    this.addEffect({ k: unit ? 'die' : 'dust', x, y, t0: now, dur: unit ? 3500 : 2500 });
   }
 
   // ---------------------------------------------------------------- Frame
@@ -270,7 +162,7 @@ export class Renderer {
     this.drawEffects(now);
 
     // 4) Kriegsnebel
-    if (this.fogVersion !== c.visVersion) this.updateFog();
+    this.refreshFog();
     g.save();
     g.setTransform(
       (TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr, -(TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr,
@@ -328,7 +220,8 @@ export class Renderer {
 
   private drawSprite(s: Sprite, sx: number, sy: number, scale = 1, flip = false): void {
     const z = this.cam.z * scale;
-    const w = (s.c.width / S) * z, h = (s.c.height / S) * z;
+    const r = s.res ?? S;
+    const w = (s.c.width / r) * z, h = (s.c.height / r) * z;
     if (sx + w < -50 || sx - w > this.vw + 50 || sy + h < -50 || sy - h > this.vh + 200) return;
     if (flip) {
       this.g.save();
@@ -469,35 +362,7 @@ export class Renderer {
   }
 
   private drawFences(b: CBuilding, sx: number, sy: number): void {
-    let fences = this.fenceCache.get(b.i);
-    const m = this.c.map;
-    if (!fences) {
-      // Richtung zum Wasser bestimmen und trichterförmige Flechtzäune hineinführen
-      let wx = 0, wy = 0;
-      for (let dy = -2; dy <= 3; dy++)
-        for (let dx = -2; dx <= 3; dx++) {
-          const x = b.x + dx, y = b.y + dy;
-          if (x < 0 || y < 0 || x >= m.w || y >= m.h) continue;
-          if (isWater(m.terrain[y * m.w + x])) {
-            wx += dx - 0.5;
-            wy += dy - 0.5;
-          }
-        }
-      const l = Math.hypot(wx, wy) || 1;
-      wx /= l;
-      wy /= l;
-      const cx = b.x + 1 + wx * 1.1, cy = b.y + 1 + wy * 1.1;
-      const px = -wy, py = wx;
-      fences = [];
-      const tipX = cx + wx * 2.6, tipY = cy + wy * 2.6;
-      fences.push([cx + px * 1.4, cy + py * 1.4, tipX, tipY]);
-      fences.push([cx - px * 1.4, cy - py * 1.4, tipX, tipY]);
-      fences.push([tipX, tipY, tipX + wx * 1.2 + px * 0.6, tipY + wy * 1.2 + py * 0.6]);
-      fences.push([tipX, tipY, tipX + wx * 1.2 - px * 0.6, tipY + wy * 1.2 - py * 0.6]);
-      this.fenceCache.set(b.i, fences);
-    }
-    void sx;
-    void sy;
+    const fences = this.fences(b);
     const g = this.g, z = this.cam.z;
     for (const [ax, ay, bx, by] of fences) {
       const n = Math.max(3, Math.round(Math.hypot(bx - ax, by - ay) * 4));
@@ -548,6 +413,16 @@ export class Renderer {
       g.strokeStyle = 'rgba(80,60,40,0.6)';
       g.lineWidth = 1;
       g.stroke();
+      g.beginPath();
+      for (let q = 1; q < 5; q++) {
+        const t = 0.25 + (q / 5) * 0.75;
+        g.moveTo(ex * t, ey * t);
+        g.lineTo(ex * t + nx, ey * t + ny);
+      }
+      g.moveTo(ex * 0.25 + nx * 0.5, ey * 0.25 + ny * 0.5);
+      g.lineTo(ex + nx * 0.5, ey + ny * 0.5);
+      g.lineWidth = 0.6;
+      g.stroke();
     }
     g.fillStyle = '#3a2818';
     g.beginPath();
@@ -574,9 +449,7 @@ export class Renderer {
     const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
     const [sx, sy] = this.toScreen(ux, uy);
     const frames = unitSprites(u.t, playerColor(this.c, u.o));
-    let f = 0;
-    if (u.a === 1) f = 1 + (Math.floor(now / 180 + u.i) % 2);
-    else if (u.a === 2 || u.a === 3) f = 3 + (Math.floor(now / (u.a === 3 ? 260 : 320) + u.i) % 2);
+    const f = unitFrame(u.a, now, u.i);
     this.drawSprite(frames[f], sx, sy, UNIT_SCALE, u.f < 0);
     const g = this.g;
     if (u.c && u.t === 'arbeiter') {
@@ -627,7 +500,7 @@ export class Renderer {
 
   private drawEffects(now: number): void {
     const g = this.g, z = this.cam.z;
-    this.effects = this.effects.filter((e) => now - e.t0 < e.dur);
+    this.pruneEffects(now);
     for (const e of this.effects) {
       const k = (now - e.t0) / e.dur;
       if (e.k === 'shot') {
@@ -692,53 +565,6 @@ export class Renderer {
     }
   }
 
-  private updateFog(): void {
-    const v = this.c.vis;
-    const d = this.fogImg.data;
-    for (let i = 0; i < v.length; i++) {
-      d[i * 4] = 11;
-      d[i * 4 + 1] = 13;
-      d[i * 4 + 2] = 8;
-      d[i * 4 + 3] = v[i] === 0 ? 255 : v[i] === 1 ? 120 : 0;
-    }
-    this.fogG.putImageData(this.fogImg, 0, 0);
-    this.fogVersion = this.c.visVersion;
-  }
-
-  /** Objekt unter dem Mauszeiger: Einheit (nach Sprite-Box) oder Gebäude (nach Kachel). */
-  pick(sx: number, sy: number, now: number): number {
-    const c = this.c, z = this.cam.z;
-    const alpha = Math.min(1, Math.max(0, (now - c.snapTime) / (1000 / RULES.tickRate)));
-    let best = 0, bd = Infinity;
-    for (const u of c.units.values()) {
-      const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
-      const [px, py] = this.toScreen(ux, uy);
-      const hw = (u.t === 'spaeher' ? 14 : 9) * z * UNIT_SCALE, hh = (u.t === 'spaeher' ? 30 : 26) * z * UNIT_SCALE;
-      if (sx >= px - hw && sx <= px + hw && sy >= py - hh && sy <= py + 4 * z) {
-        const d = Math.abs(sx - px) + Math.abs(sy - (py - hh / 2));
-        if (d < bd) {
-          bd = d;
-          best = u.i;
-        }
-      }
-    }
-    if (best) return best;
-    const [tx, ty] = this.toTile(sx, sy);
-    const x = Math.floor(tx), y = Math.floor(ty);
-    if (x >= 0 && y >= 0 && x < c.map.w && y < c.map.h) {
-      const id = c.occ[y * c.map.w + x];
-      if (id) return id;
-    }
-    // Gebäude auch über ihre Höhe anklickbar (Kachel unterhalb prüfen)
-    for (let k = 1; k <= 2; k++) {
-      const xx = Math.floor(tx + k * 0.7), yy = Math.floor(ty + k * 0.7);
-      if (xx >= 0 && yy >= 0 && xx < c.map.w && yy < c.map.h) {
-        const id = c.occ[yy * c.map.w + xx];
-        if (id) return id;
-      }
-    }
-    return 0;
-  }
 }
 
 // ------------------------------------------------------------------ Minikarte
@@ -780,7 +606,7 @@ export class Minimap {
     return [(a + b) / 2, (b - a) / 2];
   }
 
-  draw(r: Renderer): void {
+  draw(r: BaseRenderer): void {
     const g = this.canvas.getContext('2d')!;
     const c = this.c;
     const { w, h } = c.map;

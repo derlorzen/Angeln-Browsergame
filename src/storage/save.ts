@@ -9,10 +9,11 @@ export interface Settings {
   name: string;
   ice: IceSettings;
   tutorialDone: boolean;
+  renderer: 'auto' | 'canvas';
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -21,6 +22,7 @@ export function loadSettings(): Settings {
       name: typeof s.name === 'string' ? s.name.slice(0, 20) : def.name,
       ice: { ...DEFAULT_ICE, ...(s.ice ?? {}), mode: s.ice?.mode === 'none' ? 'none' : 'stun' },
       tutorialDone: !!s.tutorialDone,
+      renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
     };
   } catch {
     return def;

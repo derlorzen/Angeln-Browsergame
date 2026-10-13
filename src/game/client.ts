@@ -33,6 +33,7 @@ export class ClientState {
   goal = 0;
   events: SimEvent[] = [];
   visVersion = 0;
+  occVersion = 0;
   ack = 0;
   private occDirty = true;
   /** Wenn gesetzt (lokaler Host), wird die Sichtbarkeit direkt übernommen statt neu berechnet. */
@@ -151,6 +152,7 @@ export class ClientState {
       for (const f of b.f ?? []) if (f >= 0 && f < this.fieldOcc.length) this.fieldOcc[f] = 1;
     }
     this.occDirty = false;
+    this.occVersion++;
   }
 
   placementView(): PlacementView {

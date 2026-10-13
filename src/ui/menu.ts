@@ -7,7 +7,8 @@ import { Game } from '../game/game';
 import { PeerLink } from '../net/peer';
 import { PROTOCOL_VERSION, parseGuestMsg, parseHostMsg, type HostMsg, type LobbyState } from '../net/protocol';
 import { SignalError } from '../net/signal';
-import { Renderer } from '../render/renderer';
+import { createRenderer } from '../render/factory';
+import type { BaseRenderer } from '../render/view';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES } from '../render/sprites';
 import { World } from '../sim/world';
 import { loadSettings, readSave, saveSettings, writeSave, type Settings } from '../storage/save';
@@ -21,7 +22,7 @@ export class Menu {
   private settings: Settings = loadSettings();
   private game: Game | null = null;
   private link: PeerLink | null = null;
-  private bg: { r: Renderer; raf: number } | null = null;
+  private bg: { r: BaseRenderer | null; raf: number; alive: boolean } | null = null;
 
   start(): void {
     this.main();
@@ -46,24 +47,31 @@ export class Menu {
     fake(4, 'wohnhaus', sl.x + 1, sl.y - 4);
     fake(5, 'bauernhof', sl.x - 4, sl.y + 5);
     fake(6, 'raeucherei', sl.x + 4, sl.y + 3);
-    const r = new Renderer(cv, c);
-    const resize = () => r.resize(window.innerWidth, window.innerHeight);
-    resize();
-    window.addEventListener('resize', resize);
-    r.cam.z = 1.2;
-    const t0 = performance.now();
-    const loop = (t: number) => {
-      if (!this.bg) return;
-      this.bg.raf = requestAnimationFrame(loop);
-      const k = (t - t0) / 1000;
-      r.centerOn(sl.x + 1.5 + Math.sin(k * 0.05) * 4, sl.y + 2.5 + Math.cos(k * 0.04) * 3);
-      r.frame(t, { selected: new Set(), placement: null, drag: null, hover: 0 });
-    };
-    this.bg = { r, raf: requestAnimationFrame(loop) };
+    const bg: { r: BaseRenderer | null; raf: number; alive: boolean } = { r: null, raf: 0, alive: true };
+    this.bg = bg;
+    void createRenderer(cv, c, this.settings.renderer).then((r) => {
+      if (!bg.alive) return r.destroy();
+      bg.r = r;
+      const resize = () => bg.alive && r.resize(window.innerWidth, window.innerHeight);
+      resize();
+      window.addEventListener('resize', resize);
+      r.cam.z = 1.2;
+      const t0 = performance.now();
+      const loop = (t: number) => {
+        if (!bg.alive) return;
+        bg.raf = requestAnimationFrame(loop);
+        const k = (t - t0) / 1000;
+        r.centerOn(sl.x + 1.5 + Math.sin(k * 0.05) * 4, sl.y + 2.5 + Math.cos(k * 0.04) * 3);
+        r.frame(t, { selected: new Set(), placement: null, drag: null, hover: 0 });
+      };
+      bg.raf = requestAnimationFrame(loop);
+    });
   }
   private stopBackdrop(): void {
     if (!this.bg) return;
     cancelAnimationFrame(this.bg.raf);
+    this.bg.alive = false;
+    this.bg.r?.destroy();
     this.bg = null;
     document.getElementById('menu-bg')?.remove();
   }
@@ -162,11 +170,11 @@ export class Menu {
   private launchLocal(world: World, tutorial: boolean, aiStates?: import('../ai/ai').AIState[]): void {
     const driver = new LocalDriver(world, 0, aiStates);
     this.enterGame(
-      () => new Game(driver, {
+      () => Game.create(driver, {
         tutorial,
         onExit: () => this.exitGame(),
         onSave: () => writeSave({ v: 1, savedAt: Date.now(), me: 0, world: world.serialize(), ais: driver.ais.map((a) => a.s), tutorial }),
-      }),
+      }, this.settings.renderer),
     );
   }
 
@@ -181,11 +189,19 @@ export class Menu {
     }
   }
 
-  private enterGame(make: () => Game): void {
+  private enterGame(make: () => Promise<Game>): void {
     this.stopBackdrop();
     this.root.classList.add('hidden');
-    this.game = make();
-    (window as unknown as { __game: Game }).__game = this.game;
+    void make().then(
+      (g) => {
+        this.game = g;
+        (window as unknown as { __game: Game }).__game = g;
+      },
+      (e) => {
+        alert('Die Partie konnte nicht gestartet werden: ' + (e as Error).message);
+        this.main();
+      },
+    );
   }
 
   private exitGame(): void {
@@ -200,6 +216,7 @@ export class Menu {
     const ice = this.settings.ice;
     const box = this.show(`<h2>Einstellungen &amp; Netzwerk</h2>
       <div class="row"><label>Spielername</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
+      <div class="row"><label>Grafik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
       <h3>Verbindungshilfen (ICE)</h3>
       <div class="row"><label><input type="radio" name="ice" value="stun" ${ice.mode === 'stun' ? 'checked' : ''}> STUN verwenden</label>
         <input type="text" data-f="stun" size="34" value="${esc(ice.stunUrl)}"></div>
@@ -228,6 +245,7 @@ export class Menu {
           return;
         }
         this.settings.name = v('name').slice(0, 20) || 'Spieler';
+        this.settings.renderer = box.querySelector<HTMLSelectElement>('[data-f=renderer]')!.value === 'canvas' ? 'canvas' : 'auto';
         this.settings.ice = { mode, stunUrl: stun, turnUrl: turn, turnUser: v('tu'), turnPass: v('tp') };
         saveSettings(this.settings);
         msg.className = 'ok';
@@ -466,7 +484,7 @@ export class Menu {
           });
           const driver = new HostDriver(world, link);
           this.link = null; // gehört jetzt dem Treiber
-          this.enterGame(() => new Game(driver, { tutorial: false, onExit: () => this.exitGame() }));
+          this.enterGame(() => Game.create(driver, { tutorial: false, onExit: () => this.exitGame() }, this.settings.renderer));
         },
       });
     };
@@ -545,7 +563,7 @@ export class Menu {
         started = true;
         const driver = new GuestDriver(m.seed, m.me, link);
         this.link = null;
-        this.enterGame(() => new Game(driver, { tutorial: false, onExit: () => this.exitGame() }));
+        this.enterGame(() => Game.create(driver, { tutorial: false, onExit: () => this.exitGame() }, this.settings.renderer));
       } else if (m.t === 'bye') {
         const box = this.show(`<h2>Lobby geschlossen</h2><p>${esc(m.reason)}</p><div class="row"><button class="btn" data-a="back">Zum Hauptmenü</button></div>`);
         this.bind(box, { back: () => this.main() });

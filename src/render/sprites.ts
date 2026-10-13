@@ -1,9 +1,10 @@
 // Prozedural erzeugte, gecachte Sprites: Gelände, Bäume, Knicks, Gebäude, Einheiten, Symbole.
 import type { BuildingType, Res, UnitType } from '../data/defs';
 import {
-  S, TH, TW, Iso, boxFaces, bush, canvas, doorOn, fillFace, flag, ground, poly, prng, roof, shade, shadowDiamond,
-  wall, windowOn, type Ctx, type Pt,
+  S, TH, TW, Iso, boxFaces, bush, canvas, faceAt, fillFace, flag, ground, poly, prng, roof, shade, shadowDiamond,
+  wall, windowOn, type Ctx, type Face, type Pt,
 } from './draw';
+import { brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
 
 export const PLAYER_COLORS = ['#b3342b', '#2f5ea6', '#d4a21f', '#3f8a3c'];
 export const PLAYER_COLOR_NAMES = ['Ziegelrot', 'Schleiblau', 'Ockergelb', 'Knickgrün'];
@@ -13,6 +14,7 @@ export interface Sprite {
   c: HTMLCanvasElement;
   ax: number; // Ankerpunkt in 1x-Pixeln
   ay: number;
+  res?: number; // Pixel je 1x-Pixel (Standard: S)
 }
 
 // ------------------------------------------------------------------ Gelände
@@ -419,83 +421,207 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
   const { g, iso } = B;
   const out: BuildingSprite = { c: B.c, ax: B.ax, ay: B.ay };
   const to1x = (p: Pt): Pt => [p[0] / S - B.ax, p[1] / S - B.ay];
+  // Wand mit Schattierung (Dachüberstand oben, Fuß unten)
+  const W = (f: Face, mat: Parameters<typeof wall>[2], light: number, seed: number, opts: { sockel?: boolean; ausfachung?: boolean } = {}) => {
+    wall(g, f, mat, light, seed);
+    if (opts.ausfachung) {
+      brickNogging(g, f, light, seed + 7);
+      // Balken über der Ausfachung erneut zeichnen
+      g.save();
+      g.globalAlpha = 0.95;
+      const posts = Math.max(2, Math.round(Math.hypot(f.br[0] - f.bl[0], f.br[1] - f.bl[1]) / 18));
+      g.strokeStyle = shade('#4a3222', light);
+      g.lineWidth = 3;
+      const line = (u0: number, v0: number, u1: number, v1: number) => {
+        const a = faceAt(f, u0, v0), b = faceAt(f, u1, v1);
+        g.beginPath();
+        g.moveTo(a[0], a[1]);
+        g.lineTo(b[0], b[1]);
+        g.stroke();
+      };
+      line(0, 0.5, 1, 0.5);
+      for (let c = 0; c <= posts; c++) line(c / posts, 0, c / posts, 1);
+      g.restore();
+    }
+    if (opts.sockel) plinth(g, f, 0.16, light, seed + 3);
+    wallShading(g, f);
+  };
   switch (type) {
     case 'dorfzentrum': {
       ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#8d8573');
       const r = prng(5);
-      for (let k = 0; k < 90; k++) {
+      for (let k = 0; k < 140; k++) {
         const p = iso.p(0.1 + r() * 2.8, 0.1 + r() * 2.8);
         g.fillStyle = r() < 0.5 ? '#7d7563' : '#a39a86';
         g.fillRect(p[0], p[1], 5, 3);
       }
+      // Ziehbrunnen und Karren im Hof
+      const wb = iso.p(0.45, 2.45);
+      g.fillStyle = '#7d7a72';
+      g.beginPath();
+      g.ellipse(wb[0], wb[1] - 4, 10, 5, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#2f4a5c';
+      g.beginPath();
+      g.ellipse(wb[0], wb[1] - 6, 7, 3.4, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#5a3d22';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(wb[0] - 8, wb[1] - 4);
+      g.lineTo(wb[0] - 8, wb[1] - 22);
+      g.lineTo(wb[0] + 8, wb[1] - 22);
+      g.lineTo(wb[0] + 8, wb[1] - 4);
+      g.stroke();
+      poly(g, [[wb[0] - 11, wb[1] - 21], [wb[0], wb[1] - 30], [wb[0] + 11, wb[1] - 21]], '#8e3a27');
       shadowDiamond(g, iso, 0.3, 0.3, 2.5, 2.1);
       const f = boxFaces(iso, 0.3, 0.35, 2.4, 2.0, 0, 30);
-      wall(g, f.left, 'ziegel', 0.05, 2);
-      wall(g, f.right, 'ziegel', -0.2, 3);
-      doorOn(g, f.left, 0.42, 0.16, 0.55, 0.05);
-      windowOn(g, f.left, 0.12, 0.45, 0.1, 0.25, 0.05);
-      windowOn(g, f.left, 0.72, 0.45, 0.1, 0.25, 0.05);
-      windowOn(g, f.right, 0.25, 0.45, 0.14, 0.25, -0.2);
-      windowOn(g, f.right, 0.62, 0.45, 0.14, 0.25, -0.2);
+      W(f.left, 'ziegel', 0.05, 2, { sockel: true });
+      W(f.right, 'ziegel', -0.2, 3, { sockel: true });
+      plankDoor(g, f.left, 0.42, 0.14, 0.58, 0.05, '#6a3a22');
+      window4(g, f.left, 0.1, 0.42, 0.09, 0.3, 0.05, '#3f5a3a');
+      window4(g, f.left, 0.25, 0.42, 0.09, 0.3, 0.05, '#3f5a3a');
+      window4(g, f.left, 0.68, 0.42, 0.09, 0.3, 0.05, '#3f5a3a');
+      window4(g, f.left, 0.83, 0.42, 0.09, 0.3, 0.05, '#3f5a3a');
+      window4(g, f.right, 0.3, 0.42, 0.14, 0.3, -0.2);
       roof(g, iso, 0.3, 0.35, 2.4, 2.0, 30, 30, 'x', 'ziegel', 0, 9);
-      // Turm mit Glocke
+      steppedGable(g, iso, 2.4, 0.35, 2.0, 30, 30, 4);
+      out.smoke = [chimney(g, iso, 0.9, 1.0, 44, 18)].map(to1x);
+      // Turm mit Glockenstube, Uhr und Wetterfahne
       const t = boxFaces(iso, 2.0, 1.95, 2.75, 2.7, 0, 62);
-      wall(g, t.left, 'ziegel', 0.05, 4);
-      wall(g, t.right, 'ziegel', -0.2, 5);
-      windowOn(g, t.left, 0.35, 0.7, 0.3, 0.18, 0.1);
-      windowOn(g, t.right, 0.35, 0.7, 0.3, 0.18, -0.2);
+      W(t.left, 'ziegel', 0.05, 4, { sockel: true });
+      W(t.right, 'ziegel', -0.2, 5, { sockel: true });
+      plankDoor(g, t.left, 0.32, 0.36, 0.2, 0.05, '#6a3a22');
+      window4(g, t.left, 0.38, 0.45, 0.24, 0.14, 0.05);
+      windowOn(g, t.left, 0.3, 0.76, 0.4, 0.14, 0.1);
+      windowOn(g, t.right, 0.3, 0.76, 0.4, 0.14, -0.2);
+      const cl = faceAt(t.right, 0.5, 0.56);
+      g.fillStyle = '#efe6cc';
+      g.beginPath();
+      g.ellipse(cl[0], cl[1], 6, 7, -0.45, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#2a2420';
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.moveTo(cl[0], cl[1]);
+      g.lineTo(cl[0] + 1, cl[1] - 4);
+      g.moveTo(cl[0], cl[1]);
+      g.lineTo(cl[0] + 3, cl[1] + 1);
+      g.stroke();
       roof(g, iso, 2.0, 1.95, 2.75, 2.7, 62, 30, 'x', 'ziegel', 0.37, 12);
       const fp = iso.p(2.375, 2.325, 92);
       flag(g, fp[0], fp[1], 22, color, 2);
       out.flagPt = to1x(fp);
-      out.smoke = [to1x(iso.p(0.9, 0.9, 64))];
-      // Brunnen/Kisten
-      barrel(g, ...iso.p(0.4, 2.6));
-      sack(g, ...iso.p(0.8, 2.75));
+      // Wappenbanner an der Hauswand
+      const bn = faceAt(f.left, 0.56, 0.9);
+      g.fillStyle = color;
+      g.beginPath();
+      g.moveTo(bn[0] - 5, bn[1]);
+      g.lineTo(bn[0] + 5, bn[1] + 2.5);
+      g.lineTo(bn[0] + 5, bn[1] + 20);
+      g.lineTo(bn[0], bn[1] + 16);
+      g.lineTo(bn[0] - 5, bn[1] + 18);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#e8d890';
+      g.beginPath();
+      g.arc(bn[0], bn[1] + 9, 2.4, 0, Math.PI * 2);
+      g.fill();
+      cart(g, iso, 0.9, 2.5, 'saecke');
+      barrel(g, ...iso.p(2.75, 0.4));
+      barrel(g, ...iso.p(2.85, 0.65), 0.8);
+      crate(g, iso, 2.6, 1.0);
+      chicken(g, ...iso.p(1.6, 2.6), 1);
+      chicken(g, ...iso.p(1.85, 2.75), -1);
+      tinyPerson(g, ...iso.p(1.4, 2.3), '#6a5a8a', '#3a3020', 3);
       break;
     }
     case 'wohnhaus': {
-      ground(g, iso, 0.15, 0.15, 1.85, 1.85, '#7a8a48');
+      ground(g, iso, 0.12, 0.12, 1.88, 1.88, '#7a8a48');
+      flowers(g, iso, 0.2, 1.68, 1.0, 1.88, 12);
+      wattle(g, iso, [[0.12, 1.92], [1.15, 1.92]], 7);
       shadowDiamond(g, iso, 0.35, 0.45, 1.75, 1.6);
-      const f = boxFaces(iso, 0.35, 0.45, 1.75, 1.6, 0, 20);
-      wall(g, f.left, 'fachwerk', 0.08, 1);
-      wall(g, f.right, 'fachwerk', -0.15, 2);
-      doorOn(g, f.left, 0.38, 0.17, 0.7, 0.08, color);
-      windowOn(g, f.left, 0.1, 0.4, 0.14, 0.3, 0.08);
-      windowOn(g, f.left, 0.72, 0.4, 0.14, 0.3, 0.08);
-      windowOn(g, f.right, 0.38, 0.4, 0.22, 0.3, -0.15);
-      roof(g, iso, 0.35, 0.45, 1.75, 1.6, 20, 26, 'x', 'reet', 0.3, 21);
-      const ch = iso.p(0.75, 1.0, 46);
-      g.fillStyle = '#8d3e2b';
-      g.fillRect(ch[0] - 4, ch[1] - 8, 8, 12);
-      out.smoke = [to1x([ch[0], ch[1] - 10])];
+      const f = boxFaces(iso, 0.35, 0.45, 1.75, 1.55, 0, 20);
+      W(f.left, 'fachwerk', 0.08, 1, { sockel: true, ausfachung: true });
+      W(f.right, 'fachwerk', -0.15, 2, { sockel: true, ausfachung: true });
+      plankDoor(g, f.left, 0.4, 0.17, 0.72, 0.08, color);
+      window4(g, f.left, 0.1, 0.42, 0.13, 0.3, 0.08, '#3f5a3a');
+      window4(g, f.left, 0.74, 0.42, 0.13, 0.3, 0.08, '#3f5a3a');
+      window4(g, f.right, 0.36, 0.42, 0.24, 0.3, -0.15);
+      roof(g, iso, 0.35, 0.45, 1.75, 1.55, 20, 26, 'x', 'reet', 0.3, 21);
+      const eb = iso.p(1.05, 1.45, 27);
+      eyebrow(g, eb[0], eb[1], 24);
+      out.smoke = [chimney(g, iso, 0.8, 0.95, 40, 6)].map(to1x);
+      woodpile(g, iso, 1.78, 0.5, 3);
+      // Bank vor dem Haus
+      const bk = iso.p(1.2, 1.7);
+      g.fillStyle = '#7a5634';
+      g.fillRect(bk[0] - 8, bk[1] - 6, 16, 2.5);
+      g.fillRect(bk[0] - 7, bk[1] - 4, 2, 4);
+      g.fillRect(bk[0] + 5, bk[1] - 4, 2, 4);
       break;
     }
     case 'holzfaeller': {
       ground(g, iso, 0.1, 0.1, 1.9, 1.9, '#7d7046');
+      // Sägespäne
+      const r = prng(31);
+      for (let k = 0; k < 40; k++) {
+        const p = iso.p(0.3 + r() * 1.5, 1.1 + r() * 0.7);
+        g.fillStyle = r() < 0.5 ? '#c9a46a' : '#a88450';
+        g.fillRect(p[0], p[1], 2, 1.5);
+      }
       shadowDiamond(g, iso, 0.3, 0.25, 1.6, 1.1);
       const f = boxFaces(iso, 0.3, 0.25, 1.6, 1.1, 0, 20);
-      wall(g, f.left, 'holz', 0.05, 2);
-      wall(g, f.right, 'holz', -0.2, 3);
-      doorOn(g, f.left, 0.55, 0.3, 0.8, 0.0, '#3a2818');
+      W(f.left, 'holz', 0.05, 2);
+      W(f.right, 'holz', -0.2, 3);
+      plankDoor(g, f.left, 0.55, 0.3, 0.8, 0.0, '#3a2818');
+      window4(g, f.right, 0.35, 0.45, 0.3, 0.25, -0.2);
       roof(g, iso, 0.3, 0.25, 1.6, 1.1, 20, 14, 'x', 'schindel', 0, 31);
-      logs(g, ...iso.p(0.5, 1.6), 4);
-      // Hackklotz mit Axt
-      const hb = iso.p(1.5, 1.5);
+      // Werkzeug an der Wand
+      const tw = faceAt(f.left, 0.2, 0.6);
+      g.strokeStyle = '#6b4a2c';
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(tw[0], tw[1]);
+      g.lineTo(tw[0] + 3, tw[1] - 16);
+      g.stroke();
+      g.fillStyle = '#a8aeb4';
+      g.fillRect(tw[0] + 1, tw[1] - 18, 5, 4);
+      // Holzstapel, Sägebock mit Stamm, Hackklotz
+      woodpile(g, iso, 0.35, 1.55, 5);
+      woodpile(g, iso, 1.05, 1.75, 3);
+      const sb = iso.p(1.45, 1.35);
+      g.strokeStyle = '#5a3d22';
+      g.lineWidth = 2;
+      for (const dx of [-8, 8]) {
+        g.beginPath();
+        g.moveTo(sb[0] + dx - 4, sb[1]);
+        g.lineTo(sb[0] + dx + 4, sb[1] - 12);
+        g.moveTo(sb[0] + dx + 4, sb[1]);
+        g.lineTo(sb[0] + dx - 4, sb[1] - 12);
+        g.stroke();
+      }
+      g.fillStyle = '#7a5634';
+      g.fillRect(sb[0] - 16, sb[1] - 13, 32, 5);
+      g.fillStyle = '#d0a870';
+      g.beginPath();
+      g.ellipse(sb[0] + 16, sb[1] - 10.5, 2.5, 2.5, 0, 0, Math.PI * 2);
+      g.fill();
+      const hb = iso.p(1.75, 1.75);
       g.fillStyle = '#6b4a2c';
-      g.fillRect(hb[0] - 7, hb[1] - 10, 14, 10);
+      g.fillRect(hb[0] - 6, hb[1] - 9, 12, 9);
       g.fillStyle = '#c9a16a';
       g.beginPath();
-      g.ellipse(hb[0], hb[1] - 10, 7, 3.5, 0, 0, Math.PI * 2);
+      g.ellipse(hb[0], hb[1] - 9, 6, 3, 0, 0, Math.PI * 2);
       g.fill();
       g.strokeStyle = '#5a3d22';
       g.lineWidth = 2.5;
       g.beginPath();
-      g.moveTo(hb[0], hb[1] - 11);
-      g.lineTo(hb[0] + 10, hb[1] - 26);
+      g.moveTo(hb[0], hb[1] - 10);
+      g.lineTo(hb[0] + 9, hb[1] - 24);
       g.stroke();
       g.fillStyle = '#9aa0a6';
-      g.fillRect(hb[0] - 3, hb[1] - 15, 6, 6);
+      g.fillRect(hb[0] - 3, hb[1] - 14, 6, 5);
       const fp = iso.p(1.75, 0.3, 0);
       flag(g, fp[0], fp[1], 34, color, 1);
       break;
@@ -503,15 +629,37 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
     case 'bauernhof': {
       ground(g, iso, 0.1, 0.1, 1.9, 1.9, '#7e8248');
       shadowDiamond(g, iso, 0.2, 0.4, 1.85, 1.55);
-      const f = boxFaces(iso, 0.2, 0.4, 1.85, 1.55, 0, 18);
-      wall(g, f.left, 'fachwerk', 0.06, 3);
-      wall(g, f.right, 'ziegel', -0.18, 4);
-      doorOn(g, f.right, 0.28, 0.44, 0.85, -0.18, '#6a4a2c'); // Grotdör
-      windowOn(g, f.left, 0.15, 0.4, 0.1, 0.3, 0.06);
-      windowOn(g, f.left, 0.45, 0.4, 0.1, 0.3, 0.06);
-      windowOn(g, f.left, 0.75, 0.4, 0.1, 0.3, 0.06);
-      roof(g, iso, 0.2, 0.4, 1.85, 1.55, 18, 30, 'x', 'reet', 0.35, 41);
-      // Heuhaufen
+      const f = boxFaces(iso, 0.2, 0.4, 1.85, 1.5, 0, 18);
+      W(f.left, 'fachwerk', 0.06, 3, { sockel: true, ausfachung: true });
+      W(f.right, 'ziegel', -0.18, 4, { sockel: true });
+      // Grotdör (großes Dielentor) mit Rautenmuster
+      plankDoor(g, f.right, 0.28, 0.44, 0.86, -0.18, '#6a4a2c');
+      g.strokeStyle = 'rgba(40,25,10,0.6)';
+      g.lineWidth = 1;
+      const d0 = faceAt(f.right, 0.28, 0), d1 = faceAt(f.right, 0.72, 0.86), d2 = faceAt(f.right, 0.72, 0), d3 = faceAt(f.right, 0.28, 0.86);
+      g.beginPath();
+      g.moveTo(d0[0], d0[1]);
+      g.lineTo(d1[0], d1[1]);
+      g.moveTo(d2[0], d2[1]);
+      g.lineTo(d3[0], d3[1]);
+      g.stroke();
+      window4(g, f.left, 0.12, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
+      window4(g, f.left, 0.45, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
+      window4(g, f.left, 0.78, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
+      roof(g, iso, 0.2, 0.4, 1.85, 1.5, 18, 30, 'x', 'reet', 0.35, 41);
+      const eb = iso.p(1.0, 1.4, 27);
+      eyebrow(g, eb[0], eb[1], 26);
+      // Pferdeköpfe am First (Giebelzier)
+      const gz = iso.p(1.5, 0.95, 48);
+      g.strokeStyle = '#4a3222';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(gz[0], gz[1]);
+      g.lineTo(gz[0] - 5, gz[1] - 8);
+      g.moveTo(gz[0], gz[1]);
+      g.lineTo(gz[0] + 5, gz[1] - 8);
+      g.stroke();
+      // Heuhaufen, Karren, Hühner, Zaun
       const hp = iso.p(0.35, 1.85);
       g.fillStyle = '#c8ad5a';
       g.beginPath();
@@ -524,15 +672,20 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
         g.lineTo(hp[0] - 8 + k * 2.5, hp[1] - 16);
         g.stroke();
       }
-      const fp = iso.p(1.85, 0.45, 0);
+      cart(g, iso, 1.05, 1.62, 'heu');
+      chicken(g, ...iso.p(0.7, 1.75), 1);
+      chicken(g, ...iso.p(0.9, 1.9), -1);
+      chicken(g, ...iso.p(1.75, 1.85), 1);
+      wattle(g, iso, [[1.92, 0.1], [1.92, 0.38]], 7);
+      const fp = iso.p(1.88, 0.42, 0);
       flag(g, fp[0], fp[1], 34, color, 2);
       break;
     }
     case 'muehle': {
       ground(g, iso, 0.2, 0.2, 1.8, 1.8, '#7a8a48');
-      // Bock: Steinsockel und Streben
+      // Steinsockel und Bock
       for (const [x, y] of [[0.55, 1.0], [1.45, 1.0], [1.0, 0.55], [1.0, 1.45]] as Pt[]) {
-        const b = boxFaces(iso, x - 0.1, y - 0.1, x + 0.1, y + 0.1, 0, 6);
+        const b = boxFaces(iso, x - 0.11, y - 0.11, x + 0.11, y + 0.11, 0, 7);
         fillFace(g, b.left, '#8f8a7e');
         fillFace(g, b.right, '#6f6a5e');
         poly(g, b.top, '#a39e90');
@@ -541,7 +694,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.lineWidth = 4;
       const post0 = iso.p(1, 1, 0), post1 = iso.p(1, 1, 30);
       for (const [x, y] of [[0.55, 1.0], [1.45, 1.0], [1.0, 0.55], [1.0, 1.45]] as Pt[]) {
-        const a = iso.p(x, y, 6);
+        const a = iso.p(x, y, 7);
         g.beginPath();
         g.moveTo(a[0], a[1]);
         g.lineTo(post1[0], post1[1] + 14);
@@ -552,15 +705,20 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.moveTo(post0[0], post0[1] - 6);
       g.lineTo(post1[0], post1[1]);
       g.stroke();
-      // Mühlenkasten
+      // Mehlsäcke am Fuß
+      sack(g, ...iso.p(1.55, 1.55));
+      sack(g, ...iso.p(1.72, 1.45));
+      sack(g, ...iso.p(1.62, 1.72));
       shadowDiamond(g, iso, 0.6, 0.6, 1.5, 1.4);
       const f = boxFaces(iso, 0.55, 0.6, 1.4, 1.4, 28, 40);
-      wall(g, f.left, 'holz', 0.1, 5);
-      wall(g, f.right, 'holz', -0.18, 6);
-      windowOn(g, f.right, 0.4, 0.55, 0.2, 0.2, -0.18);
+      W(f.left, 'holz', 0.1, 5);
+      W(f.right, 'holz', -0.18, 6);
+      window4(g, f.right, 0.38, 0.5, 0.22, 0.18, -0.18);
+      window4(g, f.left, 0.4, 0.62, 0.2, 0.14, 0.1);
+      plankDoor(g, f.left, 0.2, 0.22, 0.4, 0.1, '#4a3222');
       roof(g, iso, 0.55, 0.6, 1.4, 1.4, 68, 14, 'y', 'schindel', 0, 51);
-      // Treppe/Steert nach hinten links
-      const s0 = iso.p(0.7, 1.4, 30), s1 = iso.p(0.2, 1.9, 0);
+      // Treppe und Steert (Drehbalken) nach hinten links, mit Krühwerk-Rad
+      const s0 = iso.p(0.7, 1.4, 30), s1 = iso.p(0.15, 1.95, 0);
       g.strokeStyle = '#5a3d22';
       g.lineWidth = 3;
       g.beginPath();
@@ -569,13 +727,22 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.moveTo(s0[0] + 6, s0[1] + 2);
       g.lineTo(s1[0] + 6, s1[1] + 2);
       g.stroke();
-      for (let k = 1; k < 6; k++) {
-        const a: Pt = [s0[0] + (s1[0] - s0[0]) * (k / 6), s0[1] + (s1[1] - s0[1]) * (k / 6)];
+      for (let k = 1; k < 7; k++) {
+        const a: Pt = [s0[0] + (s1[0] - s0[0]) * (k / 7), s0[1] + (s1[1] - s0[1]) * (k / 7)];
         g.beginPath();
         g.moveTo(a[0], a[1]);
         g.lineTo(a[0] + 6, a[1] + 2);
         g.stroke();
       }
+      g.strokeStyle = '#3a2818';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(s1[0] + 3, s1[1] - 6, 6, 0, Math.PI * 2);
+      g.moveTo(s1[0] - 3, s1[1] - 6);
+      g.lineTo(s1[0] + 9, s1[1] - 6);
+      g.moveTo(s1[0] + 3, s1[1] - 12);
+      g.lineTo(s1[0] + 3, s1[1]);
+      g.stroke();
       out.hub = to1x(iso.p(1.42, 1.0, 58));
       const fp = iso.p(0.98, 1.0, 86);
       flag(g, fp[0], fp[1], 12, color, 1);
@@ -594,12 +761,49 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
         g.lineTo(b[0], b[1]);
         g.stroke();
       }
+      // Kahn am Steg
+      const kb = iso.p(1.2, 0.35, 2);
+      g.fillStyle = '#5a3d22';
+      g.beginPath();
+      g.moveTo(kb[0] - 18, kb[1] - 2);
+      g.quadraticCurveTo(kb[0], kb[1] + 9, kb[0] + 20, kb[1] - 4);
+      g.lineTo(kb[0] + 16, kb[1] - 8);
+      g.quadraticCurveTo(kb[0], kb[1] - 1, kb[0] - 15, kb[1] - 6);
+      g.closePath();
+      g.fill();
+      g.fillStyle = '#7a5634';
+      g.fillRect(kb[0] - 3, kb[1] - 5, 6, 2);
       const f = boxFaces(iso, 0.3, 0.3, 1.0, 1.0, 2, 16);
-      wall(g, f.left, 'holz', 0.05, 7);
-      wall(g, f.right, 'holz', -0.2, 8);
-      doorOn(g, f.left, 0.3, 0.35, 0.75, 0.05, '#3a2818');
+      W(f.left, 'holz', 0.05, 7);
+      W(f.right, 'holz', -0.2, 8);
+      plankDoor(g, f.left, 0.3, 0.35, 0.75, 0.05, '#3a2818');
       roof(g, iso, 0.3, 0.3, 1.0, 1.0, 18, 12, 'y', 'reet', 0, 61);
-      // Trockengestell mit Heringen
+      // Netze zum Trocknen
+      const n0 = iso.p(0.25, 1.15, 2), n1 = iso.p(0.25, 1.75, 2);
+      g.strokeStyle = '#4a3222';
+      g.lineWidth = 2;
+      for (const p of [n0, n1]) {
+        g.beginPath();
+        g.moveTo(p[0], p[1]);
+        g.lineTo(p[0], p[1] - 24);
+        g.stroke();
+      }
+      g.strokeStyle = 'rgba(70,80,70,0.85)';
+      g.lineWidth = 0.7;
+      for (let k = 0; k <= 8; k++) {
+        const x = n0[0] + ((n1[0] - n0[0]) * k) / 8, y = n0[1] + ((n1[1] - n0[1]) * k) / 8 - 24;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + (k % 2 ? 2 : -2), y + 18);
+        g.stroke();
+      }
+      for (let j = 0; j < 4; j++) {
+        g.beginPath();
+        g.moveTo(n0[0], n0[1] - 22 + j * 5);
+        g.quadraticCurveTo((n0[0] + n1[0]) / 2, (n0[1] + n1[1]) / 2 - 18 + j * 5, n1[0], n1[1] - 22 + j * 5);
+        g.stroke();
+      }
+      // Trockengestell mit Heringen, Fischkorb
       const a = iso.p(1.2, 1.3, 2), b = iso.p(1.75, 1.3, 2);
       g.strokeStyle = '#4a3222';
       g.lineWidth = 2.5;
@@ -613,32 +817,41 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.moveTo(a[0], a[1] - 22);
       g.lineTo(b[0], b[1] - 22);
       g.stroke();
-      for (let k = 1; k < 7; k++) {
-        const x = a[0] + (b[0] - a[0]) * (k / 7), y = a[1] - 22 + (b[1] - a[1]) * (k / 7);
-        g.fillStyle = '#c4ccd2';
+      for (let k = 1; k < 9; k++) {
+        const x = a[0] + (b[0] - a[0]) * (k / 9), y = a[1] - 22 + (b[1] - a[1]) * (k / 9);
+        g.fillStyle = k % 2 ? '#c4ccd2' : '#aeb8c0';
         g.beginPath();
-        g.ellipse(x, y + 7, 2, 6, 0, 0, Math.PI * 2);
+        g.ellipse(x, y + 7, 1.8, 6, 0, 0, Math.PI * 2);
         g.fill();
       }
+      const kb2 = iso.p(1.55, 1.75, 2);
+      g.fillStyle = '#8a6a3a';
+      g.beginPath();
+      g.ellipse(kb2[0], kb2[1] - 4, 7, 5, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#c4ccd2';
+      g.beginPath();
+      g.ellipse(kb2[0], kb2[1] - 7, 5, 2, 0, 0, Math.PI * 2);
+      g.fill();
       const fp = iso.p(0.25, 1.6, 2);
-      flag(g, fp[0], fp[1], 30, color, 2);
+      flag(g, fp[0] + 22, fp[1] - 6, 30, color, 2);
       break;
     }
     case 'raeucherei': {
       ground(g, iso, 0.15, 0.15, 1.85, 1.85, '#80784e');
       shadowDiamond(g, iso, 0.3, 0.4, 1.7, 1.6);
       const f = boxFaces(iso, 0.3, 0.4, 1.7, 1.6, 0, 22);
-      wall(g, f.left, 'ziegel', 0.05, 9);
-      wall(g, f.right, 'ziegel', -0.2, 10);
-      doorOn(g, f.left, 0.4, 0.2, 0.7, 0.05);
-      windowOn(g, f.right, 0.4, 0.45, 0.18, 0.25, -0.2);
+      W(f.left, 'ziegel', 0.05, 9, { sockel: true });
+      W(f.right, 'ziegel', -0.2, 10, { sockel: true });
+      plankDoor(g, f.left, 0.4, 0.2, 0.7, 0.05);
+      window4(g, f.right, 0.4, 0.45, 0.18, 0.25, -0.2, undefined, 0.8);
       roof(g, iso, 0.3, 0.4, 1.7, 1.6, 22, 20, 'y', 'ziegel', 0, 71);
       const c = boxFaces(iso, 1.15, 0.55, 1.42, 0.82, 0, 66);
       wall(g, c.left, 'ziegel', 0.0, 11);
       wall(g, c.right, 'ziegel', -0.25, 12);
       poly(g, c.top, '#2a2220');
       out.smoke = [to1x(iso.p(1.28, 0.68, 68))];
-      // Räuchergestell
+      // Räuchergestell mit Bücklingen, Buchenholz, Fässer
       const a = iso.p(0.15, 1.75), b = iso.p(0.15, 1.15);
       g.strokeStyle = '#4a3222';
       g.lineWidth = 2.5;
@@ -652,28 +865,55 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.moveTo(a[0], a[1] - 20);
       g.lineTo(b[0], b[1] - 20);
       g.stroke();
-      for (let k = 1; k < 6; k++) {
-        const x = a[0] + (b[0] - a[0]) * (k / 6), y = a[1] - 20 + (b[1] - a[1]) * (k / 6);
-        g.fillStyle = '#b08a3a';
+      for (let k = 1; k < 8; k++) {
+        const x = a[0] + (b[0] - a[0]) * (k / 8), y = a[1] - 20 + (b[1] - a[1]) * (k / 8);
+        g.fillStyle = k % 2 ? '#b08a3a' : '#9a7428';
         g.beginPath();
-        g.ellipse(x, y + 6, 2, 6, 0, 0, Math.PI * 2);
+        g.ellipse(x, y + 6, 1.8, 6, 0, 0, Math.PI * 2);
         g.fill();
       }
-      const fp = iso.p(1.75, 1.75, 0);
+      woodpile(g, iso, 1.2, 1.85, 4);
+      barrel(g, ...iso.p(1.85, 0.4));
+      barrel(g, ...iso.p(1.85, 0.7), 0.85);
+      const fp = iso.p(1.78, 1.78, 0);
       flag(g, fp[0], fp[1], 30, color, 1);
       break;
     }
     case 'lehmgrube': {
       ground(g, iso, 0.05, 0.05, 1.95, 1.95, '#8a6a42');
-      // Grube
+      // Grube mit Stufen
       poly(g, [iso.p(0.35, 0.3), iso.p(1.5, 0.3), iso.p(1.5, 1.4), iso.p(0.35, 1.4)], '#4a3424');
       poly(g, [iso.p(0.45, 0.4, -6), iso.p(1.4, 0.4, -6), iso.p(1.4, 1.3, -6), iso.p(0.45, 1.3, -6)], '#5e432c');
       poly(g, [iso.p(0.35, 1.4), iso.p(1.5, 1.4), iso.p(1.4, 1.3, -6), iso.p(0.45, 1.3, -6)], '#6e5236');
+      poly(g, [iso.p(1.5, 0.3), iso.p(1.5, 1.4), iso.p(1.4, 1.3, -6), iso.p(1.4, 0.4, -6)], '#7a5c3c');
+      // Wasserpfütze, Spaten, Leiter
+      const pw = iso.p(0.8, 0.8, -6);
+      g.fillStyle = 'rgba(70,90,100,0.7)';
+      g.beginPath();
+      g.ellipse(pw[0], pw[1], 9, 4, 0, 0, Math.PI * 2);
+      g.fill();
+      const sp = iso.p(1.1, 1.05, -6);
+      g.strokeStyle = '#6b4a2c';
+      g.lineWidth = 1.8;
+      g.beginPath();
+      g.moveTo(sp[0], sp[1]);
+      g.lineTo(sp[0] + 4, sp[1] - 18);
+      g.stroke();
+      g.fillStyle = '#9aa0a6';
+      g.fillRect(sp[0] - 2.5, sp[1] - 2, 5, 5);
       // Rampe
       poly(g, [iso.p(1.5, 0.75), iso.p(1.9, 0.75), iso.p(1.9, 1.0), iso.p(1.5, 1.0)], '#7a6040');
+      // Lehmziegel zum Trocknen in Reihen
+      for (let row = 0; row < 2; row++)
+        for (let k = 0; k < 6; k++) {
+          const p = iso.p(0.25 + k * 0.17, 1.62 + row * 0.15);
+          g.fillStyle = row ? '#b8895a' : '#a87a4c';
+          g.fillRect(p[0] - 4, p[1] - 3, 8, 3);
+          g.fillStyle = '#c9996a';
+          g.fillRect(p[0] - 4, p[1] - 4, 8, 1.2);
+        }
       // Lehmhaufen
-      const r = prng(81);
-      for (const [x, y] of [[0.3, 1.7], [0.7, 1.75], [1.75, 1.55]] as Pt[]) {
+      for (const [x, y] of [[1.75, 1.55], [1.7, 0.3]] as Pt[]) {
         const p = iso.p(x, y);
         g.fillStyle = '#9b7348';
         g.beginPath();
@@ -683,25 +923,44 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
         g.beginPath();
         g.ellipse(p[0] - 3, p[1] - 9, 6, 4, 0, 0, Math.PI * 2);
         g.fill();
-        void r;
       }
-      // Eimer und Schubkarre
-      barrel(g, ...iso.p(1.75, 0.35), 0.6);
-      const fp = iso.p(1.8, 0.2, 0);
+      // Schubkarre
+      const wb = iso.p(1.75, 1.15);
+      g.fillStyle = '#7a5634';
+      g.beginPath();
+      g.moveTo(wb[0] - 10, wb[1] - 8);
+      g.lineTo(wb[0] + 6, wb[1] - 8);
+      g.lineTo(wb[0] + 3, wb[1] - 2);
+      g.lineTo(wb[0] - 8, wb[1] - 2);
+      g.fill();
+      g.fillStyle = '#9b7348';
+      g.beginPath();
+      g.ellipse(wb[0] - 2, wb[1] - 9, 7, 3, 0, Math.PI, 0);
+      g.fill();
+      g.strokeStyle = '#3a2818';
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.arc(wb[0] + 7, wb[1] - 2, 3, 0, Math.PI * 2);
+      g.moveTo(wb[0] - 10, wb[1] - 6);
+      g.lineTo(wb[0] - 17, wb[1] - 4);
+      g.stroke();
+      const fp = iso.p(1.85, 0.12, 0);
       flag(g, fp[0], fp[1], 32, color, 2);
       break;
     }
     case 'markt': {
       ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#968b72');
       const r = prng(91);
-      for (let k = 0; k < 80; k++) {
+      for (let k = 0; k < 120; k++) {
         const p = iso.p(0.1 + r() * 2.8, 0.1 + r() * 2.8);
         g.fillStyle = r() < 0.5 ? '#857a62' : '#aaa088';
         g.fillRect(p[0], p[1], 5, 3);
       }
       stall(g, iso, 0.3, 0.3, color, 1);
       stall(g, iso, 1.7, 0.4, color, 2);
-      // Marktkreuz / Brunnen in der Mitte
+      tinyPerson(g, ...iso.p(0.65, 0.95), '#7a3a2a', '#e8dcc0', 1);
+      tinyPerson(g, ...iso.p(2.05, 1.05), '#3a5a6a', '#3a3020', 2);
+      // Marktkreuz mit Brunnen in der Mitte
       const m = iso.p(1.5, 1.5);
       g.fillStyle = '#7d7a72';
       g.beginPath();
@@ -711,28 +970,93 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.beginPath();
       g.ellipse(m[0], m[1] - 3, 13, 6, 0, 0, Math.PI * 2);
       g.fill();
+      g.fillStyle = 'rgba(220,235,245,0.4)';
+      g.fillRect(m[0] - 6, m[1] - 4, 6, 1);
       g.fillStyle = '#5a554c';
       g.fillRect(m[0] - 2, m[1] - 34, 4, 30);
       g.fillRect(m[0] - 9, m[1] - 28, 18, 4);
+      // Waage
+      const sc = iso.p(2.55, 1.2);
+      g.strokeStyle = '#4a3222';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(sc[0], sc[1]);
+      g.lineTo(sc[0], sc[1] - 22);
+      g.moveTo(sc[0] - 10, sc[1] - 20);
+      g.lineTo(sc[0] + 10, sc[1] - 20);
+      g.stroke();
+      g.fillStyle = '#c9a43a';
+      for (const dx of [-10, 10]) {
+        g.beginPath();
+        g.ellipse(sc[0] + dx, sc[1] - 13, 4, 1.6, 0, 0, Math.PI * 2);
+        g.fill();
+      }
       stall(g, iso, 0.4, 1.9, color, 3);
       stall(g, iso, 1.9, 1.9, color, 4);
-      barrel(g, ...iso.p(1.3, 2.7));
-      barrel(g, ...iso.p(1.55, 2.75));
-      sack(g, ...iso.p(2.8, 1.2));
-      sack(g, ...iso.p(2.75, 1.45));
-      const fp = iso.p(2.85, 0.15);
+      tinyPerson(g, ...iso.p(1.2, 2.2), '#5a6a3a', '#7a5634', 5);
+      cart(g, iso, 2.25, 0.2, 'saecke');
+      barrel(g, ...iso.p(1.3, 2.75));
+      barrel(g, ...iso.p(1.55, 2.82));
+      crate(g, iso, 2.6, 2.55);
+      crate(g, iso, 2.75, 2.35, 0.18);
+      sack(g, ...iso.p(2.8, 1.6));
+      sack(g, ...iso.p(2.75, 1.85));
+      const fp = iso.p(2.9, 0.1);
       flag(g, fp[0], fp[1], 40, color, 2);
       break;
     }
     case 'kaserne': {
       ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#857a58');
       shadowDiamond(g, iso, 0.25, 0.3, 2.7, 1.5);
-      const f = boxFaces(iso, 0.25, 0.3, 2.7, 1.45, 0, 26);
-      wall(g, f.left, 'ziegel', 0.05, 13);
-      wall(g, f.right, 'ziegel', -0.2, 14);
-      doorOn(g, f.left, 0.44, 0.12, 0.65, 0.05);
-      for (const u of [0.12, 0.27, 0.65, 0.8]) windowOn(g, f.left, u, 0.45, 0.07, 0.25, 0.05);
-      roof(g, iso, 0.25, 0.3, 2.7, 1.45, 26, 24, 'x', 'ziegel', 0, 91);
+      const f = boxFaces(iso, 0.25, 0.3, 2.7, 1.4, 0, 26);
+      W(f.left, 'ziegel', 0.05, 13, { sockel: true });
+      W(f.right, 'ziegel', -0.2, 14, { sockel: true });
+      plankDoor(g, f.left, 0.44, 0.12, 0.65, 0.05, '#5a2a1a');
+      for (const u of [0.1, 0.25, 0.64, 0.79]) window4(g, f.left, u, 0.42, 0.07, 0.28, 0.05, shade(color, -0.2));
+      window4(g, f.right, 0.35, 0.42, 0.3, 0.28, -0.2);
+      roof(g, iso, 0.25, 0.3, 2.7, 1.4, 26, 24, 'x', 'ziegel', 0, 91);
+      steppedGable(g, iso, 2.7, 0.3, 1.4, 26, 24, 3);
+      // Wappenschild über dem Tor
+      const ws = faceAt(f.left, 0.5, 0.82);
+      g.fillStyle = color;
+      g.beginPath();
+      g.moveTo(ws[0] - 6, ws[1] - 5);
+      g.lineTo(ws[0] + 6, ws[1] - 2);
+      g.lineTo(ws[0] + 5, ws[1] + 6);
+      g.lineTo(ws[0], ws[1] + 10);
+      g.lineTo(ws[0] - 5, ws[1] + 4);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#e8d890';
+      g.lineWidth = 1.2;
+      g.stroke();
+      // Palisade um den Übungsplatz (mit Toröffnung)
+      const stake = (x: number, y: number) => {
+        const p0 = iso.p(x, y), p1 = iso.p(x, y, 15);
+        g.strokeStyle = '#5e4128';
+        g.lineWidth = 3.4;
+        g.beginPath();
+        g.moveTo(p0[0], p0[1]);
+        g.lineTo(p1[0], p1[1]);
+        g.stroke();
+        g.fillStyle = '#8a6440';
+        g.beginPath();
+        g.moveTo(p1[0] - 1.7, p1[1]);
+        g.lineTo(p1[0], p1[1] - 4);
+        g.lineTo(p1[0] + 1.7, p1[1]);
+        g.fill();
+      };
+      for (let x = 0.1; x <= 2.9; x += 0.1) if (x < 1.3 || x > 1.75) stake(x, 2.92);
+      for (let y = 1.55; y <= 2.92; y += 0.1) stake(2.92, y);
+      for (const [x0, y0, x1, y1] of [[0.1, 2.92, 1.3, 2.92], [1.75, 2.92, 2.92, 2.92], [2.92, 1.55, 2.92, 2.92]]) {
+        const p0 = iso.p(x0, y0, 9), p1 = iso.p(x1, y1, 9);
+        g.strokeStyle = '#4a3222';
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(p0[0], p0[1]);
+        g.lineTo(p1[0], p1[1]);
+        g.stroke();
+      }
       // Waffengestell mit Spießen
       const a = iso.p(0.4, 2.2), b = iso.p(1.2, 2.2);
       g.strokeStyle = '#5a3d22';
@@ -756,8 +1080,26 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
         g.lineTo(x, y - 44);
         g.fill();
       }
+      // Schießscheibe (Strohballen mit Ringen)
+      const t = iso.p(2.3, 1.9);
+      g.fillStyle = '#c8ad5a';
+      g.beginPath();
+      g.ellipse(t[0], t[1] - 12, 10, 12, 0, 0, Math.PI * 2);
+      g.fill();
+      for (const [rr, col] of [[7, '#e8e0cc'], [4.5, '#b3342b'], [2, '#e8e0cc']] as [number, string][]) {
+        g.fillStyle = col;
+        g.beginPath();
+        g.ellipse(t[0] + 1, t[1] - 13, rr * 0.8, rr, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.strokeStyle = '#3a2818';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(t[0] + 1, t[1] - 14);
+      g.lineTo(t[0] - 8, t[1] - 18);
+      g.stroke();
       // Strohpuppe
-      const d = iso.p(2.2, 2.3);
+      const d = iso.p(1.75, 2.45);
       g.strokeStyle = '#5a3d22';
       g.lineWidth = 3;
       g.beginPath();
@@ -773,7 +1115,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.beginPath();
       g.arc(d[0], d[1] - 36, 5, 0, Math.PI * 2);
       g.fill();
-      const fp = iso.p(2.75, 1.5, 0);
+      const fp = iso.p(2.75, 1.45, 0);
       flag(g, fp[0], fp[1], 62, color, 2);
       out.flagPt = to1x([fp[0], fp[1]]);
       break;
@@ -781,28 +1123,35 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
     case 'brarupmarkt': {
       ground(g, iso, 0.0, 0.0, 3.0, 3.0, '#9a8f74');
       const r = prng(95);
-      for (let k = 0; k < 110; k++) {
+      for (let k = 0; k < 150; k++) {
         const p = iso.p(0.05 + r() * 2.9, 0.05 + r() * 2.9);
         g.fillStyle = r() < 0.5 ? '#877c62' : '#b0a68c';
         g.fillRect(p[0], p[1], 5, 3);
       }
       // kleine Feldsteinkirche im Hintergrund (Süderbrarups Kirche als Motiv)
       const c = boxFaces(iso, 0.2, 0.2, 1.3, 0.8, 0, 26);
-      wall(g, c.left, 'stein', 0.05, 15);
-      wall(g, c.right, 'stein', -0.2, 16);
-      windowOn(g, c.left, 0.3, 0.45, 0.08, 0.3, 0.05);
-      windowOn(g, c.left, 0.65, 0.45, 0.08, 0.3, 0.05);
+      W(c.left, 'stein', 0.05, 15);
+      W(c.right, 'stein', -0.2, 16);
+      window4(g, c.left, 0.3, 0.45, 0.07, 0.32, 0.05);
+      window4(g, c.left, 0.62, 0.45, 0.07, 0.32, 0.05);
+      plankDoor(g, c.right, 0.35, 0.3, 0.6, -0.2, '#5a3a22');
       roof(g, iso, 0.2, 0.2, 1.3, 0.8, 26, 20, 'x', 'ziegel', 0, 97);
       const t = boxFaces(iso, 0.2, 0.25, 0.55, 0.75, 0, 46);
-      wall(g, t.left, 'stein', 0.05, 17);
-      wall(g, t.right, 'stein', -0.2, 18);
+      W(t.left, 'stein', 0.05, 17);
+      W(t.right, 'stein', -0.2, 18);
+      windowOn(g, t.left, 0.35, 0.72, 0.3, 0.12, 0.05);
       roof(g, iso, 0.2, 0.25, 0.55, 0.75, 46, 26, 'y', 'schindel', 0.25, 98);
       stall(g, iso, 1.7, 0.3, '#7a6a4a', 5);
       stall(g, iso, 0.3, 1.5, '#5a7a8a', 6);
       stall(g, iso, 1.8, 1.6, '#8a5a3a', 7);
+      tinyPerson(g, ...iso.p(1.0, 1.4), '#6a4a3a', '#2a2420', 7);
+      tinyPerson(g, ...iso.p(2.3, 1.1), '#4a5a7a', '#e8dcc0', 8);
+      tinyPerson(g, ...iso.p(1.4, 2.5), '#7a6a3a', '#5a3d22', 9);
+      cart(g, iso, 0.3, 2.5, 'heu');
       barrel(g, ...iso.p(1.3, 2.6));
       sack(g, ...iso.p(2.6, 2.6));
       sack(g, ...iso.p(2.8, 2.4));
+      crate(g, iso, 2.7, 0.3);
       out.flagPt = to1x(iso.p(1.45, 1.45));
       break;
     }
@@ -873,277 +1222,9 @@ export function drawScaffold(g: Ctx, sx: number, sy: number, n: number, z: numbe
   }
 }
 
-// ------------------------------------------------------------------ Einheiten
-export const UNIT_FRAMES = 5; // 0 Stand, 1-2 Gehen, 3-4 Arbeiten/Kämpfen
-
-function person(
-  g: Ctx, x: number, y: number, frame: number,
-  o: { tunic: string; legs: string; hat: (g: Ctx, hx: number, hy: number) => void; accent?: string; item?: (g: Ctx, hx: number, hy: number, f: number) => void; puffy?: boolean },
-): void {
-  const step = frame === 1 ? 3 : frame === 2 ? -3 : 0;
-  // Beine
-  g.fillStyle = o.legs;
-  g.fillRect(x - 5 + step, y - 14, 4, 14);
-  g.fillRect(x + 1 - step, y - 14, 4, 14);
-  g.fillStyle = '#2e2218';
-  g.fillRect(x - 6 + step, y - 2, 6, 3);
-  g.fillRect(x + 1 - step, y - 2, 6, 3);
-  if (o.puffy && o.accent) {
-    g.fillStyle = o.accent;
-    g.beginPath();
-    g.ellipse(x - 3 + step, y - 12, 4, 4, 0, 0, Math.PI * 2);
-    g.ellipse(x + 3 - step, y - 12, 4, 4, 0, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = '#f0ead8';
-    g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(x - 5 + step, y - 13);
-    g.lineTo(x - 2 + step, y - 9);
-    g.moveTo(x + 2 - step, y - 13);
-    g.lineTo(x + 5 - step, y - 9);
-    g.stroke();
-  }
-  // Körper
-  g.fillStyle = o.tunic;
-  g.beginPath();
-  g.moveTo(x - 7, y - 13);
-  g.lineTo(x + 7, y - 13);
-  g.lineTo(x + 6, y - 30);
-  g.lineTo(x - 6, y - 30);
-  g.closePath();
-  g.fill();
-  g.fillStyle = shade(o.tunic, -0.25);
-  g.fillRect(x + 2, y - 30, 4, 17);
-  if (o.accent) {
-    g.fillStyle = o.accent;
-    g.fillRect(x - 7, y - 18, 14, 3); // Gürtel/Schärpe in Spielerfarbe
-  }
-  // Kopf
-  g.fillStyle = '#e0b48c';
-  g.beginPath();
-  g.arc(x, y - 35, 5, 0, Math.PI * 2);
-  g.fill();
-  g.fillStyle = '#c99a72';
-  g.fillRect(x + 2, y - 37, 3, 5);
-  o.hat(g, x, y - 35);
-  // Arme + Gegenstand
-  if (o.item) o.item(g, x, y, frame);
-  else {
-    g.strokeStyle = o.tunic;
-    g.lineWidth = 4;
-    g.beginPath();
-    g.moveTo(x + 5, y - 28);
-    g.lineTo(x + 7, y - 17 + step * 0.5);
-    g.stroke();
-  }
-}
-
-function drawUnitFrame(g: Ctx, type: UnitType, color: string, frame: number, x: number, y: number): void {
-  const work = frame >= 3;
-  const swing = frame === 4;
-  // Schatten
-  g.fillStyle = 'rgba(15,20,10,0.32)';
-  g.beginPath();
-  g.ellipse(x + 2, y, type === 'spaeher' ? 18 : 10, type === 'spaeher' ? 6 : 4, 0, 0, Math.PI * 2);
-  g.fill();
-  if (type === 'arbeiter') {
-    person(g, x, y, work ? 0 : frame, {
-      tunic: '#7b5b3a', legs: '#5c5348', accent: color,
-      hat: (g, hx, hy) => {
-        g.fillStyle = color;
-        g.beginPath();
-        g.ellipse(hx, hy - 3, 6, 4, 0, Math.PI, 0);
-        g.fill();
-        g.fillRect(hx - 6, hy - 4, 12, 2);
-      },
-      item: (g, hx, hy, f) => {
-        const up = f === 3;
-        g.strokeStyle = '#7b5b3a';
-        g.lineWidth = 4;
-        g.beginPath();
-        g.moveTo(hx + 4, hy - 28);
-        const ex = hx + (work ? (up ? 6 : 11) : 7), ey = hy - (work ? (up ? 38 : 22) : 17);
-        g.lineTo(ex, ey);
-        g.stroke();
-        if (work) {
-          // Axt/Hacke
-          g.strokeStyle = '#6b4a2c';
-          g.lineWidth = 2.5;
-          g.beginPath();
-          g.moveTo(ex, ey);
-          const tx = ex + (up ? -2 : 12), ty = ey + (up ? -12 : 6);
-          g.lineTo(tx, ty);
-          g.stroke();
-          g.fillStyle = '#a8aeb4';
-          g.fillRect(tx - 3, ty - 3, 6, 6);
-        }
-      },
-    });
-  } else if (type === 'spaeher') {
-    // Pferd
-    const leg = frame === 1 ? 4 : frame === 2 ? -4 : 0;
-    g.fillStyle = '#6b4428';
-    g.strokeStyle = '#4a2e1a';
-    g.lineWidth = 3;
-    for (const [lx, d] of [[-10, leg], [-5, -leg], [7, -leg], [12, leg]]) {
-      g.beginPath();
-      g.moveTo(x + lx, y - 14);
-      g.lineTo(x + lx + d, y - 1);
-      g.stroke();
-    }
-    g.beginPath();
-    g.ellipse(x, y - 18, 15, 7, 0, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.moveTo(x + 10, y - 20);
-    g.lineTo(x + 17, y - 32);
-    g.lineTo(x + 23, y - 30);
-    g.lineTo(x + 16, y - 18);
-    g.fill();
-    g.fillStyle = '#3a2416';
-    g.beginPath();
-    g.moveTo(x - 14, y - 20);
-    g.quadraticCurveTo(x - 22, y - 16, x - 19, y - 7);
-    g.lineWidth = 3;
-    g.stroke();
-    g.fillRect(x + 14, y - 33, 5, 3);
-    // Reiter
-    g.fillStyle = color;
-    g.beginPath();
-    g.moveTo(x - 7, y - 20);
-    g.lineTo(x + 5, y - 20);
-    g.lineTo(x + 4, y - 36);
-    g.lineTo(x - 5, y - 36);
-    g.closePath();
-    g.fill();
-    g.fillStyle = '#4a4440';
-    g.fillRect(x - 2, y - 22, 5, 8);
-    g.fillStyle = '#e0b48c';
-    g.beginPath();
-    g.arc(x, y - 41, 5, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = '#3a3330';
-    g.beginPath();
-    g.ellipse(x, y - 44, 7, 3, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillRect(x - 3, y - 50, 7, 6);
-    if (work) {
-      g.strokeStyle = '#b8bcc0';
-      g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(x + 4, y - 30);
-      g.lineTo(x + (swing ? 18 : 12), y - (swing ? 24 : 44));
-      g.stroke();
-    }
-  } else if (type === 'landsknecht') {
-    person(g, x, y, work ? 0 : frame, {
-      tunic: shade(color, -0.1), legs: '#d9d0bc', accent: color, puffy: true,
-      hat: (g, hx, hy) => {
-        // Morion-Helm
-        g.fillStyle = '#b8bcc0';
-        g.beginPath();
-        g.ellipse(hx, hy - 3, 6, 5, 0, Math.PI, 0);
-        g.fill();
-        g.beginPath();
-        g.moveTo(hx - 9, hy - 2);
-        g.quadraticCurveTo(hx, hy - 1, hx + 9, hy - 5);
-        g.lineTo(hx + 9, hy - 3);
-        g.quadraticCurveTo(hx, hy + 1, hx - 9, hy);
-        g.fill();
-        g.fillRect(hx - 1, hy - 11, 2, 4);
-      },
-      item: (g, hx, hy, f) => {
-        // Spieß
-        const thrust = f === 4 ? 8 : 0;
-        const tilt = work ? 0.35 : 0.08;
-        const bx = hx + 6 + thrust * 0.5, by = hy - 22;
-        g.strokeStyle = '#6b4a2c';
-        g.lineWidth = 2.5;
-        const len = 46;
-        const ex = bx + Math.sin(tilt + (work ? 0.9 : 0)) * len, ey = by - Math.cos(tilt + (work ? 0.9 : 0)) * len;
-        g.beginPath();
-        g.moveTo(bx - (ex - bx) * 0.25, by - (ey - by) * 0.25);
-        g.lineTo(ex, ey);
-        g.stroke();
-        g.fillStyle = '#c8ccd0';
-        g.beginPath();
-        g.arc(ex, ey, 2.5, 0, Math.PI * 2);
-        g.fill();
-        g.strokeStyle = shade(color, -0.1);
-        g.lineWidth = 5;
-        g.beginPath();
-        g.moveTo(hx + 4, hy - 28);
-        g.lineTo(bx, by);
-        g.stroke();
-      },
-    });
-  } else {
-    person(g, x, y, work ? 0 : frame, {
-      tunic: '#5d6748', legs: '#4c4a40', accent: color,
-      hat: (g, hx, hy) => {
-        g.fillStyle = color;
-        g.beginPath();
-        g.ellipse(hx, hy - 4, 8, 3, 0, 0, Math.PI * 2);
-        g.fill();
-        g.fillRect(hx - 4, hy - 9, 8, 5);
-        g.strokeStyle = '#f0ead8';
-        g.lineWidth = 1.5;
-        g.beginPath();
-        g.moveTo(hx - 3, hy - 8);
-        g.quadraticCurveTo(hx - 10, hy - 16, hx - 12, hy - 10);
-        g.stroke();
-      },
-      item: (g, hx, hy, f) => {
-        // Armbrust
-        const aim = work;
-        const cx = hx + (aim ? 10 : 6), cy = hy - (aim ? 30 : 22);
-        g.strokeStyle = '#5d6748';
-        g.lineWidth = 4;
-        g.beginPath();
-        g.moveTo(hx + 4, hy - 28);
-        g.lineTo(cx - 3, cy + 1);
-        g.stroke();
-        g.strokeStyle = '#6b4a2c';
-        g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(cx - 6, cy + 2);
-        g.lineTo(cx + 10, cy - (aim ? 0 : 6));
-        g.stroke();
-        g.strokeStyle = '#3a3330';
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(cx + 8, cy - (aim ? 0 : 5), 6, -Math.PI / 2, Math.PI / 2);
-        g.stroke();
-        if (aim && f === 3) {
-          g.strokeStyle = '#ddd';
-          g.lineWidth = 1;
-          g.beginPath();
-          g.moveTo(cx + 2, cy);
-          g.lineTo(cx + 14, cy);
-          g.stroke();
-        }
-      },
-    });
-  }
-}
-
-const unitCache = new Map<string, Sprite[]>();
-export function unitSprites(type: UnitType, color: string): Sprite[] {
-  const k = type + color;
-  let arr = unitCache.get(k);
-  if (arr) return arr;
-  arr = [];
-  for (let f = 0; f < UNIT_FRAMES; f++) {
-    const w = 32 * S, h = 30 * S;
-    const [c, g] = canvas(w, h);
-    g.scale(S / 2, S / 2);
-    // Figuren werden in 2x-Koordinaten (Fußpunkt) gezeichnet
-    drawUnitFrame(g, type, color, f, 32, 52);
-    arr.push({ c, ax: 16, ay: 26 });
-  }
-  unitCache.set(k, arr);
-  return arr;
-}
+// Einheiten: siehe units.ts
+export { UNIT_FRAMES, unitSprites, unitFrame } from './units';
+import { unitSprites } from './units';
 
 // ------------------------------------------------------------------ Symbole für die Oberfläche
 const iconCache = new Map<string, string>();
@@ -1257,7 +1338,11 @@ export function portrait(kind: 'b' | 'u', type: string, color: string): string {
     g.drawImage(s.c, (64 - s.c.width * sc) / 2, (64 - s.c.height * sc) / 2, s.c.width * sc, s.c.height * sc);
   } else {
     const s = unitSprites(type as UnitType, color)[0];
-    g.drawImage(s.c, 0, 2, 64, 60);
+    // Figur (ohne Spieß-Überstand) formatfüllend
+    const r = s.res ?? S;
+    const fw = 22, fh = 30; // 1x-Ausschnitt um die Figur
+    const dh = 62, dw = (dh * fw) / fh;
+    g.drawImage(s.c, (s.ax - fw / 2) * r, (s.ay - fh + 2) * r, fw * r, fh * r, (64 - dw) / 2, 1, dw, dh);
   }
   const url = c.toDataURL();
   iconCache.set(k, url);

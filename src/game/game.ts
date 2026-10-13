@@ -2,7 +2,9 @@
 // Simulation im Treiber mit festen Takten.
 import { sound } from '../audio/sound';
 import { BUILDINGS, RULES, UNITS, type BuildingType } from '../data/defs';
-import { Minimap, Renderer, playerColor, type Placement } from '../render/renderer';
+import { createRenderer, freshCanvas, type RendererPref } from '../render/factory';
+import { Minimap, playerColor, type Placement } from '../render/renderer';
+import type { BaseRenderer } from '../render/view';
 import { checkPlacement } from '../sim/rules';
 import type { Command, SimEvent } from '../sim/types';
 import { Hud } from '../ui/hud';
@@ -21,7 +23,7 @@ const BUILD_NAMES = Object.fromEntries(Object.entries(BUILDINGS).map(([k, v]) =>
 
 export class Game {
   readonly client: ClientState;
-  readonly renderer: Renderer;
+  readonly renderer: BaseRenderer;
   readonly minimap: Minimap;
   readonly hud: Hud;
   readonly tutorial: Tutorial;
@@ -44,14 +46,22 @@ export class Game {
   private showPerf = false;
   private lastErrSound = 0;
   private cleanup: (() => void)[] = [];
-  private canvas = document.getElementById('view') as HTMLCanvasElement;
+  private canvas: HTMLCanvasElement;
   private dialogEl = document.getElementById('dialog')!;
   private idleIdx = 0;
 
-  constructor(readonly driver: Driver, readonly opts: GameOptions) {
-    this.client = driver.client;
+  /** Baut Darstellung (WebGL/PixiJS oder Canvas 2D) asynchron auf und startet dann die Partie. */
+  static async create(driver: Driver, opts: GameOptions, pref: RendererPref = 'auto'): Promise<Game> {
     document.getElementById('screen-game')!.classList.remove('hidden');
-    this.renderer = new Renderer(this.canvas, this.client);
+    const canvas = freshCanvas(document.getElementById('view') as HTMLCanvasElement);
+    const renderer = await createRenderer(canvas, driver.client, pref);
+    return new Game(driver, opts, renderer);
+  }
+
+  private constructor(readonly driver: Driver, readonly opts: GameOptions, renderer: BaseRenderer) {
+    this.client = driver.client;
+    this.renderer = renderer;
+    this.canvas = renderer.canvas;
     this.minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, this.client);
     this.hud = new Hud(this);
     this.tutorial = new Tutorial(this, opts.tutorial);
@@ -84,6 +94,7 @@ export class Game {
   destroy(): void {
     cancelAnimationFrame(this.raf);
     this.driver.stop();
+    this.renderer.destroy();
     for (const f of this.cleanup) f();
     this.cleanup = [];
     document.getElementById('screen-game')!.classList.add('hidden');
@@ -182,7 +193,7 @@ export class Game {
       const avg = ft.reduce((a, b) => a + b, 0) / ft.length;
       const max = Math.max(...ft);
       document.getElementById('perf')!.textContent =
-        `Frame ${avg.toFixed(1)} ms (max ${max.toFixed(1)}) · ${(1000 / Math.max(1, dt * 1000)).toFixed(0)} fps · Einheiten ${this.client.units.size} · Kacheln ${this.renderer.stats.drawn}`;
+        `${this.renderer.kind === 'webgl' ? 'WebGL/PixiJS' : 'Canvas 2D'} · Frame ${avg.toFixed(1)} ms (max ${max.toFixed(1)}) · ${(1000 / Math.max(1, dt * 1000)).toFixed(0)} fps · Einheiten ${this.client.units.size} · Kacheln ${this.renderer.stats.drawn}`;
     }
     if (this.client.winner >= 0 && !this.ended) this.showEnd();
   }
