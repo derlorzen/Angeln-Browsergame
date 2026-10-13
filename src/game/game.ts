@@ -56,13 +56,22 @@ export class Game {
     this.hud = new Hud(this);
     this.tutorial = new Tutorial(this, opts.tutorial);
     this.resize();
-    const dz = [...this.client.buildings.values()].find((b) => b.o === this.client.me && b.t === 'dorfzentrum');
-    if (dz) this.renderer.centerOn(dz.x + 1.5, dz.y + 1.5);
+    this.centerHome();
     driver.onNotice = (text, fatal) => this.notice(text, fatal);
     driver.onAfterTick = () => undefined;
     this.bindInput();
     driver.start();
     this.raf = requestAnimationFrame((t) => this.loop(t));
+  }
+
+  private centered = false;
+  /** Kamera auf das eigene Dorfzentrum setzen, sobald es bekannt ist (beim Gast erst nach dem ersten Zustand). */
+  private centerHome(): void {
+    if (this.centered) return;
+    const dz = [...this.client.buildings.values()].find((b) => b.o === this.client.me && b.t === 'dorfzentrum');
+    if (!dz) return;
+    this.renderer.centerOn(dz.x + 1.5, dz.y + 1.5);
+    this.centered = true;
     this.hud.message(`Willkommen, ${this.client.mePlayer?.name ?? ''}! Eure Siedlung: ${this.client.map.slots[this.mySlot()]?.name ?? ''}.`, 'good');
   }
 
@@ -151,6 +160,7 @@ export class Game {
     this.raf = requestAnimationFrame((tt) => this.loop(tt));
     const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
     this.lastFrame = t;
+    this.centerHome();
     this.scrollCamera(dt);
     this.processEvents(t);
     // Auswahl bereinigen
@@ -304,6 +314,8 @@ export class Game {
   private bindInput(): void {
     const cv = this.canvas;
     this.on(window, 'resize', () => this.resize());
+    // Beim Schließen der Seite die Gegenseite sauber informieren
+    this.on(window, 'pagehide', () => this.driver.stop());
     this.on(cv, 'contextmenu', (e: MouseEvent) => e.preventDefault());
     this.on(document, 'mouseleave', () => (this.mouse.inside = false));
     this.on(window, 'mousemove', (e: MouseEvent) => {
