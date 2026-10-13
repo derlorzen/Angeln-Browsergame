@@ -1,4 +1,5 @@
 import type { BuildingType, Res, UnitType } from '../data/defs';
+import type { FactionId } from '../data/factions';
 
 export type Order =
   | { k: 'none' }
@@ -84,13 +85,14 @@ export interface PlayerState {
   defeated: boolean;
   isAI: boolean;
   aiLevel: 'leicht' | 'normal';
+  faction: FactionId;
   stats: PlayerStats;
   pop: number;
   popCap: number;
 }
 
 export type SimEvent =
-  | { e: 'shot'; x: number; y: number; tx: number; ty: number; r: 0 | 1 } // r: 0 Bolzen, 1 Pfeil vom Dorfzentrum
+  | { e: 'shot'; x: number; y: number; tx: number; ty: number; r: 0 | 1 | 2 } // r: 0 Bolzen, 1 Pfeil vom Dorfzentrum, 2 Musketenkugel
   | { e: 'hit'; x: number; y: number; m: 0 | 1 } // m: 1 Nahkampf
   | { e: 'die'; x: number; y: number; u: 0 | 1; o: number }
   | { e: 'built'; x: number; y: number; o: number; b: BuildingType }

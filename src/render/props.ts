@@ -393,3 +393,121 @@ export function steppedGable(g: Ctx, iso: Iso, x: number, y0: number, y1: number
     poly(g, [a, b, c, d], '#e8dfc8');
   }
 }
+
+/** Helle Sandsteinbänder auf Backstein (dänische Renaissance). */
+export function bands(g: Ctx, f: Face, light: number, vs = [0.34, 0.68]): void {
+  for (const v of vs) poly(g, faceQuad(f, 0, v, 1, v + 0.05), shade('#e0d2b0', light));
+  poly(g, faceQuad(f, 0, 0.96, 1, 1), shade('#e0d2b0', light));
+}
+
+/** Kupferhelm (grüne Patina): spitzer Turmhelm über quadratischem Grundriss. */
+export function spire(g: Ctx, iso: Iso, x0: number, y0: number, x1: number, y1: number, z: number, h: number): void {
+  const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+  const tip = iso.p(xm, ym, z + h);
+  const neck = iso.p(xm, ym, z + h * 0.45);
+  // Zwiebel/Laterne
+  poly(g, [iso.p(x0, y1, z), iso.p(x1, y1, z), neck], '#6aa890');
+  poly(g, [iso.p(x1, y1, z), iso.p(x1, y0, z), neck], '#4a8070');
+  g.fillStyle = '#5e9a83';
+  g.beginPath();
+  g.ellipse(neck[0], neck[1], 4, 3, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#4a8070';
+  g.lineWidth = 2.6;
+  g.beginPath();
+  g.moveTo(neck[0], neck[1]);
+  g.lineTo(tip[0], tip[1]);
+  g.stroke();
+  g.fillStyle = '#d8b040';
+  g.beginPath();
+  g.arc(tip[0], tip[1], 1.8, 0, Math.PI * 2);
+  g.fill();
+}
+
+/** Weidetiere: Angler Rotvieh, Deichschaf, Pferd, Schwein. */
+export function animal(g: Ctx, x: number, y: number, kind: 'kuh' | 'schaf' | 'pferd' | 'schwein', flip = 1): void {
+  g.save();
+  g.translate(x, y);
+  g.scale(flip, 1);
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.beginPath();
+  g.ellipse(0, 0, 9, 2.6, 0, 0, Math.PI * 2);
+  g.fill();
+  const leg = (lx: number, h: number, c: string) => {
+    g.fillStyle = c;
+    g.fillRect(lx - 0.8, -h, 1.6, h);
+  };
+  if (kind === 'kuh') {
+    for (const lx of [-5, -3, 3, 5]) leg(lx, 5, '#5a2418');
+    g.fillStyle = '#9a3a24'; // Angler Rotvieh
+    g.beginPath();
+    g.ellipse(0, -7, 7.5, 3.6, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(7.4, -8.4, 2.6, 2, 0.3, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#e8dcc8';
+    g.fillRect(8.4, -11, 0.8, 2);
+    g.fillRect(6.4, -11, 0.8, 2);
+    g.fillStyle = '#c8a090';
+    g.beginPath();
+    g.ellipse(9.4, -7.6, 1.2, 1, 0, 0, Math.PI * 2);
+    g.fill();
+  } else if (kind === 'schaf') {
+    for (const lx of [-3.5, -2, 2, 3.5]) leg(lx, 4, '#2a2420');
+    g.fillStyle = '#ece8dc';
+    for (const [dx, dy] of [[-3, -6], [0, -7], [3, -6], [-1.5, -4.5], [1.5, -4.5]]) {
+      g.beginPath();
+      g.arc(dx, dy, 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = '#2a2420';
+    g.beginPath();
+    g.ellipse(6, -7, 2, 1.5, 0.2, 0, Math.PI * 2);
+    g.fill();
+  } else if (kind === 'pferd') {
+    for (const lx of [-5, -3.5, 3.5, 5]) leg(lx, 7, '#4a2a18');
+    g.fillStyle = '#7a4a2a';
+    g.beginPath();
+    g.ellipse(0, -9, 7, 3.2, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(4.5, -10.5);
+    g.lineTo(7.5, -16);
+    g.lineTo(9.5, -15.5);
+    g.lineTo(7.5, -8.5);
+    g.fill();
+    g.fillStyle = '#2e1d12';
+    g.fillRect(4.6, -15.5, 2, 5);
+    g.fillRect(-8, -10, 1.6, 6);
+  } else {
+    for (const lx of [-3.5, -2, 2, 3.5]) leg(lx, 3, '#d89a8a');
+    g.fillStyle = '#e8b0a0';
+    g.beginPath();
+    g.ellipse(0, -5.5, 6, 3.2, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(6, -5.8, 2, 1.8, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#c88a7a';
+    g.fillRect(7.4, -6.4, 1.2, 1.4);
+  }
+  g.restore();
+}
+
+/** Friesischer Frontispiz: Zwerchgiebel über der Haustür mit weißer Einfassung. */
+export function frontispiz(g: Ctx, f: Face, u: number, du: number, h: number, light: number): void {
+  const a = faceAt(f, u, 0.95), b = faceAt(f, u + du, 0.95);
+  const top: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - h];
+  const l = faceAt(f, u, 0.35), r = faceAt(f, u + du, 0.35);
+  poly(g, [l, r, b, top, a], shade('#74332a', light), '#f2ede0', 2);
+  const c: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - h * 0.45];
+  g.fillStyle = '#f2ede0';
+  g.beginPath();
+  g.arc(c[0], c[1], 3, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#2c3238';
+  g.beginPath();
+  g.arc(c[0], c[1], 2, 0, Math.PI * 2);
+  g.fill();
+}

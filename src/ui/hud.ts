@@ -1,7 +1,8 @@
 // Klassisches Strategie-HUD (DOM): Ressourcenleiste, Auswahlfenster, Befehlskarte, Tooltips, Meldungen.
 import {
-  BUILDINGS, RES, RES_NAME, RULES, UNITS, costText, type BuildingType, type Cost, type Res, type UnitType,
+  RES, RES_NAME, RULES, costText, type BuildingType, type Cost, type Res, type UnitType,
 } from '../data/defs';
+import { FACTION_DEFS } from '../data/factions';
 import type { CBuilding, CUnit } from '../game/client';
 import type { Game } from '../game/game';
 import { playerColor } from '../render/renderer';
@@ -17,6 +18,7 @@ export interface CmdButton {
   act: () => void;
 }
 
+const fmt = (v: number) => (Math.round(v * 10) / 10).toLocaleString('de-DE');
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const BUILD_ORDER: [BuildingType, string][] = [
   ['wohnhaus', 'Q'], ['holzfaeller', 'W'], ['bauernhof', 'E'], ['lehmgrube', 'R'],
@@ -156,17 +158,17 @@ export class Hud {
   }
 
   buildingTip(t: BuildingType): string {
-    const d = BUILDINGS[t];
     const c = this.game.client;
+    const d = c.bd(c.me, t);
     const rows: string[] = [`<h4>${d.name}</h4><div>${esc(d.desc)}</div>`];
     rows.push(`<div class="row2"><b>Kosten:</b> ${this.costHtml(d.cost)}</div>`);
     rows.push(`<div class="row2"><b>Bauzeit:</b> ${d.buildTime} s mit einem Arbeiter (mehrere Arbeiter bauen schneller)</div>`);
     if (d.requires?.length)
-      rows.push(`<div class="row2"><b>Voraussetzung:</b> ${d.requires.map((r) => `<span class="${c.hasBuilt(r) ? '' : 'c-bad'}">${BUILDINGS[r].name} (fertig)</span>`).join(', ')}</div>`);
+      rows.push(`<div class="row2"><b>Voraussetzung:</b> ${d.requires.map((r) => `<span class="${c.hasBuilt(r) ? '' : 'c-bad'}">${c.bd(c.me, r).name} (fertig)</span>`).join(', ')}</div>`);
     if (d.popCap) rows.push(`<div class="row2"><b>Bevölkerung:</b> +${d.popCap}</div>`);
     if (d.produce)
-      rows.push(`<div class="row2"><b>Ertrag:</b> ${d.produce.amount} ${RES_NAME[d.produce.res]} alle ${d.produce.time} s${d.produce.perWorker ? ' je zugewiesenem Arbeiter (max. ' + d.staffSlots + ')' : ' (selbstständig)'}</div>`);
-    if (d.process) rows.push(`<div class="row2"><b>Verarbeitung:</b> ${costText(d.process.input)} → ${costText(d.process.output)} alle ${d.process.time} s</div>`);
+      rows.push(`<div class="row2"><b>Ertrag:</b> ${d.produce.amount} ${RES_NAME[d.produce.res]} alle ${fmt(d.produce.time)} s${d.produce.perWorker ? ' je zugewiesenem Arbeiter (max. ' + d.staffSlots + ')' : ' (selbstständig)'}</div>`);
+    if (d.process) rows.push(`<div class="row2"><b>Verarbeitung:</b> ${costText(d.process.input)} → ${costText(d.process.output)} alle ${fmt(d.process.time)} s</div>`);
     if (d.placement === 'ufer') rows.push('<div class="row2"><b>Bauplatz:</b> direkt am Ufer der Schlei</div>');
     if (d.placement === 'lehm') rows.push('<div class="row2"><b>Bauplatz:</b> mindestens 2 Felder Lehmboden</div>');
     rows.push(`<div class="row2 note">Nur innerhalb von ${RULES.buildRadius} Kacheln um eigene fertige Gebäude. Linksklick setzt, Umschalt hält den Baumodus, Rechtsklick bricht ab.</div>`);
@@ -174,8 +176,10 @@ export class Hud {
   }
 
   unitTip(t: UnitType, where: string): string {
-    const u = UNITS[t];
-    return `<h4>${u.name}</h4><div>${esc(u.desc)}</div>
+    const c = this.game.client;
+    const u = c.ud(c.me, t);
+    const uniq = Object.values(FACTION_DEFS).find((f) => f.unique === t);
+    return `<h4>${u.name}</h4><div>${esc(u.desc)}</div>${uniq ? `<div class="row2"><b>Spezialeinheit der ${uniq.name}</b></div>` : ''}
       <div class="row2"><b>Kosten:</b> ${this.costHtml(u.cost)} · 1 Bevölkerung</div>
       <div class="row2"><b>Ausbildung:</b> ${u.trainTime} s in ${where}</div>
       <div class="row2"><b>Werte:</b> ${u.hp} LP · Schaden ${u.dmg} · Reichweite ${u.range} · Rüstung ${u.armor} · Tempo ${u.speed}</div>`;
@@ -230,11 +234,11 @@ export class Hud {
     const c = this.game.client;
     if (units.length === 1 && !blds.length) {
       const u = units[0];
-      const d = UNITS[u.t];
+      const d = c.ud(u.o, u.t);
       const owner = c.players[u.o];
-      this.sel.innerHTML = `<img class="portrait" src="${portrait('u', u.t, playerColor(c, u.o))}" alt="">
+      this.sel.innerHTML = `<img class="portrait" src="${portrait('u', u.t, playerColor(c, u.o), c.faction(u.o))}" alt="">
         <div class="selmain"><div class="name">${d.name}</div>
-        <div class="stat">${esc(owner?.name ?? '')}${u.o === c.me ? '' : ' (Gegner)'}</div>
+        <div class="stat">${esc(owner?.name ?? '')} · ${FACTION_DEFS[c.faction(u.o)].name}${u.o === c.me ? '' : ' (Gegner)'}</div>
         ${this.hpBar(u.h, d.hp)}<div class="stat">${u.h} / ${d.hp} Lebenspunkte</div>
         <div class="stat">Schaden ${d.dmg} · Reichweite ${d.range} · Rüstung ${d.armor} · Sicht ${d.vision}</div>
         <div class="stat">${u.o === c.me ? this.unitStatus(u) : ''}</div></div>`;
@@ -243,7 +247,7 @@ export class Hud {
     if (units.length > 1) {
       this.sel.innerHTML = `<div class="multi">${units
         .slice(0, 40)
-        .map((u) => `<div class="m" data-id="${u.i}" title="${UNITS[u.t].name}"><img src="${portrait('u', u.t, playerColor(c, u.o))}" alt=""><div class="h"><i style="width:${(u.h / UNITS[u.t].hp) * 100}%"></i></div></div>`)
+        .map((u) => `<div class="m" data-id="${u.i}" title="${c.ud(u.o, u.t).name}"><img src="${portrait('u', u.t, playerColor(c, u.o), c.faction(u.o))}" alt=""><div class="h"><i style="width:${(u.h / c.ud(u.o, u.t).hp) * 100}%"></i></div></div>`)
         .join('')}</div>`;
       this.sel.querySelectorAll<HTMLElement>('.m').forEach((el) =>
         el.addEventListener('click', (e) => {
@@ -260,7 +264,7 @@ export class Hud {
     }
     if (blds.length) {
       const b = blds[0];
-      const d = BUILDINGS[b.t];
+      const d = c.bd(b.o, b.t);
       const mine = b.o === c.me;
       const lines: string[] = [];
       if (!b.b) lines.push(`Im Bau: ${b.p} % – Arbeiter per Rechtsklick zum Bauen schicken`);
@@ -275,16 +279,16 @@ export class Hud {
         if (b.t === 'markt') {
           const ctrl = c.brarup.c === c.me;
           const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
-          lines.push(`Verkauf: ${s.waren} Waren → ${s.taler} Taler + ${s.prestige} Prestige${ctrl ? ' (Brarup-Bonus)' : ''}`);
+          lines.push(`Verkauf: ${s.waren} Waren → ${Math.round(s.taler * (FACTION_DEFS[c.faction(c.me)].marketTalerMul ?? 1))} Taler + ${s.prestige} Prestige${ctrl ? ' (Brarup-Bonus)' : ''}`);
           lines.push(`Automatischer Verkauf: ${b.as ? 'an' : 'aus'}`);
         }
         if (d.popCap) lines.push(`Bietet Wohnraum für ${d.popCap}`);
         if (d.dropoff) lines.push(d.dropoff.includes('all') ? 'Nimmt alle Rohstoffe an' : 'Nimmt Holz an');
       } else lines.push(`Gehört ${esc(c.players[b.o]?.name ?? '?')}${b.ghost ? ' (zuletzt gesehen)' : ''}`);
       const queue = mine && b.q?.length
-        ? `<div class="queue">${b.q.map((t, k) => `<div class="q" data-k="${k}" title="${UNITS[t].name} – Klick: abbrechen"><img src="${portrait('u', t, playerColor(c, c.me))}" alt="">${k === 0 ? `<div class="p" style="width:${b.qp ?? 0}%"></div>` : ''}</div>`).join('')}</div>`
+        ? `<div class="queue">${b.q.map((t, k) => `<div class="q" data-k="${k}" title="${c.ud(c.me, t).name} – Klick: abbrechen"><img src="${portrait('u', t, playerColor(c, c.me), c.faction(c.me))}" alt="">${k === 0 ? `<div class="p" style="width:${b.qp ?? 0}%"></div>` : ''}</div>`).join('')}</div>`
         : '';
-      this.sel.innerHTML = `<img class="portrait" src="${portrait('b', b.t, playerColor(c, b.o))}" alt="">
+      this.sel.innerHTML = `<img class="portrait" src="${portrait('b', b.t, playerColor(c, b.o), b.o < 0 ? 'angeln' : c.faction(b.o))}" alt="">
         <div class="selmain"><div class="name">${d.name}</div>
         ${b.o >= 0 ? this.hpBar(b.h, b.m) + `<div class="stat">${b.h} / ${b.m} Lebenspunkte</div>` : ''}
         ${lines.map((l) => `<div class="stat">${l}</div>`).join('')}${queue}</div>`;
@@ -308,9 +312,9 @@ export class Hud {
       const workers = own.filter((u) => u.t === 'arbeiter');
       if (workers.length) {
         for (const [t, key] of BUILD_ORDER) {
-          const d = BUILDINGS[t];
+          const d = c.bd(c.me, t);
           out.push({
-            key, icon: portrait('b', t, color), label: d.name,
+            key, icon: portrait('b', t, color, c.faction(c.me)), label: d.name,
             tip: () => this.buildingTip(t),
             state: () => (d.requires?.some((r) => !c.hasBuilt(r)) ? 'na' : !this.canAfford(d.cost) ? 'poor' : g.placement?.type === t ? 'on' : 'ok'),
             act: () => g.beginPlacement(t),
@@ -337,7 +341,7 @@ export class Hud {
     }
     if (blds.length === 1 && blds[0].o === c.me) {
       const b = blds[0];
-      const d = BUILDINGS[b.t];
+      const d = c.bd(c.me, b.t);
       if (!b.b) {
         while (out.length < 11) out.push(null as unknown as CmdButton);
         out.push({
@@ -349,9 +353,9 @@ export class Hud {
       if (d.trains) {
         const keys = ['Q', 'W', 'E', 'R'];
         d.trains.forEach((t, k) => {
-          const ud = UNITS[t];
+          const ud = c.ud(c.me, t);
           out.push({
-            key: keys[k], icon: portrait('u', t, color), label: ud.name,
+            key: keys[k], icon: portrait('u', t, color, c.faction(c.me)), label: ud.name,
             tip: () => this.unitTip(t, d.name),
             state: () => (!this.canAfford(ud.cost) ? 'poor' : 'ok'),
             act: () => g.issue({ c: 'train', b: b.i, u: t }),
@@ -371,7 +375,10 @@ export class Hud {
       }
       if (b.t === 'markt') {
         const ctrl = () => c.brarup.c === c.me;
-        const sell = () => (ctrl() ? RULES.marketSellControlled : RULES.marketSell);
+        const fd = FACTION_DEFS[c.faction(c.me)];
+        const base = () => (ctrl() ? RULES.marketSellControlled : RULES.marketSell);
+        const sell = () => ({ ...base(), taler: Math.round(base().taler * (fd.marketTalerMul ?? 1)), prestige: base().prestige + (fd.marketPrestigeBonus ?? 0) });
+        const buyPrice = Math.round(RULES.marketBuy.taler * (fd.marketBuyMul ?? 1));
         out.push({
           key: 'Q', icon: resIcon('waren'), label: 'Verkaufen',
           tip: () => `<h4>Waren verkaufen (Q)</h4>${sell().waren} Waren → ${sell().taler} Taler und ${sell().prestige} Prestige.<br>Wer den Brarup-Markt besetzt, erhält ${RULES.marketSellControlled.taler} Taler und ${RULES.marketSellControlled.prestige} Prestige.`,
@@ -385,14 +392,14 @@ export class Hud {
         });
         out.push({
           key: 'E', icon: resIcon('holz'), label: 'Holz kaufen',
-          tip: () => `<h4>Holz kaufen (E)</h4>${RULES.marketBuy.taler} Taler → ${RULES.marketBuy.amount} Holz`,
-          state: () => ((c.mePlayer?.res?.taler ?? 0) >= RULES.marketBuy.taler ? 'ok' : 'poor'),
+          tip: () => `<h4>Holz kaufen (E)</h4>${buyPrice} Taler → ${RULES.marketBuy.amount} Holz`,
+          state: () => ((c.mePlayer?.res?.taler ?? 0) >= buyPrice ? 'ok' : 'poor'),
           act: () => g.issue({ c: 'buy', b: b.i, r: 'holz' }),
         });
         out.push({
           key: 'R', icon: resIcon('lehm'), label: 'Lehm kaufen',
-          tip: () => `<h4>Lehm kaufen (R)</h4>${RULES.marketBuy.taler} Taler → ${RULES.marketBuy.amount} Lehm`,
-          state: () => ((c.mePlayer?.res?.taler ?? 0) >= RULES.marketBuy.taler ? 'ok' : 'poor'),
+          tip: () => `<h4>Lehm kaufen (R)</h4>${buyPrice} Taler → ${RULES.marketBuy.amount} Lehm`,
+          state: () => ((c.mePlayer?.res?.taler ?? 0) >= buyPrice ? 'ok' : 'poor'),
           act: () => g.issue({ c: 'buy', b: b.i, r: 'lehm' }),
         });
       }

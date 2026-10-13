@@ -4,6 +4,7 @@ import {
   BUILDINGS, RES, RULES, UNITS, costText, isBuildingType, isUnitType,
   type BuildingType, type Cost, type Res, type UnitType,
 } from '../data/defs';
+import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
 import { generateMap, T, isWater, terrainWalkable, type GameMap } from './map';
 import { findPath, nearestPassable, type PathGrid } from './path';
 import { Rng } from './rng';
@@ -19,6 +20,7 @@ export interface PlayerSetup {
   slot: number;
   isAI: boolean;
   aiLevel?: 'leicht' | 'normal';
+  faction?: FactionId;
 }
 
 export interface WorldOptions {
@@ -28,11 +30,18 @@ export interface WorldOptions {
   richStart?: boolean;
 }
 
+const withBonus = (r: Record<Res, number>, b?: Cost): Record<Res, number> => {
+  const out = { ...r };
+  for (const k of RES) out[k] += b?.[k] ?? 0;
+  return out;
+};
 const zeroRes = (): Record<Res, number> => ({ holz: 0, getreide: 0, fisch: 0, lehm: 0, waren: 0, taler: 0 });
 
 export class World {
   readonly map: GameMap;
   readonly grid: PathGrid;
+  /** Wegeraster für Einheiten, die Knicks überwinden (Grabenspringer) */
+  readonly gridJump: PathGrid;
   readonly bocc: Int32Array; // Gebäude-ID je Kachel
   readonly field: Int32Array; // Bauernhof-ID je Feldkachel
   tick = 0;
@@ -49,6 +58,17 @@ export class World {
   brarup = { id: 0, controller: -1, contested: false, timer: 0 };
   moorFoundBy = -1;
   treeDirty: number[] = [];
+  /** Bäume, zu denen kürzlich kein Weg gefunden wurde (Kachel → Takt, bis zu dem sie gemieden werden) */
+  badTrees = new Map<number, number>();
+  isBadTree(i: number): boolean {
+    const until = this.badTrees.get(i);
+    if (until === undefined) return false;
+    if (until < this.tick) {
+      this.badTrees.delete(i);
+      return false;
+    }
+    return true;
+  }
   private cells: Unit[][] = [];
   private cellsW: number;
   private attackedNote: number[] = [];
@@ -59,6 +79,7 @@ export class World {
     this.map = generateMap(opts.seed);
     const N = this.map.w * this.map.h;
     this.grid = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
+    this.gridJump = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
     this.bocc = new Int32Array(N);
     this.field = new Int32Array(N);
     this.rng = new Rng(opts.seed * 7 + 13);
@@ -67,15 +88,16 @@ export class World {
     for (let i = 0; i < this.cellsW * this.cellsW; i++) this.cells.push([]);
     for (let i = 0; i < N; i++) {
       const t = this.map.terrain[i];
-      this.grid.pass[i] = terrainWalkable(t) && !this.map.trees[i] ? 1 : 0;
       this.grid.cost[i] = t === T.WEG || t === T.TOR ? 0.75 : t === T.MOOR ? 1.8 : 1;
+      this.gridJump.cost[i] = t === T.KNICK ? 1.6 : this.grid.cost[i];
+      this.refreshPass(i);
     }
     if (skipSetup) return;
     const start = opts.richStart ? RULES.startResHigh : RULES.startRes;
     opts.players.forEach((ps, id) => {
       this.players.push({
-        id, name: ps.name, color: ps.color, slot: ps.slot, res: { ...start }, prestige: 0, defeated: false,
-        isAI: ps.isAI, aiLevel: ps.aiLevel ?? 'normal',
+        id, name: ps.name, color: ps.color, slot: ps.slot, res: withBonus(start, FACTION_DEFS[ps.faction ?? 'angeln'].startBonus), prestige: 0, defeated: false,
+        isAI: ps.isAI, aiLevel: ps.aiLevel ?? 'normal', faction: ps.faction ?? 'angeln',
         stats: { gathered: zeroRes(), trained: 0, lost: 0, kills: 0, built: 0, sold: 0 }, pop: 0, popCap: 0,
       });
       this.vis.push(new Uint8Array(N));
@@ -106,6 +128,16 @@ export class World {
   building(id: number): Building | undefined {
     const e = this.ents.get(id);
     return e && e.kind === 'b' ? e : undefined;
+  }
+  /** Einheiten-/Gebäudewerte gemäß Partei des Besitzers */
+  ud(owner: number, t: UnitType) {
+    return fudef(this.players[owner]?.faction, t);
+  }
+  bd(owner: number, t: BuildingType) {
+    return fbdef(this.players[owner]?.faction, t);
+  }
+  gridFor(u: Unit): PathGrid {
+    return UNITS[u.type].knickJump ? this.gridJump : this.grid;
   }
   isEnemy(a: number, b: number): boolean {
     return a !== b && a >= 0 && b >= 0;
@@ -154,7 +186,7 @@ export class World {
 
   // ---------------------------------------------------------------- Erzeugen
   addBuilding(type: BuildingType, owner: number, x: number, y: number, built: boolean): Building {
-    const def = BUILDINGS[type];
+    const def = this.bd(owner, type);
     const b: Building = {
       id: this.nextId++, kind: 'b', type, owner, x, y, w: def.w, h: def.h,
       hp: built ? def.hp : Math.max(1, Math.round(def.hp * 0.1)), maxHp: def.hp, built, prog: built ? def.buildTime : 0,
@@ -173,6 +205,7 @@ export class World {
         const i = this.idx(b.x + dx, b.y + dy);
         this.bocc[i] = b.id;
         this.grid.pass[i] = 0;
+        this.gridJump.pass[i] = 0;
       }
     // Einheiten auf der Baufläche werden herausgeschoben
     for (const e of this.ents.values()) {
@@ -192,7 +225,9 @@ export class World {
 
   private refreshPass(i: number): void {
     const t = this.map.terrain[i];
-    this.grid.pass[i] = terrainWalkable(t) && !this.map.trees[i] && !this.bocc[i] ? 1 : 0;
+    const free = !this.map.trees[i] && !this.bocc[i];
+    this.grid.pass[i] = terrainWalkable(t) && free ? 1 : 0;
+    this.gridJump.pass[i] = (terrainWalkable(t) || t === T.KNICK) && free ? 1 : 0;
   }
 
   spawnUnit(type: UnitType, owner: number, from: Building): Unit | null {
@@ -215,7 +250,7 @@ export class World {
       }
     if (best < 0) best = nearestPassable(this.grid, from.x + from.w, from.y + from.h, 10);
     if (best < 0) return null;
-    const def = UNITS[type];
+    const def = this.ud(owner, type);
     const u: Unit = {
       id: this.nextId++, kind: 'u', type, owner, x: (best % this.map.w) + 0.5, y: Math.floor(best / this.map.w) + 0.5,
       hp: def.hp, face: 1, anim: 0, order: { k: 'none' }, path: null, pathI: 0, goalTile: -1, repathT: 0,
@@ -330,7 +365,7 @@ export class World {
       case 'place': {
         if (!isBuildingType(cmd.b) || typeof cmd.x !== 'number' || typeof cmd.y !== 'number') return;
         const x = Math.floor(cmd.x), y = Math.floor(cmd.y);
-        const def = BUILDINGS[cmd.b];
+        const def = this.bd(p, cmd.b);
         const why = checkPlacement(this.placementView(p), cmd.b, x, y);
         if (why) return this.err(p, why);
         if (!this.canAfford(p, def.cost)) return this.err(p, `${def.name}: ${this.missingText(p, def.cost)}`);
@@ -343,11 +378,11 @@ export class World {
       case 'train': {
         const b = this.ownedBuilding(p, cmd.b);
         if (!b || !isUnitType(cmd.u)) return;
-        const def = BUILDINGS[b.type];
+        const def = this.bd(p, b.type);
         if (!b.built) return this.err(p, 'Das Gebäude ist noch nicht fertig.');
-        if (!def.trains?.includes(cmd.u)) return;
+        if (!def.trains?.includes(cmd.u)) return this.err(p, `${UNITS[cmd.u].name}: nur für ${this.uniqueOwnerName(cmd.u)}.`);
         if (b.queue.length >= 5) return this.err(p, 'Die Warteschlange ist voll (max. 5).');
-        const ud = UNITS[cmd.u];
+        const ud = this.ud(p, cmd.u);
         if (!this.canAfford(p, ud.cost)) return this.err(p, `${ud.name}: ${this.missingText(p, ud.cost)}`);
         this.pay(p, ud.cost);
         b.queue.push(cmd.u);
@@ -357,13 +392,13 @@ export class World {
         const b = this.ownedBuilding(p, cmd.b);
         if (!b) return;
         if (!b.built) {
-          this.refund(p, BUILDINGS[b.type].cost, 0.75);
+          this.refund(p, this.bd(p, b.type).cost, 0.75);
           this.removeBuilding(b, false);
           this.emit({ e: 'info', p, msg: `Bau abgebrochen – 75 % erstattet.` });
         } else if (b.queue.length) {
           const u = b.queue.pop()!;
           if (!b.queue.length) b.qt = 0;
-          this.refund(p, UNITS[u].cost, 1);
+          this.refund(p, this.ud(p, u).cost, 1);
         }
         break;
       }
@@ -376,8 +411,9 @@ export class World {
       case 'buy': {
         const b = this.ownedBuilding(p, cmd.b);
         if (!b || b.type !== 'markt' || !b.built || (cmd.r !== 'holz' && cmd.r !== 'lehm')) return;
-        if (pl.res.taler < RULES.marketBuy.taler) return this.err(p, `Zu wenig Taler (${RULES.marketBuy.taler} nötig).`);
-        pl.res.taler -= RULES.marketBuy.taler;
+        const price = this.buyPrice(p);
+        if (pl.res.taler < price) return this.err(p, `Zu wenig Taler (${price} nötig).`);
+        pl.res.taler -= price;
         pl.res[cmd.r] += RULES.marketBuy.amount;
         break;
       }
@@ -399,16 +435,27 @@ export class World {
     }
   }
 
+  buyPrice(p: number): number {
+    return Math.round(RULES.marketBuy.taler * (FACTION_DEFS[this.players[p].faction].marketBuyMul ?? 1));
+  }
+
+  private uniqueOwnerName(t: UnitType): string {
+    const f = Object.values(FACTION_DEFS).find((d) => d.unique === t);
+    return f ? `die ${f.name}` : 'andere Parteien';
+  }
+
   private sell(p: number): boolean {
     const pl = this.players[p];
     const ctrl = this.brarup.controller === p;
     const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
     if (pl.res.waren < s.waren) return false;
+    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1));
     pl.res.waren -= s.waren;
-    pl.res.taler += s.taler;
-    pl.prestige += s.prestige;
+    pl.res.taler += taler;
+    const prestige = s.prestige + (FACTION_DEFS[pl.faction].marketPrestigeBonus ?? 0);
+    pl.prestige += prestige;
     pl.stats.sold += s.waren;
-    this.emit({ e: 'sold', p, taler: s.taler, prestige: s.prestige });
+    this.emit({ e: 'sold', p, taler, prestige });
     return true;
   }
 
@@ -541,7 +588,7 @@ export class World {
       const src: VisionSource[] = [];
       for (const e of this.ents.values()) {
         if (e.owner !== pid) continue;
-        if (e.kind === 'u') src.push({ x: e.x, y: e.y, r: UNITS[e.type].vision });
+        if (e.kind === 'u') src.push({ x: e.x, y: e.y, r: this.ud(e.owner, e.type).vision });
         else src.push({ x: e.x + e.w / 2, y: e.y + e.h / 2, r: e.built ? BUILDINGS[e.type].vision : 3 });
       }
       if (p.defeated) {
@@ -593,22 +640,23 @@ export class World {
 
   private updateBuilding(b: Building): void {
     if (b.owner < 0 || !b.built) return;
-    const def = BUILDINGS[b.type];
+    const def = this.bd(b.owner, b.type);
     const pl = this.players[b.owner];
     // Ausbildung
     if (b.queue.length) {
       const ut = b.queue[0];
-      if (pl.pop + UNITS[ut].pop > pl.popCap) {
+      const utd = this.ud(b.owner, ut);
+      if (pl.pop + utd.pop > pl.popCap) {
         b.status = pl.popCap >= RULES.maxPop ? 'Bevölkerungsmaximum erreicht' : 'Wartet: Wohnhaus bauen!';
       } else {
         b.status = '';
         b.qt += DT;
-        if (b.qt >= UNITS[ut].trainTime) {
+        if (b.qt >= utd.trainTime) {
           const u = this.spawnUnit(ut, b.owner, b);
           if (u) {
             b.queue.shift();
             b.qt = 0;
-            pl.pop += UNITS[ut].pop;
+            pl.pop += utd.pop;
             pl.stats.trained++;
             this.emit({ e: 'trained', x: u.x, y: u.y, o: b.owner, u: ut });
             if (b.rally) {
@@ -671,14 +719,26 @@ export class World {
         const t = this.findEnemy({ x: cx, y: cy, owner: b.owner }, def.attack.range, false);
         if (t && t.kind === 'u') {
           b.cd = def.attack.cooldown;
-          this.damage(t, Math.max(1, def.attack.dmg - UNITS[t.type].armor), b.owner, b.id);
+          this.damage(t, Math.max(1, def.attack.dmg - this.ud(t.owner, t.type).armor), b.owner, b.id);
           this.emit({ e: 'shot', x: cx, y: cy, tx: t.x, ty: t.y, r: 1 });
         }
       }
     }
   }
 
+  /** Knickwächter neben einem Knick erleiden deutlich weniger Schaden. */
+  private nearKnick(x: number, y: number): boolean {
+    const cx = Math.floor(x), cy = Math.floor(y);
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (this.inMap(nx, ny) && this.map.terrain[this.idx(nx, ny)] === T.KNICK) return true;
+      }
+    return false;
+  }
+
   private damage(t: Entity, dmg: number, attacker: number, attackerId: number): void {
+    if (t.kind === 'u' && t.type === 'knickwaechter' && this.nearKnick(t.x, t.y)) dmg = Math.max(1, Math.round(dmg * 0.55));
     t.hp -= dmg;
     if (t.kind === 'u') {
       t.lastHitBy = attackerId;
@@ -695,7 +755,7 @@ export class World {
   // ---------------------------------------------------------------- Einheiten
   private updateUnit(u: Unit): void {
     if (u.hp <= 0) return;
-    const def = UNITS[u.type];
+    const def = this.ud(u.owner, u.type);
     u.cd -= DT;
     const o = u.order;
     // Automatische Zielerfassung
@@ -742,6 +802,7 @@ export class World {
    */
   private follow(u: Unit, gx: number, gy: number, key: number, isGoal: (i: number) => boolean, arriveR: number): 'moving' | 'arrived' | 'fail' {
     const w = this.map.w;
+    const grid = this.gridFor(u);
     if (key === -2 && Math.hypot(u.x - gx, u.y - gy) <= arriveR) return 'arrived';
     const cur = this.idx(Math.floor(u.x), Math.floor(u.y));
     if (key !== -2 && isGoal(cur)) {
@@ -757,14 +818,14 @@ export class World {
       const gTile = this.idx(Math.floor(gx), Math.floor(gy));
       const goal = key === -2 ? (i: number) => i === gTile : isGoal;
       let sx = Math.floor(u.x), sy = Math.floor(u.y);
-      if (!this.grid.pass[cur]) {
-        const np = nearestPassable(this.grid, sx, sy, 4);
+      if (!grid.pass[cur]) {
+        const np = nearestPassable(grid, sx, sy, 4);
         if (np >= 0) {
           sx = np % w;
           sy = Math.floor(np / w);
         }
       }
-      const p = findPath(this.grid, sx, sy, goal, Math.floor(gx), Math.floor(gy));
+      const p = findPath(grid, sx, sy, goal, Math.floor(gx), Math.floor(gy));
       u.goalTile = key;
       u.repathT = 1;
       if (!p) {
@@ -787,7 +848,7 @@ export class World {
       return isGoal(cur) ? 'arrived' : 'fail';
     }
     const next = path[u.pathI];
-    if (!this.grid.pass[next]) {
+    if (!grid.pass[next]) {
       u.path = null;
       u.repathT = 0;
       u.goalTile = -1;
@@ -819,7 +880,7 @@ export class World {
     const dx = tx - u.x, dy = ty - u.y;
     const d = Math.hypot(dx, dy);
     const cur = this.idx(Math.floor(u.x), Math.floor(u.y));
-    const sp = (UNITS[u.type].speed / this.grid.cost[cur]) * DT;
+    const sp = (this.ud(u.owner, u.type).speed / this.gridFor(u).cost[cur]) * DT;
     u.anim = 1;
     if (Math.abs(dx - dy) > 0.01) u.face = dx - dy > 0 ? 1 : -1;
     if (d <= sp) {
@@ -838,7 +899,7 @@ export class World {
   }
 
   private doAttack(u: Unit, o: Extract<Order, { k: 'attack' }>): void {
-    const def = UNITS[u.type];
+    const def = this.ud(u.owner, u.type);
     const t = this.ents.get(o.t);
     const done = () => {
       if (o.resume) this.setOrder(u, { k: 'move', x: o.resume.x, y: o.resume.y, am: true });
@@ -862,10 +923,10 @@ export class World {
       if (u.cd <= 0) {
         u.cd = def.cooldown;
         let dmg: number;
-        if (t.kind === 'u') dmg = Math.max(1, def.dmg - UNITS[t.type].armor);
+        if (t.kind === 'u') dmg = Math.max(1, def.dmg - this.ud(t.owner, t.type).armor);
         else dmg = def.dmg * def.vsBuilding;
         this.damage(t, dmg, u.owner, u.id);
-        if (def.range > 2) this.emit({ e: 'shot', x: u.x, y: u.y, tx, ty, r: 0 });
+        if (def.range > 2) this.emit({ e: 'shot', x: u.x, y: u.y, tx, ty, r: u.type === 'musketier' ? 2 : 0 });
         else this.emit({ e: 'hit', x: tx, y: ty, m: 1 });
       }
       return;
@@ -914,7 +975,7 @@ export class World {
         const px = x0 + dx, py = y0 + dy;
         if (!this.inMap(px, py)) continue;
         const i = py * w + px;
-        if (!this.map.trees[i]) continue;
+        if (!this.map.trees[i] || this.isBadTree(i)) continue;
         // nur Bäume mit freiem Nachbarn
         let free = false;
         for (let k = 0; k < 8 && !free; k++) {
@@ -987,8 +1048,17 @@ export class World {
         } else if (this.map.trees[o.tile] % 5 === 0) this.treeDirty.push(o.tile);
       }
     } else if (r === 'fail') {
-      this.err(u.owner, 'Dieser Baum ist nicht erreichbar.');
-      this.setOrder(u, { k: 'none' });
+      // Baum liegt z. B. in einer von Knicks umschlossenen Koppel: merken und einen anderen suchen
+      this.badTrees.set(o.tile, this.tick + 3000);
+      const nt = this.nearestTree(u.x, u.y, 10);
+      if (nt >= 0) {
+        o.tile = nt;
+        u.path = null;
+        u.goalTile = -1;
+      } else {
+        this.err(u.owner, 'Hier ist kein Baum erreichbar.');
+        this.setOrder(u, { k: 'none' });
+      }
     }
   }
 
@@ -1110,11 +1180,11 @@ export class World {
           const push = (0.4 - d) * 0.25;
           const ux = u.x - (dx / d) * push, uy = u.y - (dy / d) * push;
           const vx = v.x + (dx / d) * push, vy = v.y + (dy / d) * push;
-          if (this.grid.pass[Math.floor(uy) * w + Math.floor(ux)] && u.anim !== 3) {
+          if (this.gridFor(u).pass[Math.floor(uy) * w + Math.floor(ux)] && u.anim !== 3) {
             u.x = ux;
             u.y = uy;
           }
-          if (this.grid.pass[Math.floor(vy) * w + Math.floor(vx)] && v.anim !== 3) {
+          if (this.gridFor(v).pass[Math.floor(vy) * w + Math.floor(vx)] && v.anim !== 3) {
             v.x = vx;
             v.y = vy;
           }
@@ -1259,6 +1329,7 @@ export class World {
     w.tick = d.tick;
     w.nextId = d.nextId;
     w.players = d.players;
+    for (const p of w.players) p.faction ??= 'angeln';
     w.map.trees.set(ub(d.trees));
     w.vis = d.vis.map(ub);
     w.attackedNote = w.players.map(() => -1000);
@@ -1277,6 +1348,7 @@ export class World {
             const i = w.idx(e.x + dx, e.y + dy);
             w.bocc[i] = e.id;
             w.grid.pass[i] = 0;
+            w.gridJump.pass[i] = 0;
           }
         for (const f of e.fields) w.field[f] = e.id;
       }

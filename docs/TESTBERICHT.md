@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 28/28 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 35/35 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -26,15 +26,19 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Codes | Rundreise, Toleranz für Zeilenumbrüche; Ablehnung bei falscher Art, Version, Beschädigung, ungültigen Zeichen, Überlänge, Alter, falscher SDP/Sitzungskennung, fremdem JSON, Dekompressionsbombe |
 | Protokoll | Befehls-Whitelist, ID-/Koordinatengrenzen, Namensbereinigung, Gast darf keine Zustände senden, Ratenbegrenzung |
 | Kriegsnebel | verborgene Gegner, gegnerische Ressourcen und Ereignisse werden nicht gesendet; „hid“/„gone“-Semantik; Deltas |
+| Parteien | jede Partei hat eigene Spezialeinheit nur in ihrer Kaserne (fremde werden mit Meldung abgelehnt); Friesen zahlen Arbeiter mit Fisch; Schwansener verkaufen teurer; Boni greifen; Spielstand behält Parteien |
+| Grabenspringer | überquert einen geschlossenen Knick und ist schneller am Ziel als ein Landsknecht, der nie eine Knickkachel betritt |
+| Knickwächter / Musketier | Knickwächter neben Knick erleiden weniger Schaden; Musketier trifft auf 6 Kacheln (Ereignis „Muskete“) |
+| KI je Partei | vier Paarungen: jede KI bildet ihre Spezialeinheit aus, alle Partien enden mit Sieger |
 
-## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 28/28 bestanden
+## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 30/30 bestanden
 
 Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne ICE-Dienste“, mit dem Entwicklungsserver
 **und** dem Produktionsbuild (`vite preview`) jeweils bestanden, mit WebGL- und mit Canvas-Renderer:
 
 - Einladungscode (~650–700 Zeichen) und Antwortcode (~650 Zeichen) über die echte Oberfläche erzeugt
 - Ungültiger, abgeschnittener, vertauschter Code → verständliche Meldung; doppelte Antworterzeugung abgefangen
-- DataChannel öffnet sich, gemeinsame Lobby, Namensaustausch, Start erst wenn beide bereit
+- DataChannel öffnet sich, gemeinsame Lobby, Namens- und **Parteiaustausch** (Gast Dänen, Host Nordfriesen → in der Partie übernommen), Start erst wenn beide bereit
 - Gast sieht nur eigene Einheiten, keine verborgenen Gegner, keine gegnerischen Ressourcen; gleicher Takt wie der Host
 - Gast wählt per Linksklick, befiehlt per Rechtsklick → Host führt aus → Gast sieht die Bewegung
 - Manipulationsversuche des Gastes (fremde Einheit bewegen, erfundener Befehl, eigener „Zustand“, doppelte und
@@ -51,6 +55,13 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 
 Rahmenauswahl, Holz schlagen per Rechtsklick, Bauvorschau per Hotkey, ungültiger Platz rot + Begründung, gültiger Platz
 → Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, keine Skriptfehler.
+
+## 3a. Balance der Parteien (KI gegen KI, einmalige Auswertung)
+
+Alle 12 Paarungen × 3 Seeds = 36 Partien, beide KI „normal“: Siege Angeliter 11, Schwansener 11, Nordfriesen 7,
+Dänen 7 (je 18 Partien); 7 militärische, 29 wirtschaftliche Siege; Ø 12,2 Minuten. Vor der Nachjustierung gewannen
+die Nordfriesen keine Partie (Fischmangel zu Beginn) – behoben durch Startfisch, günstigere Arbeiter und
+KI-Bauvorrang für den Heringszaun. Die Werte stammen aus KI-Partien; mit Menschen ist weitere Feinabstimmung nötig.
 
 ## 4. Leistung (gemessen, mit Einschränkungen)
 
@@ -77,7 +88,7 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 2. **Leistung auf echter Laptop-GPU** nicht gemessen (siehe 4).
 3. **Andere Browser** (Firefox, Safari) nicht getestet; benötigt werden WebRTC DataChannels und `CompressionStream`
    (Firefox ≥ 113, Safari ≥ 16.4).
-4. **Balance:** Die KI gewinnt gegen sich selbst meist wirtschaftlich; militärische Siege kommen vor, sind aber seltener.
+4. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
    Feinabstimmung mit menschlichen Testspielern steht aus.
 5. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
    mit Raumcode, Hostmigration, Mehrspieler-Spielstände.

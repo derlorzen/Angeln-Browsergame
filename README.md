@@ -5,7 +5,8 @@ Handel und die Wege zum **Brarup-Markt** in Süderbrarup. Siedlungsbau und Produ
 direkte Einheitensteuerung wie bei Command & Conquer, Erkundung und Gefechte wie bei Age of Empires – mit eigenen
 Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Landschaft Angeln um 1600.
 
-- Einzelspieler gegen eine KI (zwei Stufen), mit Lehrmeister-Einstieg
+- Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
+- Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
 - Online-Modus für zwei Menschen über **direktes WebRTC**, ohne eigenen Server (manueller Code-Austausch)
 - Militärischer Sieg (gegnerisches Dorfzentrum zerstören) oder wirtschaftlicher Sieg (Prestige aus Handel)
 - Darstellung mit **PixiJS 8 (WebGL)**, automatischer Rückfall auf Canvas 2D
@@ -49,6 +50,17 @@ Beispiele:
 - **Eigener Webserver (nginx, Apache, Caddy):** `dist/` in das Web-Wurzelverzeichnis kopieren, HTTPS aktivieren.
 
 HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sicheren Kontext“ (HTTPS oder `localhost`).
+
+## Parteien (bewusst klischeehaft)
+
+| Partei | Fokus | Boni | Spezialeinheit | Baustil |
+|---|---|---|---|---|
+| **Angeliter** „Wat mutt, dat mutt.“ | Landwirtschaft | Hof +30 % Getreide, Mühle 20 % schneller, Wohnhaus −20 % | **Knickwächter** – billige Bauernwehr mit Sense, neben Knicks besonders zäh | Reet, Fachwerk mit roter Ausfachung, Rotvieh |
+| **Schwansener** „Wer reitet, der regiert.“ | Handel, Reiterei | Markt +25 % Taler und +1 Prestige je Verkauf, Zukauf −20 %, Späher +30 % LP; Wohnhaus +10 % | **Gutsreiter** – schwer gepanzerter Lanzenreiter | weiß verputzte Herrenhäuser, Ziegel-Walmdächer, Alleen, Pferde |
+| **Nordfriesen** „Lewwer duad üs Slaav!“ | Fischerei | Heringszaun +50 %, Räucherei 25 % schneller, Arbeiter kosten 30 Fisch statt Getreide, +120 Fisch zum Start; Hof −20 % | **Grabenspringer** – überspringt mit dem Springstock Knicks | Haubarg, Friesenhaus mit Frontispiz, Klinker, Schafe |
+| **Dänen** „For Konge og Fædreland!“ | Militär | Soldaten −15 %, Kaserne 25 % schneller, Amtshaus +30 % LP und stärkere Schützen | **Musketier** – größte Reichweite, hoher Schaden, langes Nachladen | Backstein-Renaissance mit Sandsteinbändern, Treppengiebel, Kupferhelme |
+
+Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedlich (z. B. greifen die Dänen früher an).
 
 ## Kurze Spielanleitung
 

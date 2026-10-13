@@ -2,6 +2,7 @@
 // über world.queueCommand() ab – dieselben Regeln, Kosten und Prüfungen wie für Menschen.
 // Vereinfachung: Die KI kennt die Startplätze der Gegner (die Karte ist allen bekannt).
 import { BUILDINGS, RULES, UNITS, type BuildingType, type UnitType } from '../data/defs';
+import { FACTION_DEFS } from '../data/factions';
 import { T } from '../sim/map';
 import { checkPlacement } from '../sim/rules';
 import type { Building, Command, Unit } from '../sim/types';
@@ -57,6 +58,9 @@ export class AI {
     const me = w.players[p];
     if (!me || me.defeated || w.winner >= 0) return;
     const easy = this.s.level === 'leicht';
+    const fd = FACTION_DEFS[me.faction];
+    const plan: [BuildingType, number][] = [...(fd.aiFirst ?? []).map((t): [BuildingType, number] => [t, 1]), ...PLAN];
+    fd.aiPlan.forEach((t, k) => plan.splice(9 + k * 2, 0, [t, PLAN.filter(([x]) => x === t).length + 1 + (t === 'kaserne' ? 0 : k % 2)]));
 
     const units: Unit[] = [];
     const blds: Building[] = [];
@@ -70,6 +74,7 @@ export class AI {
     const count = (t: BuildingType) => blds.filter((b) => b.type === t).length;
     const workers = units.filter((u) => u.type === 'arbeiter');
     const military = units.filter((u) => UNITS[u.type].military && u.type !== 'spaeher');
+    const aggr = easy ? 1 : fd.aiAggression;
     const unbuilt = blds.filter((b) => !b.built);
     const queued = blds.reduce((n, b) => n + b.queue.length, 0);
 
@@ -83,7 +88,7 @@ export class AI {
 
     // Arbeiter ausbilden
     const wantWorkers = easy ? 11 : 17;
-    if (workers.length + dz.queue.length < wantWorkers && dz.queue.length < 2 && w.canAfford(p, UNITS.arbeiter.cost))
+    if (workers.length + dz.queue.length < wantWorkers && dz.queue.length < 2 && w.canAfford(p, w.ud(p, 'arbeiter').cost))
       this.cmd(w, { c: 'train', b: dz.id, u: 'arbeiter' });
 
     // Wohnraum
@@ -92,11 +97,11 @@ export class AI {
       this.tryBuild(w, 'wohnhaus', dz, workers);
     else if (unbuilt.filter((b) => b.type !== 'wohnhaus').length === 0) {
       // Bauplan abarbeiten
-      for (const [t, n] of PLAN) {
+      for (const [t, n] of plan) {
         if (count(t) >= n) continue;
         if (easy && n > 2) break;
         if ((this.noSpot.get(t) ?? -1) > w.tick) continue; // kürzlich kein Bauplatz gefunden
-        if (!w.canAfford(p, BUILDINGS[t].cost)) break; // sparen
+        if (!w.canAfford(p, w.bd(p, t).cost)) break; // sparen
         if (this.tryBuild(w, t, dz, workers)) break;
         this.noSpot.set(t, w.tick + 600);
       }
@@ -139,8 +144,9 @@ export class AI {
     const kaserne = blds.find((b) => b.type === 'kaserne' && b.built);
     const maxArmy = easy ? 12 : 30;
     if (kaserne && kaserne.queue.length < 2 && workers.length >= (easy ? 8 : 12) && military.length < maxArmy) {
-      const ut: UnitType = (military.length + this.s.wave) % 3 === 2 ? 'schuetze' : 'landsknecht';
-      if (w.canAfford(p, UNITS[ut].cost)) this.cmd(w, { c: 'train', b: kaserne.id, u: ut });
+      const mix = fd.aiArmy;
+      const ut: UnitType = mix[(military.length + this.s.wave) % mix.length];
+      if (w.canAfford(p, w.ud(p, ut).cost)) this.cmd(w, { c: 'train', b: kaserne.id, u: ut });
     }
 
     // Späher: erst das Moor erkunden, dann den Markt beobachten
@@ -188,8 +194,8 @@ export class AI {
     }
 
     // Angriff
-    const firstAttack = (easy ? 12 : 7) * 60 * RULES.tickRate;
-    const waveSize = (easy ? 9 : 7) + this.s.wave * 2;
+    const firstAttack = ((easy ? 12 : 7) / aggr) * 60 * RULES.tickRate;
+    const waveSize = Math.round(((easy ? 9 : 7) + this.s.wave * 2) / aggr);
     const available = free.filter((u) => u.order.k === 'none');
     if (!threat && w.tick > firstAttack && available.length >= waveSize && w.tick - this.s.lastAttackTick > 900) {
       const enemy = w.players.find((q) => q.id !== p && !q.defeated);
@@ -235,7 +241,7 @@ function nearestTree(w: World, x: number, y: number, r: number): number {
       const px = Math.floor(x) + dx, py = Math.floor(y) + dy;
       if (!w.inMap(px, py)) continue;
       const i = w.idx(px, py);
-      if (!w.map.trees[i]) continue;
+      if (!w.map.trees[i] || w.isBadTree(i)) continue;
       let free = false;
       for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
         if (w.inMap(px + ax, py + ay) && w.grid.pass[w.idx(px + ax, py + ay)]) free = true;

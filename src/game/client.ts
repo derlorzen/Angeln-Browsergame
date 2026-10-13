@@ -1,6 +1,7 @@
 // Client-seitiges Abbild der Partie aus Sicht eines Spielers. Wird ausschließlich aus Snapshots gespeist –
 // lokal (vom eigenen World-Objekt) wie im Netzwerk (vom Host). Die Darstellung liest nur hiervon.
-import { BUILDINGS, UNITS, type BuildingType } from '../data/defs';
+import { BUILDINGS, type BuildingType, type UnitType } from '../data/defs';
+import { FACTION_DEFS, fbdef, fudef, type ArchStyle, type FactionId } from '../data/factions';
 import { generateMap, type GameMap } from '../sim/map';
 import { computeVisibility, type PlacementView, type VisionSource } from '../sim/rules';
 import type { BSnap, PlayerSnap, Snapshot, USnap } from '../sim/snapshot';
@@ -46,6 +47,19 @@ export class ClientState {
     this.vis = new Uint8Array(N);
     this.occ = new Int32Array(N);
     this.fieldOcc = new Uint8Array(N);
+  }
+
+  faction(owner: number): FactionId {
+    return this.players[owner]?.faction ?? 'angeln';
+  }
+  arch(owner: number): ArchStyle {
+    return owner < 0 ? 'angeln' : FACTION_DEFS[this.faction(owner)].arch;
+  }
+  ud(owner: number, t: UnitType) {
+    return fudef(owner < 0 ? null : this.faction(owner), t);
+  }
+  bd(owner: number, t: BuildingType) {
+    return fbdef(owner < 0 ? null : this.faction(owner), t);
   }
 
   get mePlayer(): PlayerSnap | undefined {
@@ -131,7 +145,7 @@ export class ClientState {
       this.vis.set(this.externalVis);
     } else {
       const src: VisionSource[] = [];
-      for (const u of this.units.values()) if (u.o === this.me) src.push({ x: u.x, y: u.y, r: UNITS[u.t].vision });
+      for (const u of this.units.values()) if (u.o === this.me) src.push({ x: u.x, y: u.y, r: this.ud(u.o, u.t).vision });
       for (const b of this.buildings.values())
         if (b.o === this.me) {
           const d = BUILDINGS[b.t];

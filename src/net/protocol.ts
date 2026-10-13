@@ -1,5 +1,6 @@
 // Nachrichtenformat zwischen Host und Gast (JSON über DataChannel) und strikte Prüfung eingehender Daten.
 import { isBuildingType, isUnitType } from '../data/defs';
+import { isFaction, type FactionId } from '../data/factions';
 import { MAP_H, MAP_W } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
@@ -11,6 +12,7 @@ export interface LobbyPlayer {
   color: number;
   slot: number;
   ready: boolean;
+  faction: FactionId;
 }
 export interface LobbyState {
   players: LobbyPlayer[]; // [0] = Host, [1] = Gast
@@ -19,8 +21,8 @@ export interface LobbyState {
 }
 
 export type GuestMsg =
-  | { t: 'hello'; v: number; name: string }
-  | { t: 'lset'; name: string; color: number; slot: number; ready: boolean }
+  | { t: 'hello'; v: number; name: string; faction: FactionId }
+  | { t: 'lset'; name: string; color: number; slot: number; ready: boolean; faction: FactionId }
   | { t: 'cmd'; s: number; c: Command }
   | { t: 'ping'; n: number }
   | { t: 'pong'; n: number }
@@ -103,10 +105,10 @@ export function parseGuestMsg(raw: unknown): GuestMsg | null {
   switch (m.t) {
     case 'hello':
       if (!isInt(m.v, 0, 1000)) return null;
-      return { t: 'hello', v: m.v, name: cleanName(m.name, 'Gast') };
+      return { t: 'hello', v: m.v, name: cleanName(m.name, 'Gast'), faction: isFaction(m.faction) ? m.faction : 'angeln' };
     case 'lset':
-      if (!isInt(m.color, 0, 3) || !isInt(m.slot, 0, 1) || typeof m.ready !== 'boolean') return null;
-      return { t: 'lset', name: cleanName(m.name, 'Gast'), color: m.color, slot: m.slot, ready: m.ready };
+      if (!isInt(m.color, 0, 3) || !isInt(m.slot, 0, 1) || typeof m.ready !== 'boolean' || !isFaction(m.faction)) return null;
+      return { t: 'lset', name: cleanName(m.name, 'Gast'), color: m.color, slot: m.slot, ready: m.ready, faction: m.faction };
     case 'cmd': {
       if (!isInt(m.s, 1, 1e12)) return null;
       const c = validateCommand(m.c);
@@ -136,7 +138,7 @@ export function parseHostMsg(raw: unknown): HostMsg | null {
     case 'lobby': {
       const st = m.st as LobbyState;
       if (!st || !Array.isArray(st.players) || st.players.length > 4) return null;
-      for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3)) return null;
+      for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction)) return null;
       return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: Number(st.goal) || 250, rich: !!st.rich } };
     }
     case 'start':

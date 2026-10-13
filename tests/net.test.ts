@@ -66,7 +66,8 @@ describe('Protokollprüfung', () => {
     expect(parseGuestMsg({ t: 'cmd', s: 0, c: { c: 'stop', ids: [1] } })).toBeNull(); // Sequenz muss >= 1 sein
     expect(parseGuestMsg({ t: 'cmd', s: 1, c: { c: 'stop', ids: [1] } })).toBeTruthy();
     expect(parseGuestMsg({ t: 'lset', name: '<script>', color: 9, slot: 0, ready: true })).toBeNull();
-    expect(parseGuestMsg({ t: 'lset', name: '<b>Bob</b>\u0000', color: 1, slot: 1, ready: true })).toEqual({ t: 'lset', name: 'bBob/b', color: 1, slot: 1, ready: true });
+    expect(parseGuestMsg({ t: 'lset', name: '<b>Bob</b>\u0000', color: 1, slot: 1, ready: true, faction: 'friesen' })).toEqual({ t: 'lset', name: 'bBob/b', color: 1, slot: 1, ready: true, faction: 'friesen' });
+    expect(parseGuestMsg({ t: 'lset', name: 'Bob', color: 1, slot: 1, ready: true, faction: 'wikinger' })).toBeNull();
     expect(parseGuestMsg({ t: 'snap', s: {} })).toBeNull(); // Gast darf keine Zustände senden
     expect(parseHostMsg({ t: 'snap', s: { ents: 'x' } })).toBeNull();
   });

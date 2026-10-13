@@ -1,5 +1,6 @@
 // Lokale Speicherung (localStorage): Einstellungen und ein Einzelspieler-Spielstand.
 import type { AIState } from '../ai/ai';
+import { isFaction, type FactionId } from '../data/factions';
 import { DEFAULT_ICE, type IceSettings } from '../net/peer';
 
 const SETTINGS_KEY = 'angeln-settings-v1';
@@ -10,10 +11,11 @@ export interface Settings {
   ice: IceSettings;
   tutorialDone: boolean;
   renderer: 'auto' | 'canvas';
+  faction: FactionId;
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto' };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -23,6 +25,7 @@ export function loadSettings(): Settings {
       ice: { ...DEFAULT_ICE, ...(s.ice ?? {}), mode: s.ice?.mode === 'none' ? 'none' : 'stun' },
       tutorialDone: !!s.tutorialDone,
       renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
+      faction: isFaction(s.faction) ? s.faction : 'angeln',
     };
   } catch {
     return def;

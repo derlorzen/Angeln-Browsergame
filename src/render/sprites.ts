@@ -2,9 +2,10 @@
 import type { BuildingType, Res, UnitType } from '../data/defs';
 import {
   S, TH, TW, Iso, boxFaces, bush, canvas, faceAt, fillFace, flag, ground, poly, prng, roof, shade, shadowDiamond,
-  wall, windowOn, type Ctx, type Face, type Pt,
+  wall, windowOn, type Ctx, type Face, type Pt, type RoofMat, type WallMat,
 } from './draw';
-import { brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
+import { FACTION_DEFS, type ArchStyle, type FactionId } from '../data/factions';
+import { animal, bands, frontispiz, spire, brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
 
 export const PLAYER_COLORS = ['#b3342b', '#2f5ea6', '#d4a21f', '#3f8a3c'];
 export const PLAYER_COLOR_NAMES = ['Ziegelrot', 'Schleiblau', 'Ockergelb', 'Knickgrün'];
@@ -407,10 +408,10 @@ function stall(g: Ctx, iso: Iso, x: number, y: number, color: string, goods: num
   poly(g, pts, undefined, 'rgba(40,30,20,0.5)', 1);
 }
 
-function drawBuilding(type: BuildingType, color: string): BuildingSprite {
+function drawBuilding(type: BuildingType, color: string, arch: ArchStyle): BuildingSprite {
   const tops: Record<BuildingType, number> = {
-    dorfzentrum: 90, wohnhaus: 56, holzfaeller: 50, bauernhof: 56, muehle: 92, heringszaun: 50, raeucherei: 80,
-    lehmgrube: 40, markt: 50, kaserne: 70, brarupmarkt: 74,
+    dorfzentrum: 124, wohnhaus: 62, holzfaeller: 50, bauernhof: 56, muehle: 92, heringszaun: 50, raeucherei: 80,
+    lehmgrube: 40, markt: 50, kaserne: 96, brarupmarkt: 74,
   };
   const size: Record<BuildingType, number> = {
     dorfzentrum: 3, wohnhaus: 2, holzfaeller: 2, bauernhof: 2, muehle: 2, heringszaun: 2, raeucherei: 2, lehmgrube: 2,
@@ -422,7 +423,8 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
   const out: BuildingSprite = { c: B.c, ax: B.ax, ay: B.ay };
   const to1x = (p: Pt): Pt => [p[0] / S - B.ax, p[1] / S - B.ay];
   // Wand mit Schattierung (Dachüberstand oben, Fuß unten)
-  const W = (f: Face, mat: Parameters<typeof wall>[2], light: number, seed: number, opts: { sockel?: boolean; ausfachung?: boolean } = {}) => {
+  const A = ARCH[arch];
+  const W = (f: Face, mat: Parameters<typeof wall>[2], light: number, seed: number, opts: WallOpts = {}) => {
     wall(g, f, mat, light, seed);
     if (opts.ausfachung) {
       brickNogging(g, f, light, seed + 7);
@@ -443,11 +445,212 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       for (let c = 0; c <= posts; c++) line(c / posts, 0, c / posts, 1);
       g.restore();
     }
+    if (opts.bands) bands(g, f, light);
     if (opts.sockel) plinth(g, f, 0.16, light, seed + 3);
     wallShading(g, f);
   };
+  /** Flagge in Spielerfarbe; Dänen mit weißem Kreuz. */
+  const banner = (x: number, y: number, h: number, wave: number) => {
+    flag(g, x, y, h, color, wave);
+    if (arch === 'daenen') {
+      g.fillStyle = '#f4f0e6';
+      g.fillRect(x + 6, y - h, 2.6, 12.5);
+      g.fillRect(x, y - h + 4.8, 20, 2.6);
+    }
+  };
+  // ---------------------------------------------------------------- Dorfzentren der anderen Parteien
+  const otherHQ = () => {
+    if (arch === 'schwansen') {
+      // Herrenhaus: weiß verputzt, Walmdach, Mittelrisalit mit Dreiecksgiebel, Freitreppe, Allee
+      ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#b8ae94');
+      const r = prng(15);
+      for (let k = 0; k < 120; k++) {
+        const p = iso.p(0.1 + r() * 2.8, 0.1 + r() * 2.8);
+        g.fillStyle = r() < 0.5 ? '#a89e84' : '#c8bea4';
+        g.fillRect(p[0], p[1], 3, 2);
+      }
+      shadowDiamond(g, iso, 0.35, 0.45, 2.65, 1.95);
+      const f = boxFaces(iso, 0.35, 0.45, 2.65, 1.85, 0, 34);
+      W(f.left, 'putz', 0.06, 2, { sockel: true });
+      W(f.right, 'putz', -0.16, 3, { sockel: true });
+      for (const u of [0.06, 0.2, 0.72, 0.86]) for (const v of [0.2, 0.62]) window4(g, f.left, u, v, 0.07, 0.24, 0.06);
+      for (const u of [0.25, 0.6]) for (const v of [0.2, 0.62]) window4(g, f.right, u, v, 0.14, 0.24, -0.16);
+      roof(g, iso, 0.35, 0.45, 2.65, 1.85, 34, 26, 'x', 'ziegel', 0.55, 9);
+      // Mittelrisalit
+      const m = boxFaces(iso, 1.15, 1.85, 1.85, 2.1, 0, 36);
+      W(m.left, 'putz', 0.1, 4, { sockel: true });
+      W(m.right, 'putz', -0.12, 5);
+      plankDoor(g, m.left, 0.36, 0.28, 0.5, 0.1, '#3a4a3a');
+      window4(g, m.left, 0.38, 0.65, 0.24, 0.2, 0.1);
+      const p0 = iso.p(1.1, 2.12, 36), p1 = iso.p(1.9, 2.12, 36), pt = iso.p(1.5, 2.12, 52);
+      poly(g, [p0, p1, pt], '#ece5d4', 'rgba(60,50,40,0.6)', 1);
+      const wp = iso.p(1.5, 2.12, 42);
+      g.fillStyle = color;
+      g.beginPath();
+      g.arc(wp[0], wp[1], 4, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#d8b040';
+      g.lineWidth = 1;
+      g.stroke();
+      // Freitreppe
+      for (let k = 0; k < 3; k++) poly(g, [iso.p(1.3, 2.12 + k * 0.08, 6 - k * 2), iso.p(1.7, 2.12 + k * 0.08, 6 - k * 2), iso.p(1.7, 2.2 + k * 0.08, 6 - k * 2), iso.p(1.3, 2.2 + k * 0.08, 6 - k * 2)], '#d8d0bc', 'rgba(0,0,0,0.2)', 0.5);
+      out.smoke = [chimney(g, iso, 0.8, 0.9, 50, 10), chimney(g, iso, 2.2, 0.9, 50, 10)].map(to1x);
+      // Allee: gestutzte Linden an der Zufahrt
+      for (const [x, y] of [[0.3, 2.5], [0.3, 2.85], [2.75, 2.2], [2.75, 2.6]] as Pt[]) {
+        const p = iso.p(x, y);
+        g.fillStyle = '#4b3727';
+        g.fillRect(p[0] - 2, p[1] - 18, 4, 18);
+        bush(g, p[0], p[1] - 26, 11, '#4a7534', prng(Math.round(x * 100 + y)));
+      }
+      const fp = iso.p(1.5, 1.15, 60);
+      banner(fp[0], fp[1], 20, 2);
+      out.flagPt = to1x(fp);
+    } else if (arch === 'friesen') {
+      // Haubarg: riesiges, fast pyramidenförmiges Reetdach über niedrigen Klinkerwänden, Wassergraben
+      ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#7e8a4a');
+      poly(g, [iso.p(0.05, 2.75), iso.p(2.95, 2.75), iso.p(2.95, 2.95), iso.p(0.05, 2.95)], '#3d6078');
+      g.strokeStyle = 'rgba(200,225,235,0.5)';
+      g.lineWidth = 1;
+      for (let k = 0; k < 6; k++) {
+        const p = iso.p(0.3 + k * 0.45, 2.85);
+        g.beginPath();
+        g.moveTo(p[0] - 4, p[1]);
+        g.quadraticCurveTo(p[0], p[1] - 2, p[0] + 4, p[1]);
+        g.stroke();
+      }
+      shadowDiamond(g, iso, 0.3, 0.3, 2.7, 2.5);
+      const f = boxFaces(iso, 0.3, 0.3, 2.65, 2.55, 0, 15);
+      W(f.left, 'klinker', 0.06, 2);
+      W(f.right, 'klinker', -0.18, 3);
+      frontispiz(g, f.left, 0.4, 0.22, 34, 0.06);
+      plankDoor(g, f.left, 0.44, 0.14, 0.8, 0.06, '#2f5f9a');
+      for (const u of [0.1, 0.24, 0.72, 0.84]) window4(g, f.left, u, 0.35, 0.08, 0.4, 0.06);
+      plankDoor(g, f.right, 0.3, 0.4, 0.92, -0.18, '#2f5f9a'); // Dielentor
+      window4(g, f.right, 0.8, 0.35, 0.1, 0.4, -0.18);
+      roof(g, iso, 0.3, 0.3, 2.65, 2.55, 15, 66, 'x', 'reet', 1.0, 9);
+      out.smoke = [chimney(g, iso, 1.45, 1.4, 70, 8)].map(to1x);
+      const fp = iso.p(1.6, 1.43, 81);
+      banner(fp[0], fp[1], 26, 2);
+      out.flagPt = to1x(fp);
+      animal(g, ...iso.p(0.35, 2.55), 'schaf', 1);
+      animal(g, ...iso.p(2.85, 1.0), 'schaf', -1);
+      animal(g, ...iso.p(2.8, 1.5), 'schaf', 1);
+      cart(g, iso, 2.5, 2.35, 'saecke');
+    } else {
+      // Amtshaus: Backstein-Renaissance mit Sandsteinbändern, Treppengiebel, Turm mit Kupferhelm, Kanone
+      ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#8d8573');
+      const r = prng(25);
+      for (let k = 0; k < 140; k++) {
+        const p = iso.p(0.1 + r() * 2.8, 0.1 + r() * 2.8);
+        g.fillStyle = r() < 0.5 ? '#7d7563' : '#a39a86';
+        g.fillRect(p[0], p[1], 5, 3);
+      }
+      shadowDiamond(g, iso, 0.3, 0.3, 2.5, 2.1);
+      const f = boxFaces(iso, 0.3, 0.35, 2.4, 2.0, 0, 34);
+      W(f.left, 'ziegel', 0.05, 2, { sockel: true, bands: true });
+      W(f.right, 'ziegel', -0.2, 3, { sockel: true, bands: true });
+      plankDoor(g, f.left, 0.42, 0.14, 0.56, 0.05, '#7a2a1e');
+      for (const u of [0.1, 0.25, 0.68, 0.83]) window4(g, f.left, u, 0.42, 0.08, 0.22, 0.05, '#8a2a22');
+      window4(g, f.right, 0.3, 0.42, 0.14, 0.22, -0.2);
+      roof(g, iso, 0.3, 0.35, 2.4, 2.0, 34, 32, 'x', 'ziegel', 0, 9);
+      steppedGable(g, iso, 2.4, 0.35, 2.0, 34, 32, 5);
+      out.smoke = [chimney(g, iso, 0.9, 1.0, 50, 14)].map(to1x);
+      const t = boxFaces(iso, 2.0, 1.95, 2.72, 2.67, 0, 60);
+      W(t.left, 'ziegel', 0.05, 4, { sockel: true, bands: true });
+      W(t.right, 'ziegel', -0.2, 5, { sockel: true, bands: true });
+      plankDoor(g, t.left, 0.32, 0.36, 0.2, 0.05, '#7a2a1e');
+      windowOn(g, t.left, 0.3, 0.76, 0.4, 0.12, 0.1);
+      windowOn(g, t.right, 0.3, 0.76, 0.4, 0.12, -0.2);
+      spire(g, iso, 2.0, 1.95, 2.72, 2.67, 60, 58);
+      // Kanone auf Lafette
+      const kn = iso.p(0.7, 2.55);
+      g.fillStyle = '#5a3d22';
+      g.fillRect(kn[0] - 9, kn[1] - 6, 16, 4);
+      g.strokeStyle = '#3a2818';
+      g.lineWidth = 1.6;
+      for (const dx of [-6, 4]) {
+        g.beginPath();
+        g.arc(kn[0] + dx, kn[1] - 3, 3.6, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.fillStyle = '#a8803a';
+      g.beginPath();
+      g.moveTo(kn[0] - 10, kn[1] - 9);
+      g.lineTo(kn[0] + 12, kn[1] - 11);
+      g.lineTo(kn[0] + 12, kn[1] - 7.5);
+      g.lineTo(kn[0] - 10, kn[1] - 5.5);
+      g.closePath();
+      g.fill();
+      for (let k = 0; k < 3; k++) {
+        const b = iso.p(1.05 + k * 0.08, 2.75);
+        g.fillStyle = '#2a2a2a';
+        g.beginPath();
+        g.arc(b[0], b[1] - 2, 2, 0, Math.PI * 2);
+        g.fill();
+      }
+      barrel(g, ...iso.p(2.75, 0.4));
+      crate(g, iso, 2.6, 1.0);
+      const fp = iso.p(1.35, 1.17, 66);
+      banner(fp[0], fp[1], 24, 2);
+      out.flagPt = to1x(fp);
+    }
+  };
+
+  const otherHouse = () => {
+    ground(g, iso, 0.12, 0.12, 1.88, 1.88, '#7a8a48');
+    shadowDiamond(g, iso, 0.35, 0.45, 1.75, 1.6);
+    if (arch === 'schwansen') {
+      // Gutskate: verputzt, Ziegel-Walmdach, Hecke
+      for (let k = 0; k < 5; k++) {
+        const p = iso.p(0.2 + k * 0.2, 1.85);
+        bush(g, p[0], p[1] - 4, 6, '#4a6e30', prng(k + 40));
+      }
+      const f = boxFaces(iso, 0.35, 0.45, 1.75, 1.55, 0, 22);
+      W(f.left, 'putz', 0.08, 1, { sockel: true });
+      W(f.right, 'putz', -0.15, 2, { sockel: true });
+      plankDoor(g, f.left, 0.42, 0.16, 0.7, 0.08, color);
+      window4(g, f.left, 0.1, 0.42, 0.13, 0.3, 0.08, A.shutter);
+      window4(g, f.left, 0.74, 0.42, 0.13, 0.3, 0.08, A.shutter);
+      window4(g, f.right, 0.36, 0.42, 0.24, 0.3, -0.15, A.shutter);
+      roof(g, iso, 0.35, 0.45, 1.75, 1.55, 22, 22, 'x', 'ziegel', 0.4, 21);
+      out.smoke = [chimney(g, iso, 1.05, 1.0, 40, 8)].map(to1x);
+    } else if (arch === 'friesen') {
+      // Friesenhaus: niedrige Klinkerwände, mächtiges Reetdach, Frontispiz, blaue Tür
+      const f = boxFaces(iso, 0.3, 0.45, 1.8, 1.55, 0, 14);
+      W(f.left, 'klinker', 0.08, 1);
+      W(f.right, 'klinker', -0.15, 2);
+      frontispiz(g, f.left, 0.36, 0.26, 26, 0.08);
+      plankDoor(g, f.left, 0.42, 0.14, 0.8, 0.08, '#2f5f9a');
+      window4(g, f.left, 0.1, 0.35, 0.1, 0.4, 0.08);
+      window4(g, f.left, 0.78, 0.35, 0.1, 0.4, 0.08);
+      window4(g, f.right, 0.38, 0.35, 0.22, 0.4, -0.15);
+      roof(g, iso, 0.3, 0.45, 1.8, 1.55, 14, 30, 'x', 'reet', 0.35, 21);
+      out.smoke = [chimney(g, iso, 1.05, 1.0, 40, 6)].map(to1x);
+      animal(g, ...iso.p(1.6, 1.8), 'schaf', -1);
+      wattle(g, iso, [[0.12, 1.92], [1.0, 1.92]], 6);
+    } else {
+      // dänisches Bürgerhaus: Backstein mit Sandsteinbändern, Treppengiebel, Ziegeldach
+      const f = boxFaces(iso, 0.35, 0.45, 1.75, 1.55, 0, 26);
+      W(f.left, 'ziegel', 0.08, 1, { sockel: true, bands: true });
+      W(f.right, 'ziegel', -0.15, 2, { sockel: true, bands: true });
+      plankDoor(g, f.left, 0.42, 0.16, 0.56, 0.08, '#7a2a1e');
+      window4(g, f.left, 0.1, 0.42, 0.13, 0.24, 0.08, A.shutter);
+      window4(g, f.left, 0.74, 0.42, 0.13, 0.24, 0.08, A.shutter);
+      window4(g, f.right, 0.36, 0.42, 0.24, 0.24, -0.15);
+      roof(g, iso, 0.35, 0.45, 1.75, 1.55, 26, 22, 'x', 'ziegel', 0, 21);
+      steppedGable(g, iso, 1.75, 0.45, 1.55, 26, 22, 3);
+      out.smoke = [chimney(g, iso, 0.75, 1.0, 44, 8)].map(to1x);
+      animal(g, ...iso.p(1.55, 1.85), 'schwein', -1);
+    }
+    woodpile(g, iso, 1.78, 0.5, 3);
+  };
+
   switch (type) {
     case 'dorfzentrum': {
+      if (arch !== 'angeln') {
+        otherHQ();
+        break;
+      }
       ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#8d8573');
       const r = prng(5);
       for (let k = 0; k < 140; k++) {
@@ -510,7 +713,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.stroke();
       roof(g, iso, 2.0, 1.95, 2.75, 2.7, 62, 30, 'x', 'ziegel', 0.37, 12);
       const fp = iso.p(2.375, 2.325, 92);
-      flag(g, fp[0], fp[1], 22, color, 2);
+      banner(fp[0], fp[1], 22, 2);
       out.flagPt = to1x(fp);
       // Wappenbanner an der Hauswand
       const bn = faceAt(f.left, 0.56, 0.9);
@@ -537,6 +740,10 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       break;
     }
     case 'wohnhaus': {
+      if (arch !== 'angeln') {
+        otherHouse();
+        break;
+      }
       ground(g, iso, 0.12, 0.12, 1.88, 1.88, '#7a8a48');
       flowers(g, iso, 0.2, 1.68, 1.0, 1.88, 12);
       wattle(g, iso, [[0.12, 1.92], [1.15, 1.92]], 7);
@@ -623,15 +830,15 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.fillStyle = '#9aa0a6';
       g.fillRect(hb[0] - 3, hb[1] - 14, 6, 5);
       const fp = iso.p(1.75, 0.3, 0);
-      flag(g, fp[0], fp[1], 34, color, 1);
+      banner(fp[0], fp[1], 34, 1);
       break;
     }
     case 'bauernhof': {
       ground(g, iso, 0.1, 0.1, 1.9, 1.9, '#7e8248');
       shadowDiamond(g, iso, 0.2, 0.4, 1.85, 1.55);
       const f = boxFaces(iso, 0.2, 0.4, 1.85, 1.5, 0, 18);
-      W(f.left, 'fachwerk', 0.06, 3, { sockel: true, ausfachung: true });
-      W(f.right, 'ziegel', -0.18, 4, { sockel: true });
+      W(f.left, A.house, 0.06, 3, A.houseOpts);
+      W(f.right, arch === 'angeln' ? 'ziegel' : A.house, -0.18, 4, arch === 'angeln' ? { sockel: true } : A.houseOpts);
       // Grotdör (großes Dielentor) mit Rautenmuster
       plankDoor(g, f.right, 0.28, 0.44, 0.86, -0.18, '#6a4a2c');
       g.strokeStyle = 'rgba(40,25,10,0.6)';
@@ -643,12 +850,14 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.moveTo(d2[0], d2[1]);
       g.lineTo(d3[0], d3[1]);
       g.stroke();
-      window4(g, f.left, 0.12, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
-      window4(g, f.left, 0.45, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
-      window4(g, f.left, 0.78, 0.42, 0.1, 0.3, 0.06, '#3f5a3a');
-      roof(g, iso, 0.2, 0.4, 1.85, 1.5, 18, 30, 'x', 'reet', 0.35, 41);
-      const eb = iso.p(1.0, 1.4, 27);
-      eyebrow(g, eb[0], eb[1], 26);
+      window4(g, f.left, 0.12, 0.42, 0.1, 0.3, 0.06, A.shutter);
+      window4(g, f.left, 0.45, 0.42, 0.1, 0.3, 0.06, A.shutter);
+      window4(g, f.left, 0.78, 0.42, 0.1, 0.3, 0.06, A.shutter);
+      roof(g, iso, 0.2, 0.4, 1.85, 1.5, 18, 30, 'x', A.houseRoof, 0.35, 41);
+      if (A.houseRoof === 'reet') {
+        const eb = iso.p(1.0, 1.4, 27);
+        eyebrow(g, eb[0], eb[1], 26);
+      }
       // Pferdeköpfe am First (Giebelzier)
       const gz = iso.p(1.5, 0.95, 48);
       g.strokeStyle = '#4a3222';
@@ -673,12 +882,16 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
         g.stroke();
       }
       cart(g, iso, 1.05, 1.62, 'heu');
+      // typisches Vieh der Partei
+      const vieh = A.vieh;
+      animal(g, ...iso.p(1.6, 0.25), vieh, -1);
+      animal(g, ...iso.p(1.95, 0.75), vieh, 1);
       chicken(g, ...iso.p(0.7, 1.75), 1);
       chicken(g, ...iso.p(0.9, 1.9), -1);
       chicken(g, ...iso.p(1.75, 1.85), 1);
       wattle(g, iso, [[1.92, 0.1], [1.92, 0.38]], 7);
       const fp = iso.p(1.88, 0.42, 0);
-      flag(g, fp[0], fp[1], 34, color, 2);
+      banner(fp[0], fp[1], 34, 2);
       break;
     }
     case 'muehle': {
@@ -745,7 +958,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.stroke();
       out.hub = to1x(iso.p(1.42, 1.0, 58));
       const fp = iso.p(0.98, 1.0, 86);
-      flag(g, fp[0], fp[1], 12, color, 1);
+      banner(fp[0], fp[1], 12, 1);
       break;
     }
     case 'heringszaun': {
@@ -834,18 +1047,18 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.ellipse(kb2[0], kb2[1] - 7, 5, 2, 0, 0, Math.PI * 2);
       g.fill();
       const fp = iso.p(0.25, 1.6, 2);
-      flag(g, fp[0] + 22, fp[1] - 6, 30, color, 2);
+      banner(fp[0] + 22, fp[1] - 6, 30, 2);
       break;
     }
     case 'raeucherei': {
       ground(g, iso, 0.15, 0.15, 1.85, 1.85, '#80784e');
       shadowDiamond(g, iso, 0.3, 0.4, 1.7, 1.6);
       const f = boxFaces(iso, 0.3, 0.4, 1.7, 1.6, 0, 22);
-      W(f.left, 'ziegel', 0.05, 9, { sockel: true });
-      W(f.right, 'ziegel', -0.2, 10, { sockel: true });
+      W(f.left, A.main, 0.05, 9, A.mainOpts);
+      W(f.right, A.main, -0.2, 10, A.mainOpts);
       plankDoor(g, f.left, 0.4, 0.2, 0.7, 0.05);
       window4(g, f.right, 0.4, 0.45, 0.18, 0.25, -0.2, undefined, 0.8);
-      roof(g, iso, 0.3, 0.4, 1.7, 1.6, 22, 20, 'y', 'ziegel', 0, 71);
+      roof(g, iso, 0.3, 0.4, 1.7, 1.6, 22, 20, 'y', A.mainRoof, A.mainRoof === 'reet' ? 0.3 : 0, 71);
       const c = boxFaces(iso, 1.15, 0.55, 1.42, 0.82, 0, 66);
       wall(g, c.left, 'ziegel', 0.0, 11);
       wall(g, c.right, 'ziegel', -0.25, 12);
@@ -876,7 +1089,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       barrel(g, ...iso.p(1.85, 0.4));
       barrel(g, ...iso.p(1.85, 0.7), 0.85);
       const fp = iso.p(1.78, 1.78, 0);
-      flag(g, fp[0], fp[1], 30, color, 1);
+      banner(fp[0], fp[1], 30, 1);
       break;
     }
     case 'lehmgrube': {
@@ -945,7 +1158,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.lineTo(wb[0] - 17, wb[1] - 4);
       g.stroke();
       const fp = iso.p(1.85, 0.12, 0);
-      flag(g, fp[0], fp[1], 32, color, 2);
+      banner(fp[0], fp[1], 32, 2);
       break;
     }
     case 'markt': {
@@ -1002,20 +1215,31 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       sack(g, ...iso.p(2.8, 1.6));
       sack(g, ...iso.p(2.75, 1.85));
       const fp = iso.p(2.9, 0.1);
-      flag(g, fp[0], fp[1], 40, color, 2);
+      banner(fp[0], fp[1], 40, 2);
       break;
     }
     case 'kaserne': {
       ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#857a58');
       shadowDiamond(g, iso, 0.25, 0.3, 2.7, 1.5);
       const f = boxFaces(iso, 0.25, 0.3, 2.7, 1.4, 0, 26);
-      W(f.left, 'ziegel', 0.05, 13, { sockel: true });
-      W(f.right, 'ziegel', -0.2, 14, { sockel: true });
+      W(f.left, A.main, 0.05, 13, A.mainOpts);
+      W(f.right, A.main, -0.2, 14, A.mainOpts);
       plankDoor(g, f.left, 0.44, 0.12, 0.65, 0.05, '#5a2a1a');
       for (const u of [0.1, 0.25, 0.64, 0.79]) window4(g, f.left, u, 0.42, 0.07, 0.28, 0.05, shade(color, -0.2));
       window4(g, f.right, 0.35, 0.42, 0.3, 0.28, -0.2);
-      roof(g, iso, 0.25, 0.3, 2.7, 1.4, 26, 24, 'x', 'ziegel', 0, 91);
-      steppedGable(g, iso, 2.7, 0.3, 1.4, 26, 24, 3);
+      roof(g, iso, 0.25, 0.3, 2.7, 1.4, 26, 24, 'x', A.mainRoof, A.mainRoof === 'reet' ? 0.4 : arch === 'schwansen' ? 0.45 : 0, 91);
+      if (arch === 'angeln' || arch === 'daenen') steppedGable(g, iso, 2.7, 0.3, 1.4, 26, 24, 3);
+      if (arch === 'daenen') {
+        // Dachreiter mit Kupferhelm
+        const tb = boxFaces(iso, 1.3, 0.75, 1.6, 1.05, 44, 10);
+        fillFace(g, tb.left, '#984530');
+        fillFace(g, tb.right, '#73311f');
+        spire(g, iso, 1.28, 0.73, 1.62, 1.07, 54, 34);
+      }
+      if (arch === 'schwansen') {
+        animal(g, ...iso.p(1.4, 2.45), 'pferd', 1);
+        animal(g, ...iso.p(2.3, 2.6), 'pferd', -1);
+      }
       // Wappenschild über dem Tor
       const ws = faceAt(f.left, 0.5, 0.82);
       g.fillStyle = color;
@@ -1116,7 +1340,7 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
       g.arc(d[0], d[1] - 36, 5, 0, Math.PI * 2);
       g.fill();
       const fp = iso.p(2.75, 1.45, 0);
-      flag(g, fp[0], fp[1], 62, color, 2);
+      banner(fp[0], fp[1], 62, 2);
       out.flagPt = to1x([fp[0], fp[1]]);
       break;
     }
@@ -1159,12 +1383,21 @@ function drawBuilding(type: BuildingType, color: string): BuildingSprite {
   return out;
 }
 
+// Baustile der Parteien
+type WallOpts = { sockel?: boolean; ausfachung?: boolean; bands?: boolean };
+const ARCH: Record<ArchStyle, { house: WallMat; houseOpts: WallOpts; houseRoof: RoofMat; main: WallMat; mainOpts: WallOpts; mainRoof: RoofMat; shutter: string; vieh: 'kuh' | 'schaf' | 'pferd' | 'schwein' }> = {
+  angeln: { house: 'fachwerk', houseOpts: { sockel: true, ausfachung: true }, houseRoof: 'reet', main: 'ziegel', mainOpts: { sockel: true }, mainRoof: 'ziegel', shutter: '#3f5a3a', vieh: 'kuh' },
+  schwansen: { house: 'putz', houseOpts: { sockel: true }, houseRoof: 'ziegel', main: 'putz', mainOpts: { sockel: true }, mainRoof: 'ziegel', shutter: '#2f4a32', vieh: 'pferd' },
+  friesen: { house: 'klinker', houseOpts: {}, houseRoof: 'reet', main: 'klinker', mainOpts: {}, mainRoof: 'reet', shutter: '#2f4f78', vieh: 'schaf' },
+  daenen: { house: 'ziegel', houseOpts: { sockel: true, bands: true }, houseRoof: 'ziegel', main: 'ziegel', mainOpts: { sockel: true, bands: true }, mainRoof: 'ziegel', shutter: '#8a2a22', vieh: 'schwein' },
+};
+
 const buildingCache = new Map<string, BuildingSprite>();
-export function buildingSprite(type: BuildingType, color: string): BuildingSprite {
-  const k = type + color;
+export function buildingSprite(type: BuildingType, color: string, arch: ArchStyle = 'angeln'): BuildingSprite {
+  const k = `${type}|${color}|${arch}`;
   let s = buildingCache.get(k);
   if (!s) {
-    s = drawBuilding(type, color);
+    s = drawBuilding(type, color, arch);
     buildingCache.set(k, s);
   }
   return s;
@@ -1325,19 +1558,19 @@ export function resIcon(r: Res | 'pop' | 'prestige'): string {
   return url;
 }
 
-export function portrait(kind: 'b' | 'u', type: string, color: string): string {
-  const k = `p:${kind}:${type}:${color}`;
+export function portrait(kind: 'b' | 'u', type: string, color: string, fac: FactionId = 'angeln'): string {
+  const k = `p:${kind}:${type}:${color}:${fac}`;
   const hit = iconCache.get(k);
   if (hit) return hit;
   const [c, g] = canvas(64, 64);
   g.fillStyle = '#3a3226';
   g.fillRect(0, 0, 64, 64);
   if (kind === 'b') {
-    const s = buildingSprite(type as BuildingType, color);
+    const s = buildingSprite(type as BuildingType, color, FACTION_DEFS[fac].arch);
     const sc = Math.min(60 / s.c.width, 60 / s.c.height);
     g.drawImage(s.c, (64 - s.c.width * sc) / 2, (64 - s.c.height * sc) / 2, s.c.width * sc, s.c.height * sc);
   } else {
-    const s = unitSprites(type as UnitType, color)[0];
+    const s = unitSprites(type as UnitType, color, fac)[0];
     // Figur (ohne Spieß-Überstand) formatfüllend
     const r = s.res ?? S;
     const fw = 22, fh = 30; // 1x-Ausschnitt um die Figur

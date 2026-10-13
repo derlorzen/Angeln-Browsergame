@@ -1,8 +1,8 @@
 // Gemeinsame, rendererunabhängige Darstellungslogik: Kamera, Koordinaten, Effekte, Auswahl (Picking), Nebelbild.
 // Konkrete Renderer: CanvasRenderer (Canvas 2D, Rückfallebene) und PixiRenderer (WebGL via PixiJS).
-import { RULES, type BuildingType } from '../data/defs';
+import { RULES, UNITS, type BuildingType } from '../data/defs';
 import type { CBuilding, ClientState } from '../game/client';
-import { isWater } from '../sim/map';
+import { T, isWater } from '../sim/map';
 import { TH, TW } from './draw';
 import { NEUTRAL_COLOR, PLAYER_COLORS } from './sprites';
 
@@ -123,14 +123,26 @@ export abstract class BaseRenderer {
   floatText(x: number, y: number, text: string, color: string, now: number): void {
     this.addEffect({ k: 'text', x, y, t0: now, dur: 1800, text, color });
   }
-  shot(x: number, y: number, tx: number, ty: number, now: number, arrow: boolean): void {
+  shot(x: number, y: number, tx: number, ty: number, now: number, kind: 0 | 1 | 2): void {
     const d = Math.hypot(tx - x, ty - y);
-    this.addEffect({ k: 'shot', x, y, tx, ty, t0: now, dur: 120 + d * 60, r: arrow ? 1 : 0 });
+    this.addEffect({ k: 'shot', x, y, tx, ty, t0: now, dur: kind === 2 ? 60 + d * 12 : 120 + d * 60, r: kind });
+    if (kind === 2) this.addEffect({ k: 'dust', x: x + (tx - x) * 0.08, y: y + (ty - y) * 0.08, t0: now, dur: 1200, r: 2 });
   }
   death(x: number, y: number, unit: boolean, now: number): void {
     this.addEffect({ k: unit ? 'die' : 'dust', x, y, t0: now, dur: unit ? 3500 : 2500 });
   }
 
+
+  /** Grabenspringer schweben beim Sprung über einen Knick (Pixel nach oben). */
+  protected hop(u: { t: string; x: number; y: number }, now: number): number {
+    if (u.t !== 'grabenspringer') return 0;
+    const m = this.c.map;
+    const i = Math.floor(u.y) * m.w + Math.floor(u.x);
+    if (m.terrain[i] !== T.KNICK) return 0;
+    const fx = u.x - Math.floor(u.x), fy = u.y - Math.floor(u.y);
+    void now;
+    return 14 * Math.sin(Math.PI * Math.min(1, Math.max(0, (fx + fy) / 2)));
+  }
 
   protected pruneEffects(now: number): void {
     this.effects = this.effects.filter((e) => now - e.t0 < e.dur);
@@ -191,7 +203,7 @@ export abstract class BaseRenderer {
     for (const u of c.units.values()) {
       const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
       const [px, py] = this.toScreen(ux, uy);
-      const hw = (u.t === 'spaeher' ? 14 : 9) * z * UNIT_SCALE, hh = (u.t === 'spaeher' ? 30 : 26) * z * UNIT_SCALE;
+      const hw = (UNITS[u.t].mounted ? 14 : 9) * z * UNIT_SCALE, hh = (UNITS[u.t].mounted ? 30 : 26) * z * UNIT_SCALE;
       if (sx >= px - hw && sx <= px + hw && sy >= py - hh && sy <= py + 4 * z) {
         const d = Math.abs(sx - px) + Math.abs(sy - (py - hh / 2));
         if (d < bd) {

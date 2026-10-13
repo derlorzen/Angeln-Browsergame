@@ -1,7 +1,7 @@
 // Eigene, synthetisch erzeugte Klänge (WebAudio). Keine Audiodateien nötig.
 type SoundName =
   | 'click' | 'chop' | 'build' | 'built' | 'hit' | 'shot' | 'die' | 'alarm' | 'trained' | 'error' | 'coin' | 'win' | 'lose'
-  | 'select' | 'order' | 'discover';
+  | 'select' | 'order' | 'discover' | 'musket';
 
 export class Sound {
   private ctx: AudioContext | null = null;
@@ -88,6 +88,7 @@ export class Sound {
       case 'built': [523, 659, 784].forEach((f, i) => this.tone(f, 0.18, 'triangle', 0.1, i * 0.09)); break;
       case 'hit': this.burst(0.09, 3200, 8, 0.25); this.tone(900, 0.05, 'sawtooth', 0.03, 0, -400); break;
       case 'shot': this.burst(0.14, 900, 1.5, 0.18); break;
+      case 'musket': this.burst(0.35, 300, 0.7, 0.45); this.tone(90, 0.25, 'sawtooth', 0.12, 0, -50); break;
       case 'die': this.tone(220, 0.35, 'sawtooth', 0.06, 0, -150); break;
       case 'alarm': [0, 0.25, 0.5].forEach((d) => this.tone(330, 0.2, 'sawtooth', 0.07, d, 60)); break;
       case 'trained': this.tone(392, 0.1, 'triangle', 0.08); this.tone(587, 0.15, 'triangle', 0.08, 0.1); break;

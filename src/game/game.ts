@@ -2,6 +2,7 @@
 // Simulation im Treiber mit festen Takten.
 import { sound } from '../audio/sound';
 import { BUILDINGS, RULES, UNITS, type BuildingType } from '../data/defs';
+import { FACTION_DEFS } from '../data/factions';
 import { createRenderer, freshCanvas, type RendererPref } from '../render/factory';
 import { Minimap, playerColor, type Placement } from '../render/renderer';
 import type { BaseRenderer } from '../render/view';
@@ -19,7 +20,6 @@ export interface GameOptions {
   onResign?: () => void;
 }
 
-const BUILD_NAMES = Object.fromEntries(Object.entries(BUILDINGS).map(([k, v]) => [k, v.name]));
 
 export class Game {
   readonly client: ClientState;
@@ -82,7 +82,10 @@ export class Game {
     if (!dz) return;
     this.renderer.centerOn(dz.x + 1.5, dz.y + 1.5);
     this.centered = true;
-    this.hud.message(`Willkommen, ${this.client.mePlayer?.name ?? ''}! Eure Siedlung: ${this.client.map.slots[this.mySlot()]?.name ?? ''}.`, 'good');
+    const fd = FACTION_DEFS[this.client.faction(this.client.me)];
+    this.hud.message(`Willkommen, ${this.client.mePlayer?.name ?? ''}! Ihr führt die ${fd.name} in ${this.client.map.slots[this.mySlot()]?.name ?? ''}. ${fd.motto}`, 'good');
+    const foes = this.client.players.filter((p) => p.id !== this.client.me).map((p) => `${p.name} (${FACTION_DEFS[p.faction].name})`);
+    if (foes.length) this.hud.message(`Gegner: ${foes.join(', ')}.`);
   }
 
   private mySlot(): number {
@@ -124,9 +127,10 @@ export class Game {
   }
 
   beginPlacement(t: BuildingType): void {
-    const d = BUILDINGS[t];
+    const c = this.client;
+    const d = c.bd(c.me, t);
     if (d.requires?.some((r) => !this.client.hasBuilt(r))) {
-      this.feedback(`${d.name}: benötigt zuerst ${d.requires.map((r) => BUILDINGS[r].name).join(', ')}.`);
+      this.feedback(`${d.name}: benötigt zuerst ${d.requires.map((r) => c.bd(c.me, r).name).join(', ')}.`);
       return;
     }
     if (!this.hud.canAfford(d.cost)) {
@@ -283,7 +287,7 @@ export class Game {
         break;
       case 'built':
         if (e.o === me) {
-          this.hud.message(`${BUILD_NAMES[e.b]} ist fertig.`, 'good');
+          this.hud.message(`${c.bd(me, e.b).name} ist fertig.`, 'good');
           sound.play('built', 500);
         }
         break;
@@ -291,8 +295,8 @@ export class Game {
         if (e.o === me) sound.play('trained', 300);
         break;
       case 'shot':
-        r.shot(e.x, e.y, e.tx, e.ty, now, e.r === 1);
-        if (this.onScreen(e.x, e.y)) sound.play('shot', 120);
+        r.shot(e.x, e.y, e.tx, e.ty, now, e.r);
+        if (this.onScreen(e.x, e.y)) sound.play(e.r === 2 ? 'musket' : 'shot', 120);
         break;
       case 'hit':
         if (this.onScreen(e.x, e.y)) sound.play('hit', 90);
@@ -429,7 +433,7 @@ export class Game {
       this.feedback(why);
       return;
     }
-    const d = BUILDINGS[p.type];
+    const d = this.client.bd(this.client.me, p.type);
     if (!this.hud.canAfford(d.cost)) {
       this.feedback(`${d.name}: nicht genug Rohstoffe.`);
       this.placement = null;
@@ -484,7 +488,7 @@ export class Game {
       return;
     }
     // Sammelpunkt für ausgewähltes Gebäude
-    const b = [...this.selected].map((id) => c.buildings.get(id)).find((x) => x && x.o === c.me && x.b && BUILDINGS[x.t].trains);
+    const b = [...this.selected].map((id) => c.buildings.get(id)).find((x) => x && x.o === c.me && x.b && c.bd(c.me, x.t).trains);
     if (b) {
       this.issue({ c: 'rally', b: b.i, x: tx, y: ty });
       this.renderer.marker(tx, ty, '#e8d080', now);

@@ -10,10 +10,28 @@ Schlei lebt vom Fischfang; sein Heringszaun, eine stationäre Fangvorrichtung au
 heute erhalten. Im Binnenland liegt Süderbrarup mit dem Brarup-Markt, nahebei das Thorsberger Moor, ein bedeutender
 archäologischer Fundplatz. Die Schlei selbst ist kein Fluss, sondern ein schmaler Meeresarm der Ostsee.</p>
 <p>Im Spiel ringen zwei Siedlungen an der Schlei um Fischgründe, Handel und die Wege zum Markt in Süderbrarup.</p>
+<h3>Die Parteien – mit einem Augenzwinkern</h3>
+<p>Die vier Parteien sind bewusst klischeehaft überzeichnet und sollen niemanden ernsthaft beschreiben:</p>
+<ul>
+<li><b>Angeliter</b> – wortkarge Bauern zwischen Knicks, Apfelbäumen und Angler Rotvieh („Wat mutt, dat mutt.“).
+Fachwerk mit roter Ausfachung, Reetdächer. Spezialeinheit: Knickwächter mit Sense.</li>
+<li><b>Schwansener</b> – Gutsherren vom Südufer der Schlei mit weißen Herrenhäusern, Alleen und edlen Pferden;
+handelsstark. Spezialeinheit: Gutsreiter. (Die tatsächliche Gutsherrschaft samt Leibeigenschaft war für die
+Landbevölkerung alles andere als romantisch – das Spiel verkürzt hier stark.)</li>
+<li><b>Nordfriesen</b> – Küstenleute aus den Uthlanden mit Haubarg und Friesenhaus, Hering und Schafen; ihr
+Freiheitsspruch „Lewwer duad üs Slaav!“ ist durch Liliencrons Ballade „Pidder Lüng“ bekannt (19. Jh.).
+Spezialeinheit: Grabenspringer mit Springstock.</li>
+<li><b>Dänen</b> – die Amtsleute der Krone mit Backstein-Renaissance, grünen Kupferhelmen und rot-weißen Fahnen.
+Spezialeinheit: Musketier mit Gabel.</li>
+</ul>
 <h3>Erfundenes und zeitliche Freiheiten</h3>
 <ul>
 <li><b>Der Konflikt ist erfunden.</b> Eine Fehde zwischen Kappeln und Arnis um den Brarup-Markt hat es nicht gegeben.
-Kasernen, Landsknechte und Gefechte sind Spielmechanik.</li>
+Kasernen, Landsknechte und Gefechte sind Spielmechanik. Um 1600 gehörte das Herzogtum Schleswig zum dänischen
+Machtbereich (König bzw. Gottorfer Herzöge); einen Krieg zwischen Angelitern, Schwansenern, Friesen und Dänen gab es so nicht.
+Jede Partei kann jeden Startplatz besetzen.</li>
+<li><b>Bauformen:</b> Haubarge entstanden vor allem ab dem 17. Jahrhundert in Eiderstedt; weiß verputzte
+Herrenhäuser in dieser Form sind meist jünger. Musketen mit Gabel passen dagegen gut in die Zeit um 1600.</li>
 <li><b>Arnis</b> wurde erst 1667 von Kappelner Familien gegründet. Im Spiel besteht es bereits um 1600.</li>
 <li><b>Thorsberger Moor:</b> Die eisenzeitlichen Opferfunde (u. a. der Thorsberger Prachtmantel) wurden erst im
 19. Jahrhundert ausgegraben (v. a. 1858–1861). Im Spiel melden Torfstecher „alte Funde“; die Erkundung bringt Ansehen
@@ -38,6 +56,9 @@ export const GUIDE_HTML = `
 <div class="text">
 <p><b>Ziel:</b> Zerstört das gegnerische Dorfzentrum (militärischer Sieg) <i>oder</i> erreicht als Erster
 ${RULES.prestigeGoalDefault} Prestige durch Handel (wirtschaftlicher Sieg; Ziel im Spielaufbau einstellbar).</p>
+<p><b>Parteien:</b> <b>Angeliter</b> (Landwirtschaft, Knickwächter), <b>Schwansener</b> (Handel, Gutsreiter),
+<b>Nordfriesen</b> (Fischerei, Grabenspringer – überspringen Knicks), <b>Dänen</b> (Militär, Musketiere).
+Jede Partei baut in eigenem Stil und hat eigene Boni; Details zeigt die Parteiwahl.</p>
 <p><b>Rohstoffe:</b> Holz, Getreide, Fisch, Lehm, Waren, Taler. Bevölkerung begrenzt Arbeiter und Soldaten – Wohnhäuser
 erhöhen die Grenze.</p>
 <ul>

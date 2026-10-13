@@ -9,12 +9,20 @@ import { PROTOCOL_VERSION, parseGuestMsg, parseHostMsg, type HostMsg, type Lobby
 import { SignalError } from '../net/signal';
 import { createRenderer } from '../render/factory';
 import type { BaseRenderer } from '../render/view';
-import { PLAYER_COLORS, PLAYER_COLOR_NAMES } from '../render/sprites';
+import { PLAYER_COLORS, PLAYER_COLOR_NAMES, portrait } from '../render/sprites';
+import { FACTIONS, FACTION_DEFS, type FactionId } from '../data/factions';
 import { World } from '../sim/world';
 import { loadSettings, readSave, saveSettings, writeSave, type Settings } from '../storage/save';
 import { BACKGROUND_HTML, GUIDE_HTML, NETWORK_HTML } from './texts';
 
 const SLOT_NAMES = ['Kappeln (Norden)', 'Arnis (Süden)'];
+// erfundene Namen der KI-Anführer
+const AI_NAMES: Record<FactionId, string> = {
+  angeln: 'Bauernvogt Hinrich Petersen',
+  schwansen: 'Junker von Schwansenhorst',
+  friesen: 'Ratmann Boy Ketelsen',
+  daenen: 'Amtmann Jens Kongsholm',
+};
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 export class Menu {
@@ -40,7 +48,8 @@ export class Menu {
     const sl = c.map.slots[0];
     const fake = (i: number, t: Parameters<typeof c.buildings.set>[1]['t'], x: number, y: number, o = 0) =>
       c.buildings.set(i, { i, k: 1, t, o, x, y, h: 1, m: 1, b: 1, p: 100, ac: 1 });
-    c.players = [{ id: 0, name: '', color: 0, prestige: 0, defeated: false }];
+    const fac = FACTIONS[Math.floor(Math.random() * FACTIONS.length)];
+    c.players = [{ id: 0, name: '', color: FACTIONS.indexOf(fac), faction: fac, prestige: 0, defeated: false }];
     fake(1, 'dorfzentrum', sl.x, sl.y);
     fake(2, 'muehle', sl.x - 4, sl.y + 1);
     fake(3, 'wohnhaus', sl.x + 4, sl.y - 1);
@@ -126,6 +135,19 @@ export class Menu {
     this.bind(box, { back: () => this.main() });
   }
 
+  private factionOptions(sel: FactionId | null): string {
+    return FACTIONS.map((x) => `<option value="${x}" ${x === sel ? 'selected' : ''}>${FACTION_DEFS[x].name} – ${FACTION_DEFS[x].focus}</option>`).join('');
+  }
+
+  /** Infotafel: Dorfzentrum, Spezialeinheit, Motto, Boni. */
+  factionInfo(fac: FactionId, color: number): string {
+    const d = FACTION_DEFS[fac];
+    const col = PLAYER_COLORS[color % PLAYER_COLORS.length];
+    return `<div class="faction-card"><img src="${portrait('b', 'dorfzentrum', col, fac)}" alt=""><img src="${portrait('u', d.unique, col, fac)}" alt="">
+      <div><b>${d.name}</b> <i>${esc(d.motto)}</i><br><span class="note">${esc(d.desc)}</span>
+      <ul>${d.bonuses.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></div></div>`;
+  }
+
   private colorOptions(sel: number): string {
     return PLAYER_COLORS.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''} style="background:${c}">${PLAYER_COLOR_NAMES[i]}</option>`).join('');
   }
@@ -135,14 +157,21 @@ export class Menu {
     const s = this.settings;
     const box = this.show(`<h2>Einzelspiel</h2>
       <div class="row"><label>Euer Name</label><input type="text" data-f="name" maxlength="20" value="${esc(s.name)}"></div>
+      <div class="row"><label>Eure Partei</label><select data-f="fac">${this.factionOptions(s.faction)}</select></div>
+      <div data-info></div>
       <div class="row"><label>Farbe</label><select data-f="color">${this.colorOptions(0)}</select></div>
       <div class="row"><label>Startort</label><select data-f="slot"><option value="0">${SLOT_NAMES[0]}</option><option value="1">${SLOT_NAMES[1]}</option></select></div>
-      <div class="row"><label>KI-Gegner</label><select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select></div>
+      <div class="row"><label>KI-Gegner</label><select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select>
+        <select data-f="aifac"><option value="zufall">zufällige Partei</option>${this.factionOptions(null)}</select></div>
       <div class="row"><label>Prestigeziel</label><select data-f="goal"><option value="150">150 (kurz)</option><option value="250" selected>250</option><option value="400">400 (lang)</option></select></div>
       <div class="row"><label>Startrohstoffe</label><select data-f="rich"><option value="0">normal</option><option value="1">reichlich</option></select></div>
       <div class="row"><label>Lehrmeister</label><select data-f="tut"><option value="1" ${s.tutorialDone ? '' : 'selected'}>an</option><option value="0" ${s.tutorialDone ? 'selected' : ''}>aus</option></select></div>
       <div class="row"><button class="btn primary" data-a="go">Partie beginnen</button><button class="btn" data-a="back">Zurück</button></div>`);
     const f = (k: string) => box.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-f="${k}"]`)!.value;
+    const info = () => (box.querySelector('[data-info]')!.innerHTML = this.factionInfo(f('fac') as FactionId, Number(f('color'))));
+    box.querySelector('[data-f=fac]')!.addEventListener('change', info);
+    box.querySelector('[data-f=color]')!.addEventListener('change', info);
+    info();
     this.bind(box, {
       back: () => this.main(),
       go: () => {
@@ -153,11 +182,16 @@ export class Menu {
         const color = Number(f('color'));
         const slot = Number(f('slot'));
         const aiColor = color === 1 ? 0 : 1;
+        const faction = f('fac') as FactionId;
+        this.settings.faction = faction;
+        saveSettings(this.settings);
+        const others = FACTIONS.filter((x) => x !== faction);
+        const aiFac: FactionId = f('aifac') === 'zufall' ? others[Math.floor(Math.random() * others.length)] : (f('aifac') as FactionId);
         const world = new World({
           seed: (Math.random() * 2 ** 31) | 0,
           players: [
-            { name, color, slot, isAI: false },
-            { name: slot === 0 ? 'Vogt von Arnis' : 'Vogt von Kappeln', color: aiColor, slot: 1 - slot, isAI: true, aiLevel: f('ai') as 'leicht' | 'normal' },
+            { name, color, slot, isAI: false, faction },
+            { name: AI_NAMES[aiFac], color: aiColor, slot: 1 - slot, isAI: true, aiLevel: f('ai') as 'leicht' | 'normal', faction: aiFac },
           ],
           prestigeGoal: Number(f('goal')),
           richStart: f('rich') === '1',
@@ -433,6 +467,7 @@ export class Menu {
       .map((p, i) => {
         const mine = i === me;
         return `<tr><td>${i === 0 ? 'Host' : 'Gast'}</td><td>${mine ? `<input type="text" data-f="name" maxlength="20" value="${esc(p.name)}">` : esc(p.name)}</td>
+        <td>${mine ? `<select data-f="fac">${this.factionOptions(p.faction)}</select>` : FACTION_DEFS[p.faction].name}</td>
         <td>${mine ? `<select data-f="color">${this.colorOptions(p.color)}</select>` : `<span class="swatch" style="background:${PLAYER_COLORS[p.color]}"></span> ${PLAYER_COLOR_NAMES[p.color]}`}</td>
         <td>${mine ? `<select data-f="slot">${SLOT_NAMES.map((n, k) => `<option value="${k}" ${k === p.slot ? 'selected' : ''}>${n}</option>`).join('')}</select>` : SLOT_NAMES[p.slot]}</td>
         <td>${mine ? `<label><input type="checkbox" data-f="ready" ${p.ready ? 'checked' : ''}> bereit</label>` : p.ready ? '<span class="ok">bereit</span>' : 'wählt …'}</td></tr>`;
@@ -444,7 +479,8 @@ export class Menu {
       if (st.players[0].slot === st.players[1].slot) conflicts.push('Beide haben denselben Startort gewählt.');
     }
     return `<h2>Lobby</h2><p class="note ok">Direkte Verbindung steht.</p>
-      <table class="lobby-table"><tr><th></th><th>Name</th><th>Farbe</th><th>Startort</th><th></th></tr>${rows}</table>
+      <table class="lobby-table"><tr><th></th><th>Name</th><th>Partei</th><th>Farbe</th><th>Startort</th><th></th></tr>${rows}</table>
+      ${st.players[me] ? this.factionInfo(st.players[me].faction, st.players[me].color) : ''}
       <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${[150, 250, 400].map((g) => `<option value="${g}" ${g === st.goal ? 'selected' : ''}>${g}</option>`).join('')}</select>` : st.goal}
         <label style="min-width:0;margin-left:16px">Startrohstoffe</label>${isHost ? `<select data-f="rich"><option value="0" ${st.rich ? '' : 'selected'}>normal</option><option value="1" ${st.rich ? 'selected' : ''}>reichlich</option></select>` : st.rich ? 'reichlich' : 'normal'}</div>
       <div class="row err">${conflicts.join(' ')}</div>
@@ -454,7 +490,7 @@ export class Menu {
   }
 
   private hostLobby(link: PeerLink, name: string): void {
-    const st: LobbyState = { players: [{ name, color: 0, slot: 0, ready: false }], goal: RULES.prestigeGoalDefault, rich: false };
+    const st: LobbyState = { players: [{ name, color: 0, slot: 0, ready: false, faction: this.settings.faction }], goal: RULES.prestigeGoalDefault, rich: false };
     let started = false;
     const broadcast = () => link.send({ t: 'lobby', st } satisfies HostMsg);
     const render = () => {
@@ -467,12 +503,15 @@ export class Menu {
         me.color = Number(f('color')!.value);
         me.slot = Number(f('slot')!.value);
         me.ready = f('ready')!.checked;
+        me.faction = f('fac')!.value as FactionId;
+        this.settings.faction = me.faction;
+        saveSettings(this.settings);
         st.goal = Number(f('goal')!.value);
         st.rich = f('rich')!.value === '1';
         broadcast();
         render();
       };
-      ['color', 'slot', 'ready', 'goal', 'rich'].forEach((k) => f(k)?.addEventListener('change', update));
+      ['fac', 'color', 'slot', 'ready', 'goal', 'rich'].forEach((k) => f(k)?.addEventListener('change', update));
       f('name')?.addEventListener('change', update);
       this.bind(box, {
         leave: () => this.main(),
@@ -487,7 +526,7 @@ export class Menu {
           link.send({ t: 'start', seed, goal: st.goal, rich: st.rich, me: 1, players: st.players } satisfies HostMsg);
           const world = new World({
             seed,
-            players: st.players.map((p) => ({ name: p.name, color: p.color, slot: p.slot, isAI: false })),
+            players: st.players.map((p) => ({ name: p.name, color: p.color, slot: p.slot, isAI: false, faction: p.faction })),
             prestigeGoal: st.goal,
             richStart: st.rich,
           });
@@ -506,11 +545,11 @@ export class Menu {
           return;
         }
         link.send({ t: 'welcome', v: PROTOCOL_VERSION } satisfies HostMsg);
-        st.players[1] = { name: m.name, color: st.players[0].color === 1 ? 0 : 1, slot: st.players[0].slot === 0 ? 1 : 0, ready: false };
+        st.players[1] = { name: m.name, color: st.players[0].color === 1 ? 0 : 1, slot: st.players[0].slot === 0 ? 1 : 0, ready: false, faction: m.faction };
         broadcast();
         render();
       } else if (m.t === 'lset' && st.players[1]) {
-        st.players[1] = { name: m.name, color: m.color, slot: m.slot, ready: m.ready };
+        st.players[1] = { name: m.name, color: m.color, slot: m.slot, ready: m.ready, faction: m.faction };
         broadcast();
         render();
       } else if (m.t === 'ping') link.send({ t: 'pong', n: m.n });
@@ -534,8 +573,8 @@ export class Menu {
   private guestLobby(link: PeerLink, name: string): void {
     let st: LobbyState | null = null;
     let started = false;
-    const myPrefs = { name, color: 1, slot: 1, ready: false };
-    link.send({ t: 'hello', v: PROTOCOL_VERSION, name });
+    const myPrefs = { name, color: 1, slot: 1, ready: false, faction: this.settings.faction };
+    link.send({ t: 'hello', v: PROTOCOL_VERSION, name, faction: this.settings.faction });
     const sendPrefs = () => link.send({ t: 'lset', ...myPrefs });
     const render = (note = '') => {
       if (started) return;
@@ -552,9 +591,12 @@ export class Menu {
         myPrefs.color = Number(f('color')!.value);
         myPrefs.slot = Number(f('slot')!.value);
         myPrefs.ready = f('ready')!.checked;
+        myPrefs.faction = f('fac')!.value as FactionId;
+        this.settings.faction = myPrefs.faction;
+        saveSettings(this.settings);
         sendPrefs();
       };
-      ['color', 'slot', 'ready', 'name'].forEach((k) => f(k)?.addEventListener('change', update));
+      ['fac', 'color', 'slot', 'ready', 'name'].forEach((k) => f(k)?.addEventListener('change', update));
       this.bind(box, { leave: () => this.main() });
     };
     link.onMessage = (raw) => {
@@ -563,7 +605,7 @@ export class Menu {
       if (m.t === 'lobby') {
         st = m.st;
         const mine = st.players[1];
-        if (mine) Object.assign(myPrefs, { color: mine.color, slot: mine.slot, ready: mine.ready, name: mine.name });
+        if (mine) Object.assign(myPrefs, { color: mine.color, slot: mine.slot, ready: mine.ready, name: mine.name, faction: mine.faction });
         render();
       } else if (m.t === 'reject') {
         render(m.reason);

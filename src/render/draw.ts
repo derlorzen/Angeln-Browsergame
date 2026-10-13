@@ -104,8 +104,28 @@ export function fillFace(g: Ctx, f: Face, color: string): void {
 }
 
 /** Wand mit Material: 'putz' (Fachwerk), 'ziegel', 'holz', 'stein'. */
-export function wall(g: Ctx, f: Face, mat: 'fachwerk' | 'ziegel' | 'holz' | 'stein', light: number, seed = 1): void {
-  const base = { fachwerk: '#e3d8bd', ziegel: '#984530', holz: '#7b5634', stein: '#8f8a7e' }[mat];
+export type WallMat = 'fachwerk' | 'ziegel' | 'holz' | 'stein' | 'putz' | 'klinker';
+export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): void {
+  if (mat === 'putz') {
+    // weiß gekalkter Putz mit leichter Textur
+    fillFace(g, f, shade('#ece5d4', light));
+    g.save();
+    poly(g, [f.bl, f.br, f.tr, f.tl]);
+    g.clip();
+    const r = prng(seed);
+    for (let k = 0; k < 40; k++) {
+      const p = faceAt(f, r(), r());
+      g.fillStyle = r() < 0.5 ? 'rgba(120,100,70,0.08)' : 'rgba(255,255,255,0.12)';
+      g.fillRect(p[0], p[1], 3 + r() * 4, 2);
+    }
+    g.restore();
+    return;
+  }
+  // Klinker: dunklerer, friesischer Backstein
+  const klinker = mat === 'klinker';
+  const m2: 'fachwerk' | 'ziegel' | 'holz' | 'stein' = mat === 'klinker' ? 'ziegel' : mat;
+  mat = m2;
+  const base = klinker ? '#74332a' : { fachwerk: '#e3d8bd', ziegel: '#984530', holz: '#7b5634', stein: '#8f8a7e' }[m2];
   fillFace(g, f, shade(base, light));
   g.save();
   poly(g, [f.bl, f.br, f.tr, f.tl]);
@@ -191,14 +211,16 @@ export function doorOn(g: Ctx, f: Face, u: number, du: number, dv: number, light
   poly(g, faceQuad(f, u, 0, u + du, dv), shade(color, light), shade('#2e1d10', 0), 1.5);
 }
 
+export type RoofMat = 'reet' | 'ziegel' | 'schindel' | 'kupfer';
+
 /** Satteldach mit First entlang x ('x') oder y ('y'); hip > 0 ergibt Walmdach (typisch für Reetdächer). */
 export function roof(
   g: Ctx, iso: Iso, x0: number, y0: number, x1: number, y1: number, H: number, R: number,
-  axis: 'x' | 'y', mat: 'reet' | 'ziegel' | 'schindel', hip = 0, seed = 3,
+  axis: 'x' | 'y', mat: RoofMat, hip = 0, seed = 3,
 ): void {
   const o = 0.12; // Überstand
   x0 -= o; y0 -= o; x1 += o; y1 += o;
-  const base = { reet: '#9a8552', ziegel: '#8e3a27', schindel: '#6b5a48' }[mat];
+  const base = { reet: '#9a8552', ziegel: '#8e3a27', schindel: '#6b5a48', kupfer: '#5e9a83' }[mat];
   const planes: { pts: Pt[]; light: number }[] = [];
   if (axis === 'x') {
     const ym = (y0 + y1) / 2;

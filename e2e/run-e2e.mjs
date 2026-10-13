@@ -87,6 +87,12 @@ try {
   await A.page.click('[data-a=start]');
   await A.page.waitForTimeout(200);
   check('Start ohne Bereitschaft verweigert', /bereit/.test(await A.page.textContent('[data-msg]')));
+  // Parteiwahl: Gast nimmt die Dänen, Host die Nordfriesen
+  await B.page.selectOption('[data-f=fac]', 'daenen');
+  await A.page.waitForFunction(() => /Dänen/.test(document.querySelector('.lobby-table').textContent), null, { timeout: 5000 });
+  await A.page.selectOption('[data-f=fac]', 'friesen');
+  await B.page.waitForFunction(() => /Nordfriesen/.test(document.querySelector('.lobby-table').textContent), null, { timeout: 5000 });
+  check('Parteiwahl wird in der Lobby ausgetauscht', true);
   await B.page.check('[data-f=ready]');
   await A.page.waitForSelector('.lobby-table .ok', { timeout: 5000 });
   await A.page.check('[data-f=ready]');
@@ -110,6 +116,9 @@ try {
   check('Gast erhält keine verborgenen gegnerischen Einheiten', info.foreign === 0);
   check('Gast erhält keine gegnerischen Ressourcen', info.enemyRes === null);
   const hostTick = await A.page.evaluate(() => window.__game.driver.world.tick);
+  const facs = await A.page.evaluate(() => window.__game.driver.world.players.map((p) => p.faction));
+  const gFac = await B.page.evaluate(() => window.__game.client.faction(window.__game.client.me));
+  check('Parteien in der Partie übernommen', facs[0] === 'friesen' && facs[1] === 'daenen' && gFac === 'daenen', JSON.stringify({ facs, gFac }));
   check('Gast folgt dem Host-Takt', Math.abs(hostTick - info.tick) < 15, `Host ${hostTick}, Gast ${info.tick}`);
 
   // Gast steuert über die echte Oberfläche: Arbeiter auswählen und per Rechtsklick bewegen

@@ -135,7 +135,7 @@ export class CanvasRenderer extends BaseRenderer {
       g.strokeStyle = u.o === c.me ? '#a8e070' : '#e05a4a';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.ellipse(sx, sy, (u.t === 'spaeher' ? 14 : 9) * z, (u.t === 'spaeher' ? 6 : 4.5) * z, 0, 0, Math.PI * 2);
+      g.ellipse(sx, sy, (UNITS[u.t].mounted ? 14 : 9) * z, (UNITS[u.t].mounted ? 6 : 4.5) * z, 0, 0, Math.PI * 2);
       g.stroke();
     }
 
@@ -302,7 +302,7 @@ export class CanvasRenderer extends BaseRenderer {
     const d = BUILDINGS[b.t];
     const color = playerColor(this.c, b.o);
     const [sx, sy] = this.toScreen(b.x, b.y);
-    const spr: BuildingSprite = buildingSprite(b.t, color);
+    const spr: BuildingSprite = buildingSprite(b.t, color, this.c.arch(b.o));
     if (b.ghost) g.globalAlpha = 0.55;
     if (b.t === 'heringszaun') this.drawFences(b, sx, sy);
     if (!b.b) {
@@ -448,9 +448,9 @@ export class CanvasRenderer extends BaseRenderer {
     const z = this.cam.z;
     const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
     const [sx, sy] = this.toScreen(ux, uy);
-    const frames = unitSprites(u.t, playerColor(this.c, u.o));
+    const frames = unitSprites(u.t, playerColor(this.c, u.o), this.c.faction(u.o));
     const f = unitFrame(u.a, now, u.i);
-    this.drawSprite(frames[f], sx, sy, UNIT_SCALE, u.f < 0);
+    this.drawSprite(frames[f], sx, sy - this.hop(u, now) * z, UNIT_SCALE, u.f < 0);
     const g = this.g;
     if (u.c && u.t === 'arbeiter') {
       // Holzbündel auf der Schulter
@@ -466,8 +466,8 @@ export class CanvasRenderer extends BaseRenderer {
       g.fill();
       u.hitFlash = Math.max(0, u.hitFlash - 0.08);
     }
-    const max = UNITS[u.t].hp;
-    if (ui.selected.has(u.i) || u.h < max || ui.hover === u.i) this.hpBar(sx, sy - (u.t === 'spaeher' ? 30 : 26) * z * UNIT_SCALE - 4 * z, 20 * z, u.h / max);
+    const max = this.c.ud(u.o, u.t).hp;
+    if (ui.selected.has(u.i) || u.h < max || ui.hover === u.i) this.hpBar(sx, sy - ((UNITS[u.t].mounted ? 30 : 26) * UNIT_SCALE + 4 + this.hop(u, now)) * z, 20 * z, u.h / max);
   }
 
   private hpBar(cx: number, y: number, w: number, f: number): void {
@@ -494,7 +494,7 @@ export class CanvasRenderer extends BaseRenderer {
       }
     const [sx, sy] = this.toScreen(p.x, p.y);
     g.globalAlpha = 0.6;
-    this.drawSprite(buildingSprite(p.type, playerColor(this.c, this.c.me)), sx, sy);
+    this.drawSprite(buildingSprite(p.type, playerColor(this.c, this.c.me), this.c.arch(this.c.me)), sx, sy);
     g.globalAlpha = 1;
   }
 
@@ -506,7 +506,7 @@ export class CanvasRenderer extends BaseRenderer {
       if (e.k === 'shot') {
         const x = e.x + (e.tx! - e.x) * k, y = e.y + (e.ty! - e.y) * k;
         const [sx, sy] = this.toScreen(x, y);
-        const arc = Math.sin(k * Math.PI) * (e.r ? 30 : 12) * z;
+        const arc = Math.sin(k * Math.PI) * (e.r === 1 ? 30 : e.r === 2 ? 2 : 12) * z;
         const [tx, ty] = this.toScreen(e.tx!, e.ty!);
         const [ox, oy] = this.toScreen(e.x, e.y);
         const ang = Math.atan2(ty - oy, tx - ox);
@@ -544,11 +544,12 @@ export class CanvasRenderer extends BaseRenderer {
         g.globalAlpha = 1;
       } else if (e.k === 'dust') {
         const [sx, sy] = this.toScreen(e.x, e.y);
+        const small = e.r === 2;
         for (let q = 0; q < 6; q++) {
           const a = q * 1.05;
-          g.fillStyle = `rgba(150,130,100,${0.5 * (1 - k)})`;
+          g.fillStyle = small ? `rgba(216,216,210,${0.7 * (1 - k)})` : `rgba(150,130,100,${0.5 * (1 - k)})`;
           g.beginPath();
-          g.arc(sx + Math.cos(a) * k * 30 * z, sy - k * 20 * z + Math.sin(a) * k * 10 * z, (8 + k * 14) * z, 0, Math.PI * 2);
+          g.arc(sx + Math.cos(a) * k * (small ? 10 : 30) * z, sy - ((small ? 16 : 0) + k * 20) * z + Math.sin(a) * k * (small ? 4 : 10) * z, ((small ? 3 : 8) + k * (small ? 8 : 14)) * z, 0, Math.PI * 2);
           g.fill();
         }
       } else if (e.k === 'text') {

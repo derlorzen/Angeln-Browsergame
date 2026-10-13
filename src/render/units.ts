@@ -1,6 +1,7 @@
 // Detaillierte Einheiten-Sprites: hoch aufgelöst gezeichnet, mit Kontur, Schattierung und Gehzyklus.
 // Koordinaten in 1x-Pixeln, Fußpunkt (0,0); Figuren blicken nach rechts (Spiegelung im Renderer).
 import type { UnitType } from '../data/defs';
+import type { FactionId } from '../data/factions';
 import { canvas, shade, type Ctx } from './draw';
 import type { Sprite } from './sprites';
 
@@ -187,95 +188,76 @@ function shadowUnder(g: Ctx, rx: number): void {
   ell(g, 0.8, 0, rx, rx * 0.38, 'rgba(15,20,10,0.35)');
 }
 
-// ------------------------------------------------------------------ einzelne Einheiten
-function worker(g: Ctx, color: string, f: number): void {
-  shadowUnder(g, 5.5);
-  const p = pose(f);
-  const work = f >= 5;
-  const b: Body = { coat: '#7a5a3a', sleeve: '#d6c9a8', legL: '#6b6253', legR: '#6b6253', boot: '#3b2a1c', belt: '#4a3420', hair: '#6b4a2a' };
-  // geschulterte Axt hinter dem Körper
-  const axe = work
-    ? undefined
-    : () => {
-        const by = -p.bob;
-        limb(g, 6.2, -13.6 + by, -3.4, -24.5 + by, 0.9, '#7a5634');
-        g.fillStyle = '#a9b0b6';
-        g.beginPath();
-        g.moveTo(-3.6, -24.8 + by);
-        g.lineTo(-6.6, -23.4 + by);
-        g.lineTo(-5.2, -21.4 + by);
-        g.lineTo(-2.6, -23.2 + by);
-        g.closePath();
-        g.fill();
-      };
-  const s = figure(g, p, b, (hx, hy) => {
-    // Zipfelmütze in Spielerfarbe
-    g.fillStyle = color;
+// ------------------------------------------------------------------ Kopfbedeckungen
+type Hat = (g: Ctx, hx: number, hy: number) => void;
+const hats = {
+  zipfel: (c: string): Hat => (g, hx, hy) => {
+    g.fillStyle = c;
     g.beginPath();
     g.moveTo(hx - 2.8, hy - 0.4);
     g.quadraticCurveTo(hx - 0.5, hy - 4.6, hx + 2.7, hy - 0.8);
     g.quadraticCurveTo(hx - 1.5, hy - 2.6, hx - 4.6, hy + 1.6);
     g.closePath();
     g.fill();
-    g.fillStyle = shade(color, -0.3);
+    g.fillStyle = shade(c, -0.3);
     g.fillRect(hx - 2.8, hy - 1.1, 5.6, 1);
-    dot(g, hx - 4.6, hy + 1.6, 0.7, shade(color, 0.3));
-  }, axe);
-  // Schürze/Kittelsaum
-  g.fillStyle = '#c8b994';
-  g.fillRect(-1.6, -12.2 - p.bob, 3.4, 3.2);
-  const { sx, sy } = s;
-  if (!work) {
-    // Hand hält den Axtstiel vor der Brust
-    frontArm(g, sx, sy, sx + 2.2, sy + 3, sx + 3.4, sy + 3.2, b.sleeve);
-  } else {
-    const up = f === 5;
-    const hx = up ? sx - 0.5 : sx + 5.2, hy = up ? sy - 6.5 : sy + 4.2;
-    const tx = up ? hx - 3 : hx + 4.5, ty = up ? hy - 3.5 : hy + 2.2;
-    limb(g, hx, hy, tx, ty, 0.9, '#7a5634');
-    g.fillStyle = '#a9b0b6';
-    g.save();
-    g.translate(tx, ty);
-    g.rotate(up ? -2.3 : 0.45);
-    g.fillRect(-0.4, -1.6, 2.6, 3.2);
-    g.restore();
-    frontArm(g, sx, sy, up ? sx + 1.6 : sx + 3.2, up ? sy - 3 : sy + 1.5, hx, hy, b.sleeve);
-    if (!up) {
-      // Späne
-      dot(g, tx + 2, ty - 1.5, 0.45, '#d9b878');
-      dot(g, tx + 3.2, ty - 0.2, 0.35, '#d9b878');
-    }
-  }
-}
-
-function landsknecht(g: Ctx, color: string, f: number): void {
-  shadowUnder(g, 6);
-  const p = pose(f);
-  const work = f >= 5;
-  const cream = '#efe6cc';
-  const b: Body = { coat: color, coat2: cream, sleeve: color, legL: color, legR: cream, boot: '#2e2218', belt: '#2a2018', puffy: true, beard: '#7a5634', hair: '#7a5634' };
-  // Spieß hinter dem Körper beim Gehen/Stehen
-  const pikeIdle = () => {
-    if (work) return;
-    const walking = f >= 1 && f <= 4;
-    const bx = walking ? -6 : 4.8, byy = walking ? -21 : 0.5;
-    const tx = walking ? 13 : 7.2, ty = walking ? -38 : -40;
-    limb(g, bx, byy, tx, ty, 0.9, '#8a6a44');
-    g.fillStyle = '#c4c9ce';
-    g.save();
-    g.translate(tx, ty);
-    g.rotate(Math.atan2(ty - byy, tx - bx) + Math.PI / 2);
+    dot(g, hx - 4.6, hy + 1.6, 0.7, shade(c, 0.3));
+  },
+  stroh: (c: string): Hat => (g, hx, hy) => {
+    ell(g, hx, hy - 1.6, 4.6, 1.3, '#d8c070');
+    ell(g, hx, hy - 2.7, 2.6, 1.7, '#e0c87a');
+    g.fillStyle = c;
+    g.fillRect(hx - 2.6, hy - 2.3, 5.2, 0.8);
+    g.strokeStyle = '#b09848';
+    g.lineWidth = 0.3;
     g.beginPath();
-    g.moveTo(0, -3.2);
-    g.lineTo(0.9, 0);
-    g.lineTo(-0.9, 0);
-    g.closePath();
+    g.ellipse(hx, hy - 1.6, 3.6, 0.9, 0, 0, Math.PI * 2);
+    g.stroke();
+  },
+  strick: (c: string): Hat => (g, hx, hy) => {
+    g.fillStyle = c;
+    g.beginPath();
+    g.ellipse(hx - 0.2, hy - 1.6, 2.9, 2.3, 0, Math.PI, 0);
     g.fill();
-    g.restore();
-    dot(g, tx - (tx - bx) * 0.06, ty - (ty - byy) * 0.06, 0.8, color); // Quaste
-  };
-  const s = figure(g, p, b, (hx, hy) => {
-    // Morion mit Kamm und Federbusch
+    g.fillStyle = shade(c, -0.25);
+    g.fillRect(hx - 3.1, hy - 1.8, 6, 1.1);
+    for (let k = -2; k <= 2; k++) dot(g, hx + k * 1.2, hy - 1.25, 0.25, shade(c, 0.3));
+    dot(g, hx - 0.4, hy - 4, 0.9, shade(c, 0.25));
+  },
+  filz: (c: string): Hat => (g, hx, hy) => {
+    ell(g, hx, hy - 2.1, 3.1, 1.9, c);
+    g.fillStyle = shade(c, -0.3);
+    g.fillRect(hx - 3.1, hy - 1.6, 6.2, 0.9);
+  },
+  barett: (c: string, feather = '#f2ecd8'): Hat => (g, hx, hy) => {
+    ell(g, hx - 0.2, hy - 2, 3.8, 1.4, c, -0.12);
+    ell(g, hx - 0.2, hy - 2.8, 2.6, 1.3, shade(c, -0.15));
+    g.strokeStyle = feather;
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.moveTo(hx - 1.5, hy - 3.2);
+    g.quadraticCurveTo(hx - 4.8, hy - 6.5, hx - 6.2, hy - 3.6);
+    g.stroke();
+  },
+  breit: (c: string): Hat => (g, hx, hy) => {
+    ell(g, hx, hy - 1.6, 3.8, 1.1, '#2e2a26');
+    ell(g, hx - 0.1, hy - 2.6, 2.2, 1.4, '#3a3530');
+    g.strokeStyle = c;
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.moveTo(hx - 1.6, hy - 3);
+    g.quadraticCurveTo(hx - 4.5, hy - 6, hx - 5.4, hy - 2.6);
+    g.stroke();
+  },
+  kessel: (plume?: string): Hat => (g, hx, hy) => {
+    ell(g, hx, hy - 1.3, 4.3, 1.1, '#9aa0a6');
+    g.fillStyle = '#b9bec4';
+    g.beginPath();
+    g.ellipse(hx, hy - 1.6, 2.7, 2.3, 0, Math.PI, 0);
+    g.fill();
+    if (plume) dot(g, hx - 0.4, hy - 4.2, 1, plume);
+  },
+  morion: (p1: string, p2: string): Hat => (g, hx, hy) => {
     g.fillStyle = '#b9bec4';
     g.beginPath();
     g.ellipse(hx, hy - 1.4, 2.9, 2.3, 0, Math.PI, 0);
@@ -295,8 +277,7 @@ function landsknecht(g: Ctx, color: string, f: number): void {
     g.quadraticCurveTo(hx, hy - 5.6, hx + 1.8, hy - 3.4);
     g.closePath();
     g.fill();
-    // Federn
-    for (const [dx, col] of [[-0.6, cream], [0.4, color], [1.2, cream]] as [number, string][]) {
+    for (const [dx, col] of [[-0.6, p1], [0.4, p2], [1.2, p1]] as [number, string][]) {
       g.strokeStyle = col;
       g.lineWidth = 0.9;
       g.beginPath();
@@ -304,78 +285,313 @@ function landsknecht(g: Ctx, color: string, f: number): void {
       g.quadraticCurveTo(hx + dx - 2, hy - 8, hx + dx - 4.4, hy - 6.2);
       g.stroke();
     }
-  }, pikeIdle);
-  const { sx, sy } = s;
-  if (!work) {
-    const walking = f >= 1 && f <= 4;
-    frontArm(g, sx, sy, sx + 1.8, sy + 3.2, walking ? sx + 0.8 : sx + 2.9, walking ? sy - 1.5 : sy + 4.8, b.sleeve, true);
-  } else {
-    // Stoß mit dem Spieß: Ausholen (5) und Stechen (6)
-    const thrust = f === 6 ? 5 : 0;
-    const bx = -9 + thrust, byy = sy + 3;
-    const tx = 17 + thrust, ty = sy - 2;
-    limb(g, bx, byy, tx, ty, 0.9, '#8a6a44');
+  },
+  topfhelm: (plume: string): Hat => (g, hx, hy) => {
     g.fillStyle = '#c4c9ce';
     g.beginPath();
-    g.moveTo(tx + 3.4, ty - 0.7);
-    g.lineTo(tx, ty - 1);
-    g.lineTo(tx, ty + 0.8);
-    g.closePath();
+    g.ellipse(hx + 0.2, hy - 0.6, 3, 3.1, 0, 0, Math.PI * 2);
     g.fill();
-    dot(g, tx - 1, ty, 0.8, color);
-    frontArm(g, sx, sy, sx + 2.4, sy + 2.2, sx + 4.5 + thrust * 0.6, sy + 1.6, b.sleeve, true);
+    g.fillStyle = '#2a2420';
+    g.fillRect(hx + 0.6, hy - 1.1, 2.6, 0.7);
+    g.strokeStyle = plume;
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(hx, hy - 3.4);
+    g.quadraticCurveTo(hx - 3, hy - 7, hx - 6, hy - 4.6);
+    g.stroke();
+  },
+};
+
+const CREAM = '#efe6cc';
+
+// ------------------------------------------------------------------ Kleidung je Partei
+interface Outfit {
+  body: Body;
+  hat: Hat;
+  sash?: 'diag' | 'kreuz';
+  cuirass?: boolean;
+  apron?: boolean;
+}
+
+function outfit(type: UnitType, fac: FactionId, color: string): Outfit {
+  const B = (coat: string, sleeve: string, legL: string, legR: string, extra: Partial<Body> = {}): Body => ({
+    coat, sleeve, legL, legR, boot: '#33261a', belt: '#3a2a1a', hair: '#6b4a2a', ...extra,
+  });
+  switch (type) {
+    case 'arbeiter':
+      if (fac === 'schwansen') return { body: B('#5f6a4a', '#cfc6aa', '#5a5446', '#5a5446'), hat: hats.stroh(color), apron: true };
+      if (fac === 'friesen') return { body: B('#3e5a78', '#3e5a78', '#4a4a44', '#4a4a44', { beard: '#c8a060', hair: '#c8a060' }), hat: hats.strick(color) };
+      if (fac === 'daenen') return { body: B('#7a3a2a', '#e0d6c0', '#5a5040', '#5a5040'), hat: hats.filz(color), apron: true };
+      return { body: B('#7a5a3a', '#d6c9a8', '#6b6253', '#6b6253'), hat: hats.zipfel(color), apron: true };
+    case 'knickwaechter':
+      return { body: B('#6a4a2a', '#c8b994', '#5c5348', '#5c5348', { beard: '#6b4a2a' }), hat: hats.filz(color), sash: 'diag' };
+    case 'landsknecht':
+      if (fac === 'schwansen') return { body: B('#2f4a32', color, '#2f4a32', color, { puffy: true }), hat: hats.barett(color), cuirass: true };
+      if (fac === 'friesen') return { body: B('#3e5a78', '#3e5a78', '#4a4a44', '#4a4a44', { beard: '#c8a060', hair: '#c8a060' }), hat: hats.kessel(color), sash: 'diag' };
+      if (fac === 'daenen') return { body: B(color, CREAM, color, CREAM, { puffy: true }), hat: hats.morion(CREAM, '#c03028'), sash: 'kreuz' };
+      return { body: B(color, color, color, CREAM, { coat2: CREAM, puffy: true, beard: '#7a5634', boot: '#2e2218' }), hat: hats.morion(CREAM, color) };
+    case 'schuetze':
+      if (fac === 'schwansen') return { body: B('#3d5a3a', '#4a6a44', '#4a4a3a', '#4a4a3a'), hat: hats.barett('#2f4a32', color), sash: 'diag' };
+      if (fac === 'friesen') return { body: B('#3e5a78', '#3e5a78', '#4a4a44', '#4a4a44', { hair: '#c8a060' }), hat: hats.strick(color), sash: 'diag' };
+      if (fac === 'daenen') return { body: B(color, CREAM, '#4a4238', '#4a4238'), hat: hats.kessel(), sash: 'kreuz' };
+      return { body: B('#8a6a44', '#6e5a40', '#5a5a4a', '#5a5a4a', { hair: '#4a3420' }), hat: hats.barett(color), sash: 'diag' };
+    case 'grabenspringer':
+      return { body: B('#3e5a78', '#3e5a78', '#4a4a44', '#4a4a44', { beard: '#c8a060', hair: '#c8a060', boot: '#2a2420' }), hat: hats.strick(color), sash: 'diag' };
+    case 'musketier':
+      return { body: B(color, CREAM, '#3a3530', '#3a3530'), hat: hats.morion('#f2ecd8', '#c03028'), sash: 'kreuz' };
+    default:
+      return { body: B(color, color, '#4a4238', '#4a4238'), hat: hats.breit(color) };
   }
 }
 
-function schuetze(g: Ctx, color: string, f: number): void {
+function sashes(g: Ctx, o: Outfit, color: string, bob: number): void {
+  if (o.cuirass) {
+    const gr = g.createLinearGradient(-3, 0, 3.5, 0);
+    gr.addColorStop(0, '#e2e6ea');
+    gr.addColorStop(0.5, '#aeb4ba');
+    gr.addColorStop(1, '#7a8086');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.moveTo(-3, -18 - bob);
+    g.quadraticCurveTo(0.4, -19.2 - bob, 3.3, -18 - bob);
+    g.lineTo(3.2, -12.2 - bob);
+    g.quadraticCurveTo(0.2, -10.6 - bob, -3, -12.2 - bob);
+    g.closePath();
+    g.fill();
+  }
+  if (o.sash === 'diag') {
+    g.strokeStyle = o.body.coat === color ? CREAM : color;
+    g.lineWidth = 1.1;
+    g.beginPath();
+    g.moveTo(-2.8, -18 - bob);
+    g.lineTo(3, -11 - bob);
+    g.stroke();
+  } else if (o.sash === 'kreuz') {
+    g.strokeStyle = '#f4f0e6';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(-2.8, -18 - bob);
+    g.lineTo(3, -11 - bob);
+    g.moveTo(3, -18 - bob);
+    g.lineTo(-2.8, -11 - bob);
+    g.stroke();
+  }
+  if (o.apron) {
+    g.fillStyle = '#d0c29c';
+    g.fillRect(-1.6, -12.2 - bob, 3.4, 3.2);
+  }
+}
+
+// ------------------------------------------------------------------ Waffen
+function pikeHead(g: Ctx, tx: number, ty: number, ang: number, kind: 'spitze' | 'hellebarde' | 'sense'): void {
+  g.save();
+  g.translate(tx, ty);
+  g.rotate(ang);
+  g.fillStyle = '#c4c9ce';
+  if (kind === 'spitze') {
+    g.beginPath();
+    g.moveTo(0, -3.2);
+    g.lineTo(0.9, 0);
+    g.lineTo(-0.9, 0);
+    g.closePath();
+    g.fill();
+  } else if (kind === 'hellebarde') {
+    g.beginPath();
+    g.moveTo(0, -3.4);
+    g.lineTo(0.6, -0.6);
+    g.lineTo(3, -1.6);
+    g.lineTo(3, 1.6);
+    g.lineTo(0.6, 0.6);
+    g.lineTo(-1.6, 0.4);
+    g.lineTo(-0.6, -0.4);
+    g.closePath();
+    g.fill();
+  } else {
+    // Kriegssense: lange, leicht gebogene Klinge
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.quadraticCurveTo(3.6, -1.2, 6, 1.4);
+    g.quadraticCurveTo(3.2, 0.2, 0, 1.2);
+    g.closePath();
+    g.fill();
+  }
+  g.restore();
+}
+
+function polearm(g: Ctx, bx: number, by: number, tx: number, ty: number, kind: 'spitze' | 'hellebarde' | 'sense', tassel?: string): void {
+  limb(g, bx, by, tx, ty, 0.9, '#8a6a44');
+  pikeHead(g, tx, ty, Math.atan2(ty - by, tx - bx) + Math.PI / 2, kind);
+  if (tassel) dot(g, tx - (tx - bx) * 0.06, ty - (ty - by) * 0.06, 0.8, tassel);
+}
+
+// ------------------------------------------------------------------ Figurtypen
+function worker(g: Ctx, color: string, f: number, fac: FactionId): void {
+  shadowUnder(g, 5.5);
+  const p = pose(f);
+  const work = f >= 5;
+  const o = outfit('arbeiter', fac, color);
+  const axe = work
+    ? undefined
+    : () => {
+        const by = -p.bob;
+        limb(g, 6.2, -13.6 + by, -3.4, -24.5 + by, 0.9, '#7a5634');
+        g.fillStyle = '#a9b0b6';
+        g.beginPath();
+        g.moveTo(-3.6, -24.8 + by);
+        g.lineTo(-6.6, -23.4 + by);
+        g.lineTo(-5.2, -21.4 + by);
+        g.lineTo(-2.6, -23.2 + by);
+        g.closePath();
+        g.fill();
+      };
+  const s = figure(g, p, o.body, (hx, hy) => o.hat(g, hx, hy), axe);
+  sashes(g, o, color, p.bob);
+  const { sx, sy } = s;
+  if (!work) frontArm(g, sx, sy, sx + 2.2, sy + 3, sx + 3.4, sy + 3.2, o.body.sleeve);
+  else {
+    const up = f === 5;
+    const hx = up ? sx - 0.5 : sx + 5.2, hy = up ? sy - 6.5 : sy + 4.2;
+    const tx = up ? hx - 3 : hx + 4.5, ty = up ? hy - 3.5 : hy + 2.2;
+    limb(g, hx, hy, tx, ty, 0.9, '#7a5634');
+    g.fillStyle = '#a9b0b6';
+    g.save();
+    g.translate(tx, ty);
+    g.rotate(up ? -2.3 : 0.45);
+    g.fillRect(-0.4, -1.6, 2.6, 3.2);
+    g.restore();
+    frontArm(g, sx, sy, up ? sx + 1.6 : sx + 3.2, up ? sy - 3 : sy + 1.5, hx, hy, o.body.sleeve);
+    if (!up) {
+      dot(g, tx + 2, ty - 1.5, 0.45, '#d9b878');
+      dot(g, tx + 3.2, ty - 0.2, 0.35, '#d9b878');
+    }
+  }
+}
+
+/** Nahkämpfer mit Stangenwaffe (Spieß, Hellebarde, Sense, Speer + Schild). */
+function infantry(g: Ctx, color: string, f: number, type: UnitType, fac: FactionId): void {
+  shadowUnder(g, 6);
+  const p = pose(f);
+  const work = f >= 5;
+  const o = outfit(type, fac, color);
+  const kind: 'spitze' | 'hellebarde' | 'sense' = type === 'knickwaechter' ? 'sense' : fac === 'schwansen' ? 'hellebarde' : 'spitze';
+  const short = type === 'knickwaechter' || fac === 'friesen';
+  const len = short ? 0.62 : 1;
+  const tassel = kind === 'spitze' && !short ? color : undefined;
+  const carry = () => {
+    if (work) return;
+    const walking = f >= 1 && f <= 4;
+    const bx = walking ? -6 : 4.8, byy = walking ? -21 : 0.5;
+    const tx0 = walking ? 13 : 7.2, ty0 = walking ? -38 : -40;
+    polearm(g, bx, byy, bx + (tx0 - bx) * len, byy + (ty0 - byy) * len, kind, tassel);
+  };
+  const s = figure(g, p, o.body, (hx, hy) => o.hat(g, hx, hy), carry);
+  sashes(g, o, color, p.bob);
+  const { sx, sy } = s;
+  const puffy = !!o.body.puffy;
+  if (!work) {
+    const walking = f >= 1 && f <= 4;
+    frontArm(g, sx, sy, sx + 1.8, sy + 3.2, walking ? sx + 0.8 : sx + 2.9, walking ? sy - 1.5 : sy + 4.8, o.body.sleeve, puffy);
+  } else {
+    const thrust = f === 6 ? 5 : 0;
+    if (kind === 'sense') {
+      // weit ausholender Sensenhieb
+      const up = f === 5;
+      const hx = up ? sx - 1 : sx + 5, hy = up ? sy - 5 : sy + 3;
+      const tx = up ? hx - 6 : hx + 10, ty = up ? hy - 8 : hy + 1;
+      polearm(g, up ? hx + 4 : hx - 5, up ? hy + 5 : hy - 0.5, tx, ty, 'sense');
+      frontArm(g, sx, sy, (sx + hx) / 2 + 0.6, (sy + hy) / 2, hx, hy, o.body.sleeve);
+    } else {
+      const bx = -9 * len + thrust, byy = sy + 3;
+      const tx = 17 * len + thrust, ty = sy - 2;
+      polearm(g, bx, byy, tx, ty, kind, tassel);
+      frontArm(g, sx, sy, sx + 2.4, sy + 2.2, sx + 4.5 + thrust * 0.6, sy + 1.6, o.body.sleeve, puffy);
+    }
+  }
+  if (fac === 'friesen' && type === 'landsknecht') {
+    // runder Holzschild in Spielerfarbe
+    const cx = sx + 1.2, cy = sy + 4.5;
+    dot(g, cx, cy, 3.6, shade(color, -0.1));
+    g.strokeStyle = '#6b4a2c';
+    g.lineWidth = 0.6;
+    g.beginPath();
+    g.arc(cx, cy, 3.6, 0, Math.PI * 2);
+    g.stroke();
+    dot(g, cx, cy, 1, '#b9bec4');
+  }
+}
+
+function ranged(g: Ctx, color: string, f: number, type: UnitType, fac: FactionId): void {
   shadowUnder(g, 5.5);
   const p = pose(f);
   const aim = f >= 5;
-  const b: Body = { coat: '#8a6a44', sleeve: '#6e5a40', legL: '#5a5a4a', legR: '#5a5a4a', boot: '#33261a', belt: '#3a2a1a', hair: '#4a3420' };
-  const quiver = () => {
-    // Köcher mit Bolzen auf dem Rücken
+  const o = outfit(type, fac, color);
+  const musket = type === 'musketier';
+  const back = () => {
     g.save();
     g.translate(-3.2, -15 - p.bob);
     g.rotate(-0.35);
-    g.fillStyle = '#5a3d22';
-    g.fillRect(-1.1, -2, 2.2, 7);
-    for (const dx of [-0.6, 0, 0.6]) {
-      limb(g, dx, -2, dx, -4, 0.35, '#d8c8a0');
-      dot(g, dx, -4.2, 0.45, color);
+    if (musket) {
+      // Pulverhorn
+      g.fillStyle = '#d8cca8';
+      g.beginPath();
+      g.moveTo(-1, -1);
+      g.quadraticCurveTo(2, 2, 0.5, 5);
+      g.lineTo(-0.6, 4.6);
+      g.closePath();
+      g.fill();
+    } else {
+      g.fillStyle = '#5a3d22';
+      g.fillRect(-1.1, -2, 2.2, 7);
+      for (const dx of [-0.6, 0, 0.6]) {
+        limb(g, dx, -2, dx, -4, 0.35, '#d8c8a0');
+        dot(g, dx, -4.2, 0.45, color);
+      }
     }
     g.restore();
   };
-  const s = figure(g, p, b, (hx, hy) => {
-    // Barett mit Feder in Spielerfarbe
-    ell(g, hx - 0.2, hy - 2, 3.8, 1.4, color, -0.12);
-    ell(g, hx - 0.2, hy - 2.8, 2.6, 1.3, shade(color, -0.15));
-    g.strokeStyle = '#f2ecd8';
-    g.lineWidth = 0.8;
-    g.beginPath();
-    g.moveTo(hx - 1.5, hy - 3.2);
-    g.quadraticCurveTo(hx - 4.8, hy - 6.5, hx - 6.2, hy - 3.6);
-    g.stroke();
-  }, quiver);
-  // Schärpe in Spielerfarbe
-  g.strokeStyle = color;
-  g.lineWidth = 1.1;
-  g.beginPath();
-  g.moveTo(-2.8, -18 - p.bob);
-  g.lineTo(3, -11 - p.bob);
-  g.stroke();
+  const s = figure(g, p, o.body, (hx, hy) => o.hat(g, hx, hy), back);
+  sashes(g, o, color, p.bob);
+  if (musket) {
+    // Bandelier mit „Aposteln“ (Pulverfläschchen)
+    for (let k = 0; k < 5; k++) dot(g, -2.2 + k * 1.2, -17 + k * 1.4 - p.bob, 0.5, '#6b4a2c');
+  }
   const { sx, sy } = s;
-  // Armbrust
+  if (musket) {
+    const walking = f >= 1 && f <= 4;
+    if (!aim) {
+      // geschultert
+      limb(g, sx - 6, sy + 6, sx + 7, sy - 9, 1.1, '#5a3d22');
+      limb(g, sx + 2, sy - 3.5, sx + 7, sy - 9, 0.7, '#4a4a4a');
+      frontArm(g, sx, sy, sx + 2, sy + 2, walking ? sx + 1.5 : sx + 2.4, walking ? sy + 1 : sy + 2.6, o.body.sleeve);
+    } else {
+      // im Anschlag auf der Musketengabel
+      const mx = sx + 1, my = sy + 0.5;
+      limb(g, mx + 9, my + 0.2, mx + 10, 0, 0.5, '#6b4a2c'); // Gabel
+      limb(g, mx + 8.6, my - 0.3, mx + 11.2, my - 0.3, 0.4, '#6b4a2c');
+      limb(g, mx - 2, my + 0.6, mx + 5, my, 1.3, '#5a3d22');
+      limb(g, mx + 5, my, mx + 14, my - 0.6, 0.75, '#4a4a4a');
+      frontArm(g, sx, sy, sx + 2.6, sy + 1.6, mx + 4.6, my + 0.6, o.body.sleeve);
+      if (f === 6) {
+        // Mündungsfeuer und Rauch
+        dot(g, mx + 15.2, my - 0.6, 1.3, '#ffd060');
+        dot(g, mx + 15.8, my - 0.6, 0.7, '#fff4c0');
+        ell(g, mx + 17.5, my - 1.4, 2.6, 1.8, 'rgba(220,220,215,0.85)');
+        ell(g, mx + 19.5, my - 2.6, 2, 1.5, 'rgba(220,220,215,0.6)');
+      }
+    }
+    return;
+  }
   const cbx = aim ? sx + 2.5 : sx + 1.5, cby = aim ? sy - 0.3 : sy + 4;
   const ang = aim ? -0.05 : -0.55;
   g.save();
   g.translate(cbx, cby);
   g.rotate(ang);
   g.fillStyle = '#6b4a2c';
-  g.fillRect(-2.5, -0.6, 9, 1.3); // Säule
+  g.fillRect(-2.5, -0.6, 9, 1.3);
   g.strokeStyle = '#3a2f26';
   g.lineWidth = 0.9;
   g.beginPath();
-  g.arc(5.6, 0, 3.4, -Math.PI / 2, Math.PI / 2); // Bogen
+  g.arc(5.6, 0, 3.4, -Math.PI / 2, Math.PI / 2);
   g.stroke();
   g.strokeStyle = '#ddd5c0';
   g.lineWidth = 0.35;
@@ -384,38 +600,74 @@ function schuetze(g: Ctx, color: string, f: number): void {
   g.lineTo(f === 6 ? 5.2 : 1.6, 0);
   g.lineTo(5.6, 3.4);
   g.stroke();
-  limb(g, 7.6, 0, 8.6, 0, 0.6, '#5a5a5a'); // Spannbügel
-  if (f === 5) limb(g, 1.6, -0.2, 6, -0.2, 0.5, '#9a8a6a'); // eingelegter Bolzen
+  limb(g, 7.6, 0, 8.6, 0, 0.6, '#5a5a5a');
+  if (f === 5) limb(g, 1.6, -0.2, 6, -0.2, 0.5, '#9a8a6a');
   g.restore();
-  frontArm(g, sx, sy, sx + (aim ? 2.2 : 1.6), sy + (aim ? 1 : 3.2), cbx + 1, cby + 0.6, b.sleeve);
+  frontArm(g, sx, sy, sx + (aim ? 2.2 : 1.6), sy + (aim ? 1 : 3.2), cbx + 1, cby + 0.6, o.body.sleeve);
 }
 
-function spaeher(g: Ctx, color: string, f: number): void {
+/** Grabenspringer: Friese mit langem Springstock (Teller am Fuß). */
+function springer(g: Ctx, color: string, f: number, fac: FactionId): void {
+  shadowUnder(g, 5.5);
+  const p = pose(f);
+  const o = outfit('grabenspringer', fac, color);
+  const work = f >= 5;
+  const pole = () => {
+    if (work) return;
+    const walking = f >= 1 && f <= 4;
+    const bx = walking ? 9 : 5.5, byy = walking ? -1 : 0.4;
+    const tx = walking ? -4 : 3.6, ty = walking ? -34 : -36;
+    limb(g, bx, byy, tx, ty, 1, '#9a7a4a');
+    ell(g, bx, byy - 0.4, 1.6, 0.6, '#6b4a2c');
+  };
+  const s = figure(g, p, o.body, (hx, hy) => o.hat(g, hx, hy), pole);
+  sashes(g, o, color, p.bob);
+  const { sx, sy } = s;
+  if (!work) frontArm(g, sx, sy, sx + 1.6, sy + 3, sx + 2.6, sy - 2, o.body.sleeve);
+  else {
+    const up = f === 5;
+    const hx = up ? sx + 1 : sx + 4.5, hy = up ? sy - 4 : sy + 2.5;
+    limb(g, up ? hx - 8 : hx - 6, up ? hy + 8 : hy - 4, up ? hx + 6 : hx + 12, up ? hy - 10 : hy + 5, 1, '#9a7a4a');
+    frontArm(g, sx, sy, (sx + hx) / 2 + 0.5, (sy + hy) / 2 + 0.5, hx, hy, o.body.sleeve);
+  }
+}
+
+interface HorseStyle {
+  coat: string;
+  mane: string;
+  cloth: string;
+  barding?: boolean;
+}
+
+function horseman(g: Ctx, color: string, f: number, type: UnitType, fac: FactionId): void {
+  const heavy = type === 'gutsreiter';
+  const hs: HorseStyle =
+    heavy ? { coat: '#c8c4bc', mane: '#8a8680', cloth: color, barding: true }
+    : fac === 'schwansen' ? { coat: '#b8b4ac', mane: '#6a6660', cloth: color }
+    : fac === 'friesen' ? { coat: '#2a2420', mane: '#141010', cloth: color }
+    : fac === 'daenen' ? { coat: '#5a3420', mane: '#20140c', cloth: color }
+    : { coat: '#7a4a2a', mane: '#2e1d12', cloth: color };
   shadowUnder(g, 10);
   const gallop = f >= 1 && f <= 4;
   const ph = gallop ? ((f - 1) / 4) * Math.PI * 2 : 0;
   const lift = gallop ? Math.sin(ph) * 0.8 : 0;
-  const coat = '#7a4a2a';
+  const coat = hs.coat;
   const by = -9.5 - lift;
-  // Beine (hinten dunkler)
-  const legs: [number, number, number][] = [
-    [-6.2, 0, -0.2], [-4.4, Math.PI, 0], [4.6, Math.PI * 0.5, -0.2], [6.3, Math.PI * 1.5, 0],
-  ];
+  const legs: [number, number, number][] = [[-6.2, 0, -0.2], [-4.4, Math.PI, 0], [4.6, Math.PI * 0.5, -0.2], [6.3, Math.PI * 1.5, 0]];
   for (const [lx, off, dk] of legs) {
     const a = gallop ? Math.sin(ph + off) * 0.6 : 0;
     const kx = lx + Math.sin(a) * 2.5, ky = by + 4.5;
     const fx = kx + Math.sin(a * 1.4) * 2.2, fy = -Math.max(0, Math.cos(ph + off)) * (gallop ? 1.5 : 0);
     bent(g, lx, by + 1.5, kx, ky, fx, fy - 0.8, 1.4, shade(coat, dk - 0.1));
     ell(g, fx + 0.3, fy - 0.4, 0.9, 0.6, '#2a1d14');
+    if (fac === 'friesen' && !heavy) ell(g, fx + 0.2, fy - 1.4, 1, 0.8, '#e8e4dc'); // Fesselbehang
   }
-  // Schweif
-  g.strokeStyle = '#2e1d12';
+  g.strokeStyle = hs.mane;
   g.lineWidth = 1.6;
   g.beginPath();
   g.moveTo(-7.6, by - 1);
   g.quadraticCurveTo(-11, by + 1 + lift, -10, by + 6);
   g.stroke();
-  // Rumpf
   const gr = g.createLinearGradient(0, by - 4, 0, by + 4);
   gr.addColorStop(0, shade(coat, 0.15));
   gr.addColorStop(1, shade(coat, -0.3));
@@ -423,7 +675,6 @@ function spaeher(g: Ctx, color: string, f: number): void {
   g.beginPath();
   g.ellipse(0, by, 8.2, 3.8, 0, 0, Math.PI * 2);
   g.fill();
-  // Hals und Kopf
   g.beginPath();
   g.moveTo(5.2, by - 2.6);
   g.lineTo(8.6, by - 9.5);
@@ -442,15 +693,13 @@ function spaeher(g: Ctx, color: string, f: number): void {
   g.lineTo(9.9, by - 12);
   g.lineTo(10.6, by - 10);
   g.fill();
-  dot(g, 11.2, by - 9.2, 0.4, '#140d08'); // Auge
-  // Mähne
-  g.strokeStyle = '#2e1d12';
+  dot(g, 11.2, by - 9.2, 0.4, '#140d08');
+  g.strokeStyle = hs.mane;
   g.lineWidth = 1.2;
   g.beginPath();
   g.moveTo(5.6, by - 3.4);
   g.lineTo(9, by - 10.2);
   g.stroke();
-  // Zaumzeug
   g.strokeStyle = '#3a2416';
   g.lineWidth = 0.4;
   g.beginPath();
@@ -459,24 +708,39 @@ function spaeher(g: Ctx, color: string, f: number): void {
   g.moveTo(12.6, by - 7.4);
   g.lineTo(3.8, by - 8.5);
   g.stroke();
-  // Satteldecke in Spielerfarbe mit Borte
-  g.fillStyle = color;
-  g.beginPath();
-  g.moveTo(-3.8, by - 3.4);
-  g.lineTo(3.4, by - 3.4);
-  g.lineTo(3, by + 2.6);
-  g.lineTo(-3.4, by + 2.6);
-  g.closePath();
-  g.fill();
-  g.fillStyle = '#e8d890';
-  g.fillRect(-3.4, by + 2, 6.4, 0.6);
+  if (hs.barding) {
+    // Schabracke: lange Decke in Spielerfarbe mit Borte
+    g.fillStyle = hs.cloth;
+    g.beginPath();
+    g.moveTo(-8, by - 2.6);
+    g.lineTo(6, by - 2.6);
+    g.lineTo(6.6, by + 5);
+    g.quadraticCurveTo(0, by + 6.4, -8.4, by + 5);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#e8d890';
+    g.fillRect(-8.2, by + 4.3, 14.6, 0.7);
+    for (let k = 0; k < 3; k++) dot(g, -5 + k * 4.5, by + 1.5, 0.9, '#e8d890');
+  } else {
+    g.fillStyle = hs.cloth;
+    g.beginPath();
+    g.moveTo(-3.8, by - 3.4);
+    g.lineTo(3.4, by - 3.4);
+    g.lineTo(3, by + 2.6);
+    g.lineTo(-3.4, by + 2.6);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#e8d890';
+    g.fillRect(-3.4, by + 2, 6.4, 0.6);
+  }
   // Reiter
   const ry = by - 3.2;
-  bent(g, 0.2, ry, 1.6, ry + 3.4, 1.2, ry + 6, 1.8, '#5a4a3a'); // Bein
+  bent(g, 0.2, ry, 1.6, ry + 3.4, 1.2, ry + 6, 1.8, heavy ? '#9aa0a6' : '#5a4a3a');
   ell(g, 1.6, ry + 6.1, 1.1, 0.6, '#2e2218');
   const cg = g.createLinearGradient(-2, 0, 2.5, 0);
-  cg.addColorStop(0, shade(color, 0.1));
-  cg.addColorStop(1, shade(color, -0.35));
+  const rc = heavy ? '#b9bec4' : fac === 'friesen' ? '#3e5a78' : color;
+  cg.addColorStop(0, shade(rc, 0.12));
+  cg.addColorStop(1, shade(rc, -0.35));
   g.fillStyle = cg;
   g.beginPath();
   g.moveTo(-2.6, ry);
@@ -485,8 +749,7 @@ function spaeher(g: Ctx, color: string, f: number): void {
   g.lineTo(-1.6, ry - 7.6);
   g.closePath();
   g.fill();
-  // Umhang
-  g.fillStyle = shade(color, -0.4);
+  g.fillStyle = shade(color, -0.35);
   g.beginPath();
   g.moveTo(-1.6, ry - 7.4);
   g.quadraticCurveTo(-5.5 - lift, ry - 4, -4.6, ry + 0.5);
@@ -496,43 +759,57 @@ function spaeher(g: Ctx, color: string, f: number): void {
   const hx = 0.3, hy = ry - 10;
   dot(g, hx, hy, 2.3, SKIN);
   dot(g, hx + 1.2, hy - 0.3, 0.35, '#2a1d14');
-  // Hut mit breiter Krempe und Feder
-  ell(g, hx, hy - 1.6, 3.8, 1.1, '#2e2a26');
-  ell(g, hx - 0.1, hy - 2.6, 2.2, 1.4, '#3a3530');
-  g.strokeStyle = '#f2ecd8';
-  g.lineWidth = 0.7;
-  g.beginPath();
-  g.moveTo(hx - 1.6, hy - 3);
-  g.quadraticCurveTo(hx - 4.5, hy - 6, hx - 5.4, hy - 2.6);
-  g.stroke();
-  // Arm mit Zügeln bzw. Säbel
-  if (f >= 5) {
+  const hat = heavy ? hats.topfhelm(color) : fac === 'schwansen' ? hats.barett('#2f4a32', color) : fac === 'friesen' ? hats.strick(color) : fac === 'daenen' ? hats.kessel(color) : hats.breit('#f2ecd8');
+  hat(g, hx, hy);
+  const armC = heavy ? '#9aa0a6' : shade(rc, -0.2);
+  if (heavy) {
+    // Lanze mit Wimpel
+    const att = f >= 5;
+    const lx0 = att ? -6 : -3, ly0 = att ? ry - 4 : ry - 2;
+    const lx1 = att ? 22 : 10, ly1 = att ? ry - 6 : ry - 26;
+    limb(g, lx0, ly0, lx1, ly1, 0.9, '#8a6a44');
+    pikeHead(g, lx1, ly1, Math.atan2(ly1 - ly0, lx1 - lx0) + Math.PI / 2, 'spitze');
+    const wx = lx0 + (lx1 - lx0) * 0.8, wy = ly0 + (ly1 - ly0) * 0.8;
+    g.fillStyle = color;
+    g.beginPath();
+    g.moveTo(wx, wy);
+    g.lineTo(wx - 4, wy + 1.2);
+    g.lineTo(wx - 0.6, wy + 2.4);
+    g.closePath();
+    g.fill();
+    bent(g, 1.6, ry - 6.4, 3, ry - 4, (lx0 + lx1) / 2 - 2, (ly0 + ly1) / 2 + 0.5, 1.6, armC);
+  } else if (f >= 5) {
     const up = f === 5;
     const ex = up ? hx + 1.5 : hx + 6, ey = up ? hy - 3 : hy + 4.5;
-    bent(g, 1.6, ry - 6.4, (1.6 + ex) / 2 + 0.6, (ry - 6.4 + ey) / 2, ex, ey, 1.6, shade(color, -0.2));
+    bent(g, 1.6, ry - 6.4, (1.6 + ex) / 2 + 0.6, (ry - 6.4 + ey) / 2, ex, ey, 1.6, armC);
     limb(g, ex, ey, ex + (up ? -1 : 6), ey + (up ? -6 : 1.5), 0.7, '#c8ccd0');
   } else {
-    bent(g, 1.6, ry - 6.4, 3.4, ry - 3.6, 5.2, ry - 3.4, 1.6, shade(color, -0.2));
+    bent(g, 1.6, ry - 6.4, 3.4, ry - 3.6, 5.2, ry - 3.4, 1.6, armC);
     limb(g, 5.2, ry - 3.4, 12.4, by - 7.6, 0.35, '#3a2416');
   }
 }
 
-const DRAW: Record<UnitType, (g: Ctx, color: string, f: number) => void> = {
-  arbeiter: worker,
-  landsknecht,
-  schuetze,
-  spaeher,
-};
+function drawUnit(g: Ctx, type: UnitType, color: string, f: number, fac: FactionId): void {
+  switch (type) {
+    case 'arbeiter': return worker(g, color, f, fac);
+    case 'landsknecht':
+    case 'knickwaechter': return infantry(g, color, f, type, fac);
+    case 'schuetze':
+    case 'musketier': return ranged(g, color, f, type, fac);
+    case 'grabenspringer': return springer(g, color, f, fac);
+    case 'spaeher':
+    case 'gutsreiter': return horseman(g, color, f, type, fac);
+  }
+}
 
 /** Zeichnet eine Figur und legt eine dunkle Kontur darum (klassische Sprite-Lesbarkeit). */
-function renderFrame(type: UnitType, color: string, f: number): Sprite {
+function renderFrame(type: UnitType, color: string, f: number, fac: FactionId): Sprite {
   const R = UNIT_RES;
   const [fig, fg] = canvas(W1 * R, H1 * R);
   fg.scale(R, R);
   fg.translate(AX, AY);
-  DRAW[type](fg, color, f);
+  drawUnit(fg, type, color, f, fac);
   const [out, og] = canvas(W1 * R, H1 * R);
-  // Kontur: Silhouette eingefärbt und versetzt
   const [sil, sg] = canvas(W1 * R, H1 * R);
   sg.drawImage(fig, 0, 0);
   sg.globalCompositeOperation = 'source-in';
@@ -545,12 +822,12 @@ function renderFrame(type: UnitType, color: string, f: number): Sprite {
 }
 
 const cache = new Map<string, Sprite[]>();
-export function unitSprites(type: UnitType, color: string): Sprite[] {
-  const k = type + color;
+export function unitSprites(type: UnitType, color: string, fac: FactionId = 'angeln'): Sprite[] {
+  const k = `${type}|${color}|${fac}`;
   let arr = cache.get(k);
   if (!arr) {
     arr = [];
-    for (let f = 0; f < UNIT_FRAMES; f++) arr.push(renderFrame(type, color, f));
+    for (let f = 0; f < UNIT_FRAMES; f++) arr.push(renderFrame(type, color, f, fac));
     cache.set(k, arr);
   }
   return arr;

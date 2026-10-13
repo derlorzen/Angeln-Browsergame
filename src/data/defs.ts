@@ -28,7 +28,7 @@ export const BUILDING_TYPES = [
 ] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
 
-export const UNIT_TYPES = ['arbeiter', 'spaeher', 'landsknecht', 'schuetze'] as const;
+export const UNIT_TYPES = ['arbeiter', 'spaeher', 'landsknecht', 'schuetze', 'knickwaechter', 'gutsreiter', 'grabenspringer', 'musketier'] as const;
 export type UnitType = (typeof UNIT_TYPES)[number];
 
 export type Placement = 'normal' | 'ufer' | 'lehm';
@@ -140,6 +140,8 @@ export interface UnitDef {
   vsBuilding: number; // Schadensfaktor gegen Gebäude
   armor: number;
   military: boolean;
+  mounted?: boolean; // beritten (Darstellung, Auswahlrahmen)
+  knickJump?: boolean; // kann Knicks überwinden
 }
 
 export const UNITS: Record<UnitType, UnitDef> = {
@@ -151,7 +153,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
   spaeher: {
     name: 'Späher', desc: 'Schneller Reiter mit großer Sicht. Gut zum Erkunden, schwach im Kampf.',
     hp: 70, speed: 3.2, dmg: 4, range: 1.2, cooldown: 1.2, vision: 11, cost: { fisch: 40, taler: 25 }, trainTime: 14, pop: 1,
-    vsBuilding: 0.3, armor: 0, military: true,
+    vsBuilding: 0.3, armor: 0, military: true, mounted: true,
   },
   landsknecht: {
     name: 'Landsknecht', desc: 'Nahkämpfer mit Spieß. Robust, stark gegen Gebäude.',
@@ -162,6 +164,27 @@ export const UNITS: Record<UnitType, UnitDef> = {
     name: 'Armbrustschütze', desc: 'Fernkämpfer. Trifft auf 5 Kacheln, aber verwundbar im Nahkampf.',
     hp: 60, speed: 1.5, dmg: 8, range: 5, cooldown: 1.7, vision: 8, cost: { getreide: 30, holz: 40, taler: 30 }, trainTime: 20, pop: 1,
     vsBuilding: 0.4, armor: 0, military: true,
+  },
+  // Spezialeinheiten der Parteien (nur in der eigenen Kaserne)
+  knickwaechter: {
+    name: 'Knickwächter', desc: 'Angeliter Bauernwehr mit Sense. Billig und schnell ausgebildet; neben einem Knick halbiert sich erlittener Schaden fast.',
+    hp: 85, speed: 1.6, dmg: 8, range: 1.2, cooldown: 1.1, vision: 6, cost: { getreide: 35, holz: 10 }, trainTime: 11, pop: 1,
+    vsBuilding: 1.0, armor: 1, military: true,
+  },
+  gutsreiter: {
+    name: 'Gutsreiter', desc: 'Schwer gepanzerter Reiter der Schwansener Güter mit Lanze. Teuer, schnell und schlagkräftig.',
+    hp: 170, speed: 2.6, dmg: 14, range: 1.3, cooldown: 1.3, vision: 8, cost: { getreide: 40, fisch: 40, taler: 70 }, trainTime: 24, pop: 1,
+    vsBuilding: 0.8, armor: 3, military: true, mounted: true,
+  },
+  grabenspringer: {
+    name: 'Grabenspringer', desc: 'Nordfriese mit Springstock: setzt über Knicks und Gräben hinweg, wo andere den Umweg über Tore nehmen müssen.',
+    hp: 75, speed: 2.1, dmg: 8, range: 1.2, cooldown: 1.0, vision: 8, cost: { fisch: 40, holz: 15, taler: 10 }, trainTime: 14, pop: 1,
+    vsBuilding: 0.8, armor: 0, military: true, knickJump: true,
+  },
+  musketier: {
+    name: 'Musketier', desc: 'Königlich dänischer Musketier. Größte Reichweite und hoher Schaden, aber langes Nachladen.',
+    hp: 65, speed: 1.4, dmg: 19, range: 6.2, cooldown: 3.4, vision: 8, cost: { getreide: 30, holz: 30, taler: 50 }, trainTime: 22, pop: 1,
+    vsBuilding: 0.6, armor: 0, military: true,
   },
 };
 
