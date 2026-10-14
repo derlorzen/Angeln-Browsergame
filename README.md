@@ -51,6 +51,11 @@ Beispiele:
 - **Netlify / Cloudflare Pages:** Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
 - **Eigener Webserver (nginx, Apache, Caddy):** `dist/` in das Web-Wurzelverzeichnis kopieren, HTTPS aktivieren.
 
+- **Coolify (oder jeder Docker-Host):** Das beiliegende `Dockerfile` baut das Spiel und liefert es mit nginx auf
+  Port 80 aus (`deploy/nginx.conf`). In Coolify: *New Resource → Application → GitHub-Repository*, Branch wählen,
+  Build Pack **Dockerfile**, Port **80**, eine Domain mit `https://` eintragen – Coolify holt das Let's-Encrypt-Zertifikat.
+  Alternativ ohne Docker: Build Pack *Nixpacks* mit „Static site“, Build-Befehl `npm run build`, Verzeichnis `dist`.
+
 HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sicheren Kontext“ (HTTPS oder `localhost`).
 
 ## Parteien (bewusst klischeehaft)
