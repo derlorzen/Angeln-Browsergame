@@ -51,8 +51,12 @@ export interface GameMap {
   labels: { name: string; x: number; y: number }[];
 }
 
-export const MAP_W = 96;
-export const MAP_H = 96;
+export const MAP_W = 128;
+export const MAP_H = 128;
+/** Maßstab gegenüber der ursprünglichen 96er-Karte: alle Kartenmaler sind in diesen Einheiten entworfen. */
+export const MAP_SC = (MAP_W - 1) / 95;
+const SC = MAP_SC;
+const D = 95 * SC; // Halbdiagonale der Raute in Kacheln
 
 export function isWater(t: number): boolean {
   return t === T.WASSER || t === T.FLACH;
@@ -118,9 +122,9 @@ export const MAP_INFO: Record<MapId, MapInfo> = {
   },
   foerde: {
     id: 'foerde', name: 'Flensburger Förde', region: 'Angeln und Sundewitt',
-    desc: 'Glücksburg am Süd- und Gravenstein am Nordufer der Förde. Über das Wasser sind es nur wenige Kachelbreiten – zu Lande führt der Weg um die Fördespitze bei Flensburg, wo der Markt liegt.',
+    desc: 'Husby im Angelner Hinterland südlich und Gravenstein am Nordufer der Förde. Zu Lande führt der Weg um die Fördespitze bei Flensburg, wo der Markt liegt; Glücksburg mit seinem Wasserschloss liegt dazwischen am Südufer.',
     liberties: 'Das Wasserschloss Glücksburg entstand 1582–1587 und passt in die Zeit; Lage und Breite der Förde sind stark vereinfacht.',
-    slotNames: ['Glücksburg', 'Gravenstein', 'Harrislee', 'Husby'],
+    slotNames: ['Husby', 'Gravenstein', 'Harrislee', 'Glücksburg'],
     marketName: 'Flensburger Markt', siteName: 'Findling am Fördeufer',
     siteText: 'Steinmetze vermessen einen gewaltigen eiszeitlichen Findling – ein Wahrzeichen für das Land',
   },
@@ -142,10 +146,10 @@ export const MAP_INFO: Record<MapId, MapInfo> = {
   },
   marsch: {
     id: 'marsch', name: 'Nordfriesische Marsch', region: 'Husum und Eiderstedt',
-    desc: 'Husum und Tönning an der Westküste: grüne Marsch mit Gräben statt Knicks, Deiche mit Stöpen, das Watt mit Prielen und Inseln. Der neutrale Viehmarkt liegt in Oldenswort, einem alten Kirchdorf Eiderstedts; draußen im Watt liegen Spuren Rungholts.',
-    liberties: 'Rungholt ging 1362 unter; Funde im Watt sind erst seit dem 20. Jahrhundert dokumentiert. Küstenlinie und Inseln sind stark vereinfacht (die Burchardiflut von 1634 veränderte Nordstrand grundlegend). Einen bedeutenden Viehmarkt in Oldenswort gab es so nicht – die Marktorte waren Garding und Tönning; die Lage wurde der Fairness wegen in die Mitte gelegt.',
-    slotNames: ['Husum', 'Tönning', 'Bredstedt', 'Friedrichstadt'],
-    marketName: 'Viehmarkt Oldenswort', siteName: 'Rungholt-Spuren',
+    desc: 'Bredstedt im Norden und Tönning an der Eider im Süden, Husum mit seinem Ochsenmarkt dazwischen: grüne Marsch mit Gräben statt Knicks, Deiche mit Stöpen, das Watt mit Prielen und Inseln; draußen im Watt liegen Spuren Rungholts.',
+    liberties: 'Rungholt ging 1362 unter; Funde im Watt sind erst seit dem 20. Jahrhundert dokumentiert. Küstenlinie und Inseln sind stark vereinfacht (die Burchardiflut von 1634 veränderte Nordstrand grundlegend). Husum war tatsächlich ein bedeutender Ochsenmarkt; Bredstedt und Tönning liegen der Fairness wegen gleich weit davon entfernt, Entfernungen sind verkürzt.',
+    slotNames: ['Bredstedt', 'Tönning', 'Oldenswort', 'Friedrichstadt'],
+    marketName: 'Husumer Ochsenmarkt', siteName: 'Rungholt-Spuren',
     siteText: 'Bei Ebbe zeigen sich im Watt Brunnenringe und Scherben des untergegangenen Rungholt',
   },
   random: {
@@ -198,11 +202,13 @@ class Painter {
   readonly n3: (x: number, y: number) => number;
   /** Geografischer Bezug: Mittelpunkt und Kacheln je Breitengrad (maßstabstreu, Norden oben). */
   geo: { lon: number; lat: number; k: number; cos: number } | null = null;
+  /** Maßstab für Radien und Breiten: beim Malen der Landschaft SC, für die Ausgleichsschritte danach 1 (in Kacheln abgestimmt). */
+  sc = SC;
 
   constructor(seed: number) {
     this.rng = new Rng(seed);
-    this.n1 = makeNoise(this.rng, this.w, this.h, 9);
-    this.n2 = makeNoise(this.rng, this.w, this.h, 5);
+    this.n1 = makeNoise(this.rng, this.w, this.h, 9 * SC);
+    this.n2 = makeNoise(this.rng, this.w, this.h, 5 * SC);
     this.n3 = makeNoise(this.rng, this.w, this.h, 4);
   }
   idx(x: number, y: number): number {
@@ -219,11 +225,11 @@ class Painter {
   }
   /** Raute: u −1 (West) … +1 (Ost), v 0 (Nord) … 1 (Süd) → Kachel */
   at(u: number, v: number): P2 {
-    const e = u * 95, s = v * 190;
+    const e = u * D, s = v * 2 * D;
     return { x: Math.round((s + e) / 2), y: Math.round((s - e) / 2) };
   }
   uv(x: number, y: number): { u: number; v: number } {
-    return { u: (x - y) / 95, v: (x + y) / 190 };
+    return { u: (x - y) / D, v: (x + y) / (2 * D) };
   }
   /**
    * Passt die Orte maßstabstreu in die Spielraute ein: Die begehbare Fläche ist ein auf der Spitze stehendes Quadrat
@@ -235,18 +241,18 @@ class Painter {
     const A = pts.map(([lo, la]) => lo * cos + la), B = pts.map(([lo, la]) => lo * cos - la);
     const ca = (Math.max(...A) + Math.min(...A)) / 2, cb = (Math.max(...B) + Math.min(...B)) / 2;
     const R = Math.max((Math.max(...A) - Math.min(...A)) / 2, (Math.max(...B) - Math.min(...B)) / 2, 0.02);
-    this.geo = { lon: (ca + cb) / 2 / cos, lat: (ca - cb) / 2, k: (95 * margin) / R, cos };
+    this.geo = { lon: (ca + cb) / 2 / cos, lat: (ca - cb) / 2, k: (D * margin) / R, cos };
   }
   /** Länge/Breite → Kachel. */
   ll(lon: number, lat: number): P2 {
     const g = this.geo!;
-    const e = (lon - g.lon) * g.cos * g.k, s = 95 - (lat - g.lat) * g.k;
+    const e = (lon - g.lon) * g.cos * g.k, s = D - (lat - g.lat) * g.k;
     return { x: Math.round((s + e) / 2), y: Math.round((s - e) / 2) };
   }
   lonlat(x: number, y: number): { lon: number; lat: number } {
     const g = this.geo!;
     const e = x - y, s = x + y;
-    return { lon: g.lon + e / g.k / g.cos, lat: g.lat + (95 - s) / g.k };
+    return { lon: g.lon + e / g.k / g.cos, lat: g.lat + (D - s) / g.k };
   }
   each(fn: (x: number, y: number, u: number, v: number, i: number) => void): void {
     for (let y = 0; y < this.h; y++)
@@ -255,7 +261,8 @@ class Painter {
         fn(x, y, u, v, this.idx(x, y));
       }
   }
-  blob(cx: number, cy: number, r: number, fn: (x: number, y: number) => void, rough = 1.5): void {
+  blob(cx: number, cy: number, r0: number, fn: (x: number, y: number) => void, rough = 1.5): void {
+    const r = r0 * this.sc;
     for (let y = -Math.ceil(r) - 1; y <= r + 1; y++)
       for (let x = -Math.ceil(r) - 1; x <= r + 1; x++) {
         const px = Math.round(cx) + x, py = Math.round(cy) + y;
@@ -282,7 +289,7 @@ class Painter {
         const f = j / n;
         const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
         const wob = (this.n1(x * 2, y * 2) - 0.5) * wobble * 2;
-        const r = width / 2 + (this.n3(x * 3 + 7, y * 3) - 0.5) * 0.6;
+        const r = (width * this.sc) / 2 + (this.n3(x * 3 + 7, y * 3) - 0.5) * 0.6;
         for (let dy = -Math.ceil(r) - 1; dy <= r + 1; dy++)
           for (let dx = -Math.ceil(r) - 1; dx <= r + 1; dx++)
             if (Math.hypot(dx, dy) <= r) this.set(Math.round(x + dx + wob * 0.5), Math.round(y + dy - wob * 0.5), t);
@@ -302,7 +309,11 @@ class Painter {
     }
   }
   /** Furt/Brücke: begehbarer Streifen quer über Wasser. */
-  ford(a: P2, b: P2): void {
+  ford(a0: P2, b0: P2): void {
+    // auf den Maßstab verlängert, damit die Furt auch die breiteren Flüsse quert
+    const mx = (a0.x + b0.x) / 2, my = (a0.y + b0.y) / 2;
+    const a = { x: Math.round(mx + (a0.x - mx) * this.sc), y: Math.round(my + (a0.y - my) * this.sc) };
+    const b = { x: Math.round(mx + (b0.x - mx) * this.sc), y: Math.round(my + (b0.y - my) * this.sc) };
     this.line4(a, b, (x, y) => {
       for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) {
         const t = this.get(x + dx, y + dy);
@@ -346,9 +357,9 @@ const PAINTERS: Record<MapId, MapPainter> = {
   // ---------------------------------------------------------------- Schlei (Angeln)
   schlei: (p) => {
     const { n1, n2 } = p;
-    const geo = (e: number, s: number) => ({ x: Math.round((s + e) / 2), y: Math.round((s - e) / 2) });
+    const geo = (e: number, s: number) => ({ x: Math.round((SC * (s + e)) / 2), y: Math.round((SC * (s - e)) / 2) });
     p.each((x, y, _u, _v, i) => {
-      const e = x - y, s = x + y;
+      const e = (x - y) / SC, s = (x + y) / SC;
       const wob = Math.sin(s * 0.075) * 5 + (n1(x, y) - 0.5) * 6;
       const thr = 49 + wob - Math.max(0, 50 - s) * 0.35;
       let water = e > thr;
@@ -360,16 +371,20 @@ const PAINTERS: Record<MapId, MapPainter> = {
     p.blob(noor.x, noor.y, 3.6, (x, y) => p.set(x, y, T.WASSER), 2);
     const moor = geo(-62, 95);
     p.blob(moor.x, moor.y, 5.2, (x, y) => p.get(x, y) === T.GRAS && p.set(x, y, T.MOOR), 4);
-    const s0 = geo(32, 60), s1 = geo(32, 130);
-    const mir = (dx: number, dy: number, si: number) => (si === 0 ? { dx, dy } : { dx: -dy, dy: -dx });
+    // Kappeln im Norden, Arnis im Süden – weit auseinander (Entfernungen bewusst gestreckt)
+    const s0 = geo(26, 40), s1 = geo(26, 150);
+    const mir = (dx0: number, dy0: number, si: number) => {
+      const dx = Math.round(dx0 * SC), dy = Math.round(dy0 * SC);
+      return si === 0 ? { dx, dy } : { dx: -dy, dy: -dx };
+    };
     [s0, s1].forEach((c, si) => {
       const a = mir(-3, 10, si), b = mir(-11, -4, si);
       p.forestBlob(c.x + a.dx, c.y + a.dy, 3.2);
       p.forestBlob(c.x + b.dx, c.y + b.dy, 2.6);
     });
     const m = geo(-41, 95);
-    p.forestBlob(m.x + 9, m.y - 5, 3);
-    p.forestBlob(m.x - 4, m.y + 9, 2.5);
+    p.forestBlob(m.x + Math.round(9 * SC), m.y - Math.round(5 * SC), 3);
+    p.forestBlob(m.x - Math.round(4 * SC), m.y + Math.round(9 * SC), 2.5);
     return {
       slots: [s0, s1, geo(-18, 40), geo(-18, 150)],
       market: m, site: moor,
@@ -380,8 +395,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Flensburger Förde
   foerde: (p) => {
-    // Koordinaten per TomTom-Geocoding geprüft (Glücksburg, Gråsten, Flensburg)
-    const S0: [number, number] = [9.547, 54.834], S1: [number, number] = [9.594, 54.922], M: [number, number] = [9.433, 54.785], F: [number, number] = [9.36, 54.84];
+    // Koordinaten per TomTom-Geocoding geprüft (Glücksburg, Gråsten, Flensburg); Husby nach bekannten Koordinaten
+    const S0: [number, number] = [9.581, 54.763], S1: [number, number] = [9.6, 54.93], M: [number, number] = [9.433, 54.785], F: [number, number] = [9.36, 54.84];
     p.fit([S0, S1, M, F, [9.7, 54.86]]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     p.each((x, y, _u, _v, i) => {
@@ -399,7 +414,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
     for (const [lon, lat, r] of [[9.52, 54.815, 3], [9.47, 54.865, 3], [9.65, 54.905, 2.6], [9.63, 54.82, 2.8], [9.38, 54.78, 2.6], [9.42, 54.88, 2.4]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     return {
-      slots: [L(...S0), L(...S1), L(9.38, 54.87), L(9.47, 54.75)],
+      slots: [L(...S0), L(...S1), L(9.38, 54.87), L(9.547, 54.834)],
       market: L(...M), site: L(...F),
       labels: [
         { name: 'Flensburger Förde', ...L(9.66, 54.875) }, { name: 'Ostsee', ...L(9.8, 54.84) },
@@ -485,7 +500,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
   // ---------------------------------------------------------------- Nordfriesische Marsch
   marsch: (p) => {
     // Koordinaten per TomTom-Geocoding geprüft; Küstenverlauf per Rückwärtssuche (Watt gehört zu keiner Gemeinde)
-    const S0: [number, number] = [9.058, 54.484], S1: [number, number] = [8.94, 54.322], M: [number, number] = [8.94, 54.372], Rh: [number, number] = [8.775, 54.432];
+    const S0: [number, number] = [8.966, 54.619], S1: [number, number] = [9.0, 54.345], M: [number, number] = [9.05, 54.478], Rh: [number, number] = [8.775, 54.432];
     p.fit([S0, S1, M, Rh, [8.79, 54.33], [8.7, 54.46]]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     const land: [number, number][] = [
@@ -513,7 +528,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     const dike = (pts: [number, number][]) => ({ kind: 'deich' as const, pts: pts.map(([lo, la]) => L(lo, la)) });
     return {
-      slots: [L(...S0), L(...S1), L(9.08, 54.57), L(9.13, 54.4)],
+      slots: [L(...S0), L(...S1), L(8.93, 54.37), L(9.13, 54.4)],
       market: L(...M), site: L(...Rh),
       labels: [
         { name: 'Garding', ...L(8.79, 54.33) }, { name: 'Eiderstedt', ...L(8.72, 54.36) }, { name: 'Wattenmeer', ...L(8.62, 54.42) }, { name: 'Nordstrand', ...L(8.84, 54.505) },
@@ -598,12 +613,13 @@ const PAINTERS: Record<MapId, MapPainter> = {
     const R = new Rng((p.rng.state ^ 0x51ed270b) >>> 0);
     const pick = <X,>(a: readonly X[]): X => a[R.int(a.length)];
     // Achse der Startplätze (gegenüberliegende Ecken oder Kantenmitten der Raute)
-    const AXES: [P2, P2][] = [
-      [{ x: 17, y: 17 }, { x: 78, y: 78 }], // Nord – Süd
-      [{ x: 78, y: 17 }, { x: 17, y: 78 }], // Ost – West
-      [{ x: 48, y: 14 }, { x: 47, y: 81 }], // Nordost – Südwest
-      [{ x: 14, y: 48 }, { x: 81, y: 47 }], // Nordwest – Südost
-    ];
+    const z = (v: number) => Math.round(v * SC);
+    const AXES: [P2, P2][] = ([
+      [{ x: 15, y: 15 }, { x: 80, y: 80 }], // Nord – Süd
+      [{ x: 80, y: 15 }, { x: 15, y: 80 }], // Ost – West
+      [{ x: 48, y: 12 }, { x: 47, y: 83 }], // Nordost – Südwest
+      [{ x: 12, y: 48 }, { x: 83, y: 47 }], // Nordwest – Südost
+    ] as [P2, P2][]).map(([a, b]) => [{ x: z(a.x), y: z(a.y) }, { x: z(b.x), y: z(b.y) }]);
     let [a, b] = pick(AXES);
     if (R.next() < 0.5) [a, b] = [b, a];
     const ax = (b.x - a.x) / Math.hypot(b.x - a.x, b.y - a.y), ay = (b.y - a.y) / Math.hypot(b.x - a.x, b.y - a.y);
@@ -615,12 +631,12 @@ const PAINTERS: Record<MapId, MapPainter> = {
     const coastSide = R.next() < (theme === 'marsch' ? 1 : 0.55) ? (R.next() < 0.5 ? -1 : 1) : 0;
     const heath = theme === 'geest' ? 0.45 : theme === 'marsch' ? 0.75 : R.range(0.62, 0.8);
     // Grundfläche, Küste parallel zur Achse (beide Seiten gleich nah am Meer)
-    const coastAt = 30 + R.range(-3, 4);
+    const coastAt = (30 + R.range(-3, 4)) * SC;
     p.each((x, y, _u, _v, i) => {
       let t: number = p.n1(x + 17, y + 5) > heath ? T.HEIDE : T.GRAS;
       if (coastSide) {
-        const d = across(x, y) * coastSide - coastAt - (p.n1(x * 1.3, y * 1.3) - 0.5) * 9;
-        if (d > 0) t = theme === 'marsch' && d < 9 ? T.WATT : T.WASSER;
+        const d = across(x, y) * coastSide - coastAt - (p.n1(x * 1.3, y * 1.3) - 0.5) * 9 * SC;
+        if (d > 0) t = theme === 'marsch' && d < 9 * SC ? T.WATT : T.WASSER;
       }
       p.terrain[i] = t;
     });
@@ -636,27 +652,31 @@ const PAINTERS: Record<MapId, MapPainter> = {
       }
       return pick(list);
     };
-    if (coastSide) labels.push({ name: theme === 'marsch' ? 'Wattenmeer' : pick(['Ostsee', 'Förde', 'Noor', 'Nordsee']), x: Math.round(cx + nx * coastSide * 40), y: Math.round(cy + ny * coastSide * 40) });
+    if (coastSide) labels.push({ name: theme === 'marsch' ? 'Wattenmeer' : pick(['Ostsee', 'Förde', 'Noor', 'Nordsee']), x: Math.round(cx + nx * coastSide * 40 * SC), y: Math.round(cy + ny * coastSide * 40 * SC) });
     // Fluss quer zwischen den Spielern mit Furten
     const roads: [P2, P2][] = [];
     if (theme === 'fluss' || R.next() < 0.45) {
-      const off = R.range(-4, 4);
+      const off = R.range(-4, 4) * SC;
       const pts: P2[] = [];
-      for (let k = -60; k <= 60; k += 10) pts.push({ x: Math.round(cx + nx * k + ax * (off + Math.sin(k / 13 + R.next()) * 4)), y: Math.round(cy + ny * k + ay * (off + Math.sin(k / 13) * 4)) });
+      for (let k0 = -60; k0 <= 60; k0 += 10) {
+        const k = k0 * SC;
+        pts.push({ x: Math.round(cx + nx * k + ax * (off + Math.sin(k0 / 13 + R.next()) * 4 * SC)), y: Math.round(cy + ny * k + ay * (off + Math.sin(k0 / 13) * 4 * SC)) });
+      }
       p.river(pts, R.range(2.2, 3.4), T.WASSER, 1.4);
       const fords = [R.range(-26, -12), R.range(12, 26)];
       if (R.next() < 0.6) fords.push(R.range(-4, 4));
-      for (const f of fords) {
+      for (const f0 of fords) {
+        const f = f0 * SC;
         const fx = Math.round(cx + nx * f + ax * off), fy = Math.round(cy + ny * f + ay * off);
         p.ford({ x: Math.round(fx - ax * 6), y: Math.round(fy - ay * 6) }, { x: Math.round(fx + ax * 6), y: Math.round(fy + ay * 6) });
       }
-      labels.push({ name: fresh(RIVERS), x: Math.round(cx + nx * 30 + ax * (off + 3)), y: Math.round(cy + ny * 30 + ay * (off + 3)) });
+      labels.push({ name: fresh(RIVERS), x: Math.round(cx + nx * 30 * SC + ax * (off + 3)), y: Math.round(cy + ny * 30 * SC + ay * (off + 3)) });
     }
     // Seen und Moore, gespiegelt verteilt (je Seite gleich viele)
     const nLakes = R.int(3), nMoors = 1 + R.int(3);
     for (let k = 0; k < nLakes + nMoors; k++) {
       const lake = k < nLakes;
-      const s = R.range(8, 26) * (R.next() < 0.5 ? -1 : 1), q = R.range(-24, 24);
+      const s = R.range(8, 26) * SC * (R.next() < 0.5 ? -1 : 1), q = R.range(-24, 24) * SC;
       for (const sign of [-1, 1]) {
         const x = Math.round(cx + ax * s * sign + nx * q * sign), y = Math.round(cy + ay * s * sign + ny * q * sign);
         const r = lake ? R.range(2, 3.4) : R.range(2.6, 4.5);
@@ -667,27 +687,30 @@ const PAINTERS: Record<MapId, MapPainter> = {
     }
     // Wälder je Seite
     for (let k = 0; k < 3 + R.int(3); k++) {
-      const s = R.range(6, 30), q = R.range(-26, 26), r = R.range(2.2, 3.6);
+      const s = R.range(6, 30) * SC, q = R.range(-26, 26) * SC, r = R.range(2.2, 3.6);
       for (const sign of [-1, 1]) p.forestBlob(Math.round(cx + ax * s * sign + nx * q * sign), Math.round(cy + ay * s * sign + ny * q * sign), r);
     }
     // Deich an der Marschküste
     const lines: NonNullable<PaintResult['lines']> = [];
     if (theme === 'marsch' && coastSide) {
       const pts: P2[] = [];
-      for (let k = -70; k <= 70; k += 10) pts.push({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) });
-      lines.push({ kind: 'deich', pts, gates: [-30, 0, 30].map((k) => ({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) })) });
+      for (let k0 = -70; k0 <= 70; k0 += 10) {
+        const k = k0 * SC;
+        pts.push({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) });
+      }
+      lines.push({ kind: 'deich', pts, gates: [-30, 0, 30].map((k0) => k0 * SC).map((k) => ({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) })) });
     }
     const hedgeKind: Hedge = theme === 'marsch' ? 'graben' : theme === 'geest' && R.next() < 0.5 ? null : 'knick';
     const towns = [fresh(TOWNS), fresh(TOWNS), fresh(TOWNS), fresh(TOWNS)];
     const marketTown = fresh(TOWNS);
     const site = pick(SITES);
-    const q = (R.next() < 0.5 ? -1 : 1) * R.range(14, 22);
+    const q = (R.next() < 0.5 ? -1 : 1) * R.range(14, 22) * SC;
     // Fundstelle quer zur Achse, aber nicht in der Küste
     const sq = coastSide ? -coastSide * Math.abs(q) : q;
     void along;
     return {
-      slots: [a, b, { x: Math.round(cx + nx * 34), y: Math.round(cy + ny * 34) }, { x: Math.round(cx - nx * 34), y: Math.round(cy - ny * 34) }],
-      market: { x: Math.round(cx + nx * R.range(-6, 6)), y: Math.round(cy + ny * R.range(-6, 6)) },
+      slots: [a, b, { x: Math.round(cx + nx * 34 * SC), y: Math.round(cy + ny * 34 * SC) }, { x: Math.round(cx - nx * 34 * SC), y: Math.round(cy - ny * 34 * SC) }],
+      market: { x: Math.round(cx + nx * R.range(-6, 6) * SC), y: Math.round(cy + ny * R.range(-6, 6) * SC) },
       site: { x: Math.round(cx + nx * sq), y: Math.round(cy + ny * sq) },
       labels, roads, lines,
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : hedgeKind),
@@ -708,6 +731,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   for (let i = 0; i < variant.length; i++) variant[i] = rng.int(256);
   const info = MAP_INFO[mapId];
   const r = PAINTERS[mapId](p);
+  p.sc = 1;
   const idx = (x: number, y: number) => y * w + x;
   const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h;
   const near = (x: number, y: number, pred: (t: number) => boolean) => {
@@ -909,7 +933,8 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   };
   for (let si = 0; si < 2; si++) {
     const c = slotC[si], o = slotC[1 - si];
-    if (shoreSpots(c) >= 10) continue;
+    const need = Math.max(10, Math.round(shoreSpots(o) * 0.35));
+    if (shoreSpots(c) >= need) continue;
     const away = Math.atan2(c.y - o.y, c.x - o.x);
     let dug = false;
     for (let k = 0; k < 16 && !dug; k++) {
@@ -939,7 +964,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
             trees[i] = 0;
           }
         }
-      dug = shoreSpots(c) >= 10;
+      dug = shoreSpots(c) >= need;
     }
   }
 
@@ -1090,7 +1115,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
     for (let dy = -10; dy <= 10; dy++)
       for (let dx = -10; dx <= 10; dx++) {
         const x = c.x + dx, y = c.y + dy;
-        if (!inside(x, y)) continue;
+        if (!inside(x, y) || Math.hypot(dx, dy) > 10) continue;
         const t = terrain[idx(x, y)];
         if ((t === T.GRAS || t === T.LEHM) && !trees[idx(x, y)]) n++;
       }
@@ -1111,6 +1136,27 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
           if ((terrain[i] === T.HEIDE || terrain[i] === T.MOOR) && !trees[i]) {
             terrain[i] = T.GRAS;
             deficit--;
+          }
+        }
+  }
+  // Reicht das nicht (Küsten- und Waldplätze), Wald nahe dem Startplatz roden – solange genug Holz in Reichweite bleibt
+  for (const poor of [0, 1]) {
+    const a = farmNear(slotC[poor]), b = farmNear(slotC[1 - poor]);
+    let deficit = Math.max(b * 0.8 - a, 140 - a);
+    if (deficit <= 0) continue;
+    const s = slotC[poor];
+    let spare = woodNear(s) - Math.max(55, woodNear(slotC[1 - poor]) * 0.85);
+    for (let rad = 3; rad <= 10 && deficit > 0 && spare > 0; rad++)
+      for (let dy = -rad; dy <= rad && deficit > 0 && spare > 0; dy++)
+        for (let dx = -rad; dx <= rad && deficit > 0 && spare > 0; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
+          const x = s.x + dx, y = s.y + dy;
+          if (!inside(x, y)) continue;
+          const i = idx(x, y);
+          if ((terrain[i] === T.GRAS || terrain[i] === T.LEHM) && trees[i]) {
+            trees[i] = 0;
+            deficit--;
+            spare--;
           }
         }
   }

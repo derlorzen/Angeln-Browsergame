@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 77/77 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 78/78 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -30,7 +30,7 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Grabenspringer | überquert einen geschlossenen Knick und ist schneller am Ziel als ein Landsknecht, der nie eine Knickkachel betritt |
 | Knickwächter / Musketier | Knickwächter neben Knick erleiden weniger Schaden; Musketier trifft auf 6 Kacheln (Ereignis „Muskete“) |
 | KI je Partei | vier Paarungen: jede KI bildet ihre Spezialeinheit aus, alle Partien enden mit Sieger |
-| Karten (6 × 8 Seeds) | Startfelder begehbar; Startplätze, neutraler Markt und Fundstelle gegenseitig erreichbar; Weg zum Markt höchstens max(4, 15 %) und zur Fundstelle höchstens max(5, 20 %) Kacheln unterschiedlich lang; Holz im Umkreis 15 ≥ 45 Bäume je Seite und Verhältnis ≥ 0,8; Acker im Umkreis 10 ≥ 150 Kacheln und Verhältnis ≥ 0,75 (Küstenplätze haben etwas weniger Acker, dafür Fischgründe); ≥ 3 Heringszaun-Plätze je Seite mit Verhältnis ≥ 0,25; Bauplätze für Lehmgrube, Bauernhof, Kaserne, Markt |
+| Karten (6 × 8 Seeds) | Startplätze mindestens zwei Drittel der Kartenbreite (128 Kacheln) auseinander; Startfelder begehbar; Startplätze, neutraler Markt und Fundstelle gegenseitig erreichbar; Weg zum Markt höchstens max(4, 15 %) und zur Fundstelle höchstens max(5, 20 %) Kacheln unterschiedlich lang; Holz im Umkreis 15 ≥ 45 Bäume je Seite und Verhältnis ≥ 0,8; Acker im Umkreis 10 ≥ 150 Kacheln und Verhältnis ≥ 0,75 (Küstenplätze haben etwas weniger Acker, dafür Fischgründe); ≥ 3 Heringszaun-Plätze je Seite mit Verhältnis ≥ 0,25; Bauplätze für Lehmgrube, Bauernhof, Kaserne, Markt |
 | Ausbaustufen | Kosten und Dauer, Stufe II des Dorfzentrums (+LP, +Wohnraum), Voraussetzungen (Dorfzentrum derselben Stufe, Markt für Stufe III), Abbruch mit voller Erstattung, Bauernhof mit mehr Feldern und schnellerem Ertrag, Markt mit mehr Talern (nicht mehr Prestige), Stufe im Spielstand und im Zustand für den Spieler |
 | Prestige | Ziel „aus“ verhindert den wirtschaftlichen Sieg; Schwansener +50 % Prestige je Verkauf; Protokoll akzeptiert nur die wählbaren Ziele |
 | Geländehinweise | nur für erkundete Kacheln, mit Gelände und nächstem Ortsnamen |
@@ -82,7 +82,7 @@ weiter entfernt und zieht bei Holzmangel Arbeiter von vollen Höfen ab.
 
 `node e2e/showcase-maps.mjs` startet jede der sechs Karten im echten Spiel (WebGL), lässt die KI 5 Minuten aufbauen und
 speichert je ein Bild der Startsiedlung und eine aufgedeckte Übersicht. Geprüft wurden u. a. Förde zwischen
-Glücksburg und Gravenstein, Danewerk als durchgehender Wall mit Toren, Eider mit Mooren und Rendsburger Insel,
+Husby und Gravenstein, Danewerk als durchgehender Wall mit Toren, Eider mit Mooren und Rendsburger Insel,
 Deiche, Gräben und Watt in der Marsch, Wattenmeer und Heide bei Ribe. **Abgleich mit TomTom:** 35 Ortslagen per Geocoding geprüft; korrigiert wurden u. a. Gråsten (≈2 km),
 Hohner See (≈3 km falsch nördlich), Audorfer See (≈3,5 km falsch südlich) und das Westende des Danewerks
 (Hollingstedt). Per Rückwärtssuche (Land = Gemeinde, Watt/See = keine Gemeinde) geprüft: 50 Punkte in der Marsch und
@@ -146,3 +146,6 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 10. **Lagergrenzen** verändern das Spieltempo. In KI-gegen-KI-Partien (5 Seeds, 40 Minuten) erreichten die KIs mit
     Lagergrenzen die Zeitalter 3/2/4/3/2, ohne sie 3/2/4/4/3; die KI baut Speicher, sobald Lager fast voll sind oder
     das nächste Zeitalter mehr verlangt, als hineinpasst. Mit Menschen ist das noch nicht erprobt.
+11. **Größere Karten (128 × 128 statt 96 × 96):** Die Wege sind länger, Angriffe und Marktbesetzung dauern entsprechend
+    länger. Spielstände und die automatische Sicherung aus der Version mit 96er-Karten lassen sich nicht mehr laden
+    (klare Meldung im Hauptmenü).

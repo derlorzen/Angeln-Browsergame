@@ -84,13 +84,16 @@ Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedl
 
 ## Karten
 
+Alle Karten sind 128 × 128 Kacheln groß; die beiden Startplätze liegen mindestens zwei Drittel der Kartenbreite
+auseinander (Luftlinie 89–123 Kacheln).
+
 | Karte | Startorte | Neutraler Markt | Fundstelle | Besonderheiten |
 |---|---|---|---|---|
 | **Die Schlei** (Angeln) | Kappeln / Arnis | Brarup-Markt | Thorsberger Moor | Meeresarm, Knicklandschaft |
-| **Flensburger Förde** | Glücksburg / Gravenstein | Flensburger Markt | Findling am Fördeufer | über das Wasser nah, zu Lande nur um die Fördespitze |
+| **Flensburger Förde** | Husby / Gravenstein | Flensburger Markt | Findling am Fördeufer | Förde zwischen den Parteien, zu Lande nur um die Fördespitze; Glücksburg dazwischen |
 | **Danewerk** | Schuby / Kropp | Viehmarkt am Ochsenweg | Haithabu | durchgehender Wall mit wenigen Toren, Heide im Westen, Haddebyer Noor |
 | **Eider und Rendsburg** | Owschlag / Jevenstedt | Rendsburger Markt (Eiderinsel) | Grenzstein an der Eider | Fluss als Grenze mit Brücken und Furt, Moore, Gräben in der Niederung |
-| **Nordfriesische Marsch** | Husum / Tönning | Viehmarkt Oldenswort | Rungholt-Spuren | Watt (begehbar, langsam), Priele, Deiche mit Stöpen, Gräben statt Knicks |
+| **Nordfriesische Marsch** | Bredstedt / Tönning | Husumer Ochsenmarkt | Rungholt-Spuren | Watt (begehbar, langsam), Priele, Deiche mit Stöpen, Gräben statt Knicks |
 | **Ribe und Kongeå** | Varde / Tønder | Ochsenmarkt Ribe | Grabhügel auf der Heide | Wattenmeer mit Fanø und Rømø, Heide, Kongeå mit Furten |
 | **Zufallskarte** | zufällige Orte der Region | Markt in einem zufälligen Ort | Hünengrab, Runenstein, Opfermoor … | bei jedem Start neu: Startachse, Küste (ggf. mit Watt und Deich), Fluss mit Furten, Seen, Moore, Heide, Knicks oder Gräben |
 

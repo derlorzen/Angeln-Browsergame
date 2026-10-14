@@ -6,7 +6,7 @@ import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 5; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter, 5: Verarbeitung anhalten
+export const PROTOCOL_VERSION = 6; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter, 5: Lager und Abreißen, 6: Karten 128×128
 const goalOf = (g: unknown): number => ((RULES.prestigeGoals as readonly number[]).includes(g as number) ? (g as number) : RULES.prestigeGoalDefault);
 
 export interface LobbyPlayer {

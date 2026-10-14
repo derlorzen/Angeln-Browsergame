@@ -69,6 +69,9 @@ describe.each(MAP_IDS.map((id) => [id]))('Karte %s', (id: MapId) => {
       const at = (k: number, x: number, y: number) => d[k][y * m.w + x];
       // gegenseitig erreichbar
       expect(at(0, st[1].x, st[1].y), `${tag}: Startplätze verbunden`).toBeGreaterThan(0);
+      // weit auseinander: Luftlinie mindestens zwei Drittel der Kartenbreite
+      const [s0, s1] = m.slots;
+      expect(Math.hypot(s0.x - s1.x, s0.y - s1.y), `${tag}: Abstand der Startplätze`).toBeGreaterThanOrEqual(m.w * 0.65);
       // Markt (Rand des 3x3) und Fundstelle
       const mk = { x: m.market.x + 1, y: m.market.y + 1 };
       const dm = [0, 1].map((k) => at(k, mk.x, mk.y)); // Marktmitte (vor dem Bau des Markts begehbar)
@@ -110,4 +113,14 @@ describe.each(MAP_IDS.map((id) => [id]))('Karte %s', (id: MapId) => {
     expect(bl(0)).toBeGreaterThanOrEqual(6);
     expect(bl(1)).toBeGreaterThanOrEqual(6);
   }, 120000);
+});
+
+describe('Spielstände', () => {
+  test('Spielstände der alten 96er-Karten werden mit klarer Meldung abgelehnt', () => {
+    const w = new World({ seed: 5, players: [{ name: 'A', color: 0, slot: 0, isAI: false }, { name: 'B', color: 1, slot: 1, isAI: true }] });
+    const d = JSON.parse(w.serialize());
+    expect(World.deserialize(JSON.stringify(d)).map.w).toBe(128);
+    delete d.mw;
+    expect(() => World.deserialize(JSON.stringify(d))).toThrow(/älteren Version/);
+  });
 });
