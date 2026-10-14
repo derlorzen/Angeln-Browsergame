@@ -13,6 +13,8 @@
     "test": "vitest run",
     "e2e": "node e2e/run-e2e.mjs",
     "e2e:sp": "node e2e/run-sp.mjs",
+    "e2e:mobile": "node e2e/run-mobile.mjs",
+    "e2e:mobile:net": "node e2e/run-mobile-net.mjs",
     "shots": "node e2e/showcase.mjs",
     "shots:maps": "node e2e/showcase-maps.mjs"
   },

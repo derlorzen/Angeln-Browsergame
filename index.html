@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Angeln – Fürsten der Schlei</title>
   <meta name="description" content="Echtzeit-Strategiespiel im Browser: Siedlungsbau, Fischfang und Handel in der Landschaft Angeln um 1600." />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -17,6 +17,19 @@
       <div id="msglog"></div>
       <div id="terrainhint" class="hidden"></div>
       <div id="tutorial" class="panel hidden"></div>
+      <div id="touch-controls" aria-label="Touch-Steuerung">
+        <div class="touch-buttons">
+          <button class="btn" data-touch="select" aria-pressed="true">Wählen</button>
+          <button class="btn" data-touch="order" aria-pressed="false">Befehl</button>
+          <button class="btn" data-touch="box" aria-pressed="false">Rahmen</button>
+          <button class="btn hidden" data-touch="place">Bauen ✓</button>
+          <button class="btn hidden" data-touch="cancel">Abbruch</button>
+          <button class="btn" data-touch="home" aria-label="Zum Dorfzentrum">Dorf</button>
+          <button class="btn" data-touch="out" aria-label="Verkleinern">−</button>
+          <button class="btn" data-touch="in" aria-label="Vergrößern">+</button>
+        </div>
+        <div id="touch-hint" role="status"></div>
+      </div>
       <div id="bottom">
         <div id="mini-wrap" class="panel"><canvas id="minimap" width="236" height="118"></canvas></div>
         <div id="selinfo" class="panel"></div>

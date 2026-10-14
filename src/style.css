@@ -91,6 +91,12 @@ a { color: #e8c86a; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#e8c86a, #a07a2a); }
 .bar.enemy i { background: linear-gradient(#e07060, #8a2a20); }
 #topbar .spacer { flex: 1; }
+.resources, .top-actions { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.resources { flex: 1; overflow: hidden; }
+.top-actions { flex: none; }
+.hud-toggle, #touch-controls { display: none; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.cmd { color: var(--text); padding: 0; }
 #topbar .btn { padding: 1px 8px; font-size: 12px; }
 #clock { color: var(--muted); padding: 0 8px; font-variant-numeric: tabular-nums; }
 
@@ -122,6 +128,7 @@ a { color: #e8c86a; }
 .cmd img { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; transform: translate(-50%, -50%); }
 .cmd .k { position: absolute; right: 2px; top: 0; font-size: 11px; color: #f5e7b8; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .cmd .lbl { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; text-align: center; background: rgba(0,0,0,0.55); line-height: 12px; white-space: nowrap; overflow: hidden; }
+.cmd .compact { display: none; }
 .cmd:hover { border-color: var(--brass); }
 .cmd.na { filter: grayscale(0.9) brightness(0.6); }
 .cmd.poor::after { content: ''; position: absolute; inset: 0; background: rgba(160,30,20,0.32); }
@@ -171,3 +178,110 @@ a { color: #e8c86a; }
 #topbar .res.idle { cursor: pointer; }
 #topbar .res.idle.alert b { color: #ffd060; }
 #topbar .res[data-r=brarup] { cursor: pointer; }
+
+/* Touch-HUD: dieselbe Holz/Messing-Optik, ohne verdeckte Befehle oder Mauszwang. */
+html, body, #app { overscroll-behavior: none; }
+#app { height: 100dvh; }
+#view, #minimap { touch-action: none; -webkit-touch-callout: none; }
+button { touch-action: manipulation; }
+.menu-box, #dialog .panel { max-height: 90dvh; overscroll-behavior: contain; }
+.menu-box { -webkit-overflow-scrolling: touch; }
+input, textarea { user-select: text; }
+
+@media (pointer: coarse), (max-width: 820px) {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --hud-height: 178px;
+    --touch-height: 68px;
+    --top-height: calc(78px + var(--safe-top));
+  }
+  body { font-size: 14px; }
+  .btn, .btn.small { min-height: 44px; min-width: 44px; padding: 7px 10px; font-size: 14px; }
+  input[type=text], textarea, select { font-size: 16px; min-height: 44px; max-width: 100%; }
+  input[type=checkbox], input[type=radio] { width: 20px; height: 20px; vertical-align: middle; }
+  .row label { min-width: 0; }
+  .row { gap: 6px; }
+  .menu-box { width: calc(100% - 16px - var(--safe-left) - var(--safe-right)); padding: 14px; max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom)); }
+  .menu-box.wide { width: calc(100% - 16px - var(--safe-left) - var(--safe-right)); max-width: 800px; }
+  .menu-box h1 { font-size: clamp(23px, 6vw, 30px); }
+  .menu-box .row { align-items: stretch; }
+  .menu-box .row > label:first-child:not(:last-child) { flex: 0 0 100%; }
+  .menu-box .row > select, .menu-box .row > input[type=text] { min-width: 0; width: 100%; }
+  .menu-box .menu-col { max-width: 360px; }
+  .lobby-table { display: block; overflow-x: auto; }
+  .lobby-table input[type=text], .lobby-table select { width: 120px; }
+  .code-box { min-height: 100px; }
+  #topbar { height: var(--top-height); padding: var(--safe-top) var(--safe-right) 0 var(--safe-left); display: grid; grid-template-rows: 32px 44px; gap: 0; overflow: visible; }
+  .resources { overflow-x: auto; height: 32px; scrollbar-width: none; overscroll-behavior: contain; }
+  .resources::-webkit-scrollbar { display: none; }
+  .res { flex: none; height: 30px; padding: 0 5px; }
+  .res b { min-width: 0; font-variant-numeric: tabular-nums; }
+  .res.goal { min-width: 0; }
+  .res.goal .bar { display: none; }
+  .res small.cap { font-size: 10px; min-width: 0; }
+  .top-actions { justify-content: flex-end; padding: 0 4px; gap: 3px; }
+  #topbar .btn { min-height: 44px; padding: 4px 7px; font-size: 13px; }
+  #topbar [data-act=tut], #topbar [data-act=mute] { display: none; }
+  #clock { margin-right: auto; padding: 0 4px; }
+  #netinfo { max-width: 75px; overflow: hidden; font-size: 10px; }
+  .hud-toggle { display: inline-block; }
+  #bottom { height: calc(var(--hud-height) + var(--safe-bottom)); padding: 3px calc(3px + var(--safe-right)) calc(3px + var(--safe-bottom)) calc(3px + var(--safe-left)); display: grid; grid-template-columns: 104px minmax(0, 1fr); grid-template-rows: 58px 1fr; gap: 3px; }
+  #mini-wrap { width: auto; padding: 2px; min-width: 0; }
+  #minimap { width: 96px; height: 48px; max-width: 100%; }
+  #selinfo { min-width: 0; padding: 4px; gap: 5px; overflow: auto; overscroll-behavior: contain; }
+  .portrait { width: 44px; height: 44px; }
+  .selmain .name { font-size: 14px; }
+  .selmain .stat { font-size: 11px; }
+  .hp { width: min(140px, 100%); min-height: 5px; }
+  .multi { overflow: auto; }
+  .multi .m, .queue .q { width: 44px; min-height: 44px; }
+  #cmdcard { grid-column: 1 / -1; width: auto; min-width: 0; padding: 3px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(44px, 1fr)); gap: 3px; }
+  .cmd { width: 100%; height: 100%; min-height: 44px; }
+  .cmd .k { display: none; }
+  .cmd .lbl { font-size: 10px; line-height: 12px; white-space: normal; overflow-wrap: anywhere; max-height: 24px; }
+  .cmd .full { display: none; }
+  .cmd .compact { display: inline; }
+  .cmd img { width: 32px; height: 32px; top: 34%; }
+  .cmd { -webkit-touch-callout: none; }
+  #touch-controls { position: absolute; display: flex; flex-direction: column; justify-content: center; left: 0; right: 0; bottom: calc(var(--hud-height) + var(--safe-bottom)); height: var(--touch-height); padding: 3px calc(4px + var(--safe-right)) 2px calc(4px + var(--safe-left)); background: #251a10; border-top: 1px solid var(--brass-dark); }
+  .touch-buttons { display: flex; gap: 3px; }
+  .touch-buttons .btn { flex: 1; padding: 4px 2px; min-width: 44px; }
+  .touch-buttons .btn[aria-pressed=true] { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); color: #d6f3b7; }
+  #touch-hint { font-size: 10px; color: var(--muted); line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; }
+  .hud-collapsed #bottom { display: none; }
+  .hud-collapsed #touch-controls { bottom: 0; height: calc(var(--touch-height) + var(--safe-bottom)); padding-bottom: calc(2px + var(--safe-bottom)); }
+  #msglog { bottom: calc(var(--hud-height) + var(--touch-height) + var(--safe-bottom) + 6px); left: calc(6px + var(--safe-left)); width: calc(100% - 12px - var(--safe-left) - var(--safe-right)); max-height: 68px; overflow: hidden; }
+  #msglog div { font-size: 11px; }
+  .hud-collapsed #msglog { bottom: calc(var(--touch-height) + var(--safe-bottom) + 6px); }
+  #tutorial { top: calc(var(--top-height) + 5px); right: calc(5px + var(--safe-right)); width: min(270px, calc(100% - 10px)); max-height: min(180px, 35dvh); overflow: auto; padding: 5px 8px; }
+  #tutorial h3 { margin: 0; }
+  #tutorial .btn { padding: 3px; }
+  #tooltip { max-width: calc(100vw - 12px); max-height: 45dvh; overflow: auto; pointer-events: auto; }
+  #dialog { padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
+  #dialog .panel { padding: 12px; max-height: calc(100dvh - 16px - var(--safe-top) - var(--safe-bottom)); }
+  #dialog .menu-col { width: 100%; }
+  #perf { top: calc(var(--top-height) + 4px); max-width: 80vw; }
+}
+
+/* Querformat: zwei Befehlsreihen rechts, Auswahl und Minikarte links. */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (max-width: 820px) {
+  :root { --hud-height: 106px; --top-height: calc(66px + var(--safe-top)); }
+  #topbar { grid-template-rows: 22px 42px; }
+  .resources, .res { height: 22px; }
+  #bottom { grid-template-columns: 100px minmax(80px, 1fr) minmax(288px, 46%); grid-template-rows: 1fr; }
+  #cmdcard { grid-column: auto; }
+  #tutorial { max-height: 110px; }
+  .menu-box:not(.wide) { max-width: 620px; }
+  .menu-box .row > label:first-child:not(:last-child) { flex: 0 0 120px; }
+  .menu-box .row > select, .menu-box .row > input[type=text] { flex: 1; width: auto; }
+}
+
+@media (orientation: portrait) and (max-width: 359px) {
+  :root { --hud-height: 166px; }
+  #bottom { grid-template-columns: 86px minmax(0, 1fr); }
+  #minimap { width: 80px; height: 40px; }
+  #cmdcard { gap: 2px; }
+}

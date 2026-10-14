@@ -61,6 +61,13 @@ export abstract class BaseRenderer {
   cam: Camera = { x: 0, y: 0, z: 1 };
   vw = 0;
   vh = 0;
+  playTop = 0;
+  playBottom: number | null = null;
+  get centerY(): number { return (this.playTop + (this.playBottom ?? this.vh)) / 2; }
+  setPlayArea(top: number, bottom: number): void {
+    this.playTop = Math.max(0, top);
+    this.playBottom = Math.max(this.playTop, Math.min(this.vh, bottom));
+  }
   dpr = 1;
   protected effects: Effect[] = [];
   protected fenceCache = new Map<number, [number, number, number, number][]>();
@@ -87,11 +94,11 @@ export abstract class BaseRenderer {
   // ---------------------------------------------------------------- Koordinaten
   toScreen(tx: number, ty: number): [number, number] {
     const ix = (tx - ty) * (TW / 2), iy = (tx + ty) * (TH / 2);
-    return [(ix - this.cam.x) * this.cam.z + this.vw / 2, (iy - this.cam.y) * this.cam.z + this.vh / 2];
+    return [(ix - this.cam.x) * this.cam.z + this.vw / 2, (iy - this.cam.y) * this.cam.z + this.centerY];
   }
   toTile(sx: number, sy: number): [number, number] {
     const ix = (sx - this.vw / 2) / this.cam.z + this.cam.x;
-    const iy = (sy - this.vh / 2) / this.cam.z + this.cam.y;
+    const iy = (sy - this.centerY) / this.cam.z + this.cam.y;
     return [(ix / (TW / 2) + iy / (TH / 2)) / 2, (iy / (TH / 2) - ix / (TW / 2)) / 2];
   }
   centerOn(tx: number, ty: number): void {
@@ -198,7 +205,7 @@ export abstract class BaseRenderer {
   }
 
   /** Objekt unter dem Mauszeiger: Einheit (nach Sprite-Box) oder Gebäude (nach Kachel). */
-  pick(sx: number, sy: number, now: number): number {
+  pick(sx: number, sy: number, now: number, tolerance = 0): number {
     const c = this.c, z = this.cam.z;
     const alpha = Math.min(1, Math.max(0, (now - c.snapTime) / (1000 / RULES.tickRate)));
     let best = 0, bd = Infinity;
@@ -206,7 +213,7 @@ export abstract class BaseRenderer {
       const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
       const [px, py] = this.toScreen(ux, uy);
       const hw = ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 14 : 9) * z * UNIT_SCALE, hh = ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 30 : 26) * z * UNIT_SCALE;
-      if (sx >= px - hw && sx <= px + hw && sy >= py - hh && sy <= py + 4 * z) {
+      if (sx >= px - hw - tolerance && sx <= px + hw + tolerance && sy >= py - hh - tolerance && sy <= py + 4 * z + tolerance) {
         const d = Math.abs(sx - px) + Math.abs(sy - (py - hh / 2));
         if (d < bd) {
           bd = d;

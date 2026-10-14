@@ -354,14 +354,14 @@ export class PixiRenderer extends BaseRenderer {
     const c = this.c, z = this.cam.z;
     const { w: W } = c.map;
     this.world.scale.set(z);
-    this.world.position.set(Math.round(this.vw / 2 - this.cam.x * z), Math.round(this.vh / 2 - this.cam.y * z));
+    this.world.position.set(Math.round(this.vw / 2 - this.cam.x * z), Math.round(this.centerY - this.cam.y * z));
     // sichtbarer Bereich in Kachelkoordinaten
     const corners = [this.toTile(0, 0), this.toTile(this.vw, 0), this.toTile(0, this.vh), this.toTile(this.vw, this.vh)];
     const x0 = Math.floor(Math.min(...corners.map((p) => p[0]))) - 3, x1 = Math.ceil(Math.max(...corners.map((p) => p[0]))) + 3;
     const y0 = Math.floor(Math.min(...corners.map((p) => p[1]))) - 3, y1 = Math.ceil(Math.max(...corners.map((p) => p[1]))) + 5;
     // nur Bildschirmteile prüfen: Iso-Bildschirmrechteck
     const sx0 = this.cam.x - this.vw / 2 / z - 80, sx1 = this.cam.x + this.vw / 2 / z + 80;
-    const sy0 = this.cam.y - this.vh / 2 / z - 120, sy1 = this.cam.y + this.vh / 2 / z + 60;
+    const sy0 = this.cam.y - this.centerY / z - 120, sy1 = this.cam.y + (this.vh - this.centerY) / z + 60;
     const onScreen = (ix: number, iy: number) => ix > sx0 && ix < sx1 && iy > sy0 && iy < sy1;
     let drawnTiles = 0;
     for (const ch of this.chunks) {

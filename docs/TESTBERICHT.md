@@ -1,5 +1,28 @@
 # Testbericht – Version 0.1
 
+## Ergänzung: mobile Bedienung (14. Oktober 2026)
+
+Windows, Node 24.14, lokal installiertes Chrome, Playwright-Core 1.55.1. Mobile Browserkontexte mit
+Touch-Ereignissen über Chromium; keine physischen Smartphones.
+
+- `npm run build`: Typprüfung und Produktionsbuild erfolgreich.
+- Bestehende Tests: 86/88 im eingeschränkten Testlauf bestanden. Die beiden lokalen HTTP-Tests konnten dort
+  wegen `EACCES` auf Loopback nicht verbinden; getrennt ohne diese Einschränkung wiederholt: 2/2 bestanden.
+- `npm run e2e:mobile`: 85 Prüfungen bestanden, keine JavaScript-Laufzeitfehler. Größen 320×568, 390×844,
+  844×390, 568×320 und 1024×768; jeweils Rotation während einer laufenden Partie, zusätzlich Desktop 1366×768.
+  Canvas 2D explizit sowie automatische Rendererwahl geprüft. Screenshots visuell überprüft.
+- Geprüft: Menübreite, erreichbare Knöpfe, Kamerazentrum außerhalb des HUDs, Tippen zur Auswahl,
+  Touch-Befehle, Wischen ohne Spielbefehl, Pinch ohne anschließenden Fehl-Tap, Rahmenauswahl,
+  langes Drücken für Kosten, Bauvorschau, abgebrochene Geste ohne Bauauftrag, explizite Baubestätigung,
+  ausblendbare Spielleiste, Rotation und Touch-Hilfe. Maus-Rechtsklick und Tastenkürzel ebenfalls geprüft.
+- `npm run e2e:mobile:net`: 5 Prüfungen bestanden. Zwei getrennte mobile Browserkontexte (Host Hochformat,
+  Gast Querformat) über Spielcode und echtes WebRTC verbunden; Touch-Befehl des Gasts wird beim Host ausgeführt.
+
+Offen: echte Android-Geräte und iOS/Safari, insbesondere dynamische Browserleisten, tatsächliche
+Displayaussparungen und Langzeit-Leistung. Netzwerkprüfung auf einem Rechner, nicht über zwei Internetanschlüsse.
+
+Die folgenden Abschnitte dokumentieren die früheren Tests der bestehenden Spielversion.
+
 **Testumgebung:** Cloud-Container ohne GPU, 4 vCPU (Intel Xeon @ 2,8 GHz), 15 GB RAM, Linux, Node 22.22,
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
