@@ -1,6 +1,7 @@
 // Client-seitiges Abbild der Partie aus Sicht eines Spielers. Wird ausschließlich aus Snapshots gespeist –
 // lokal (vom eigenen World-Objekt) wie im Netzwerk (vom Host). Die Darstellung liest nur hiervon.
-import { BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, UPGRADES, levelDef, type BuildingType, type UnitType } from '../data/defs';
+import { BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, UPGRADES, levelDef, type BuildingType, type UnitDef, type UnitType } from '../data/defs';
+import { AGES, MAX_AGE, TECHS, techUnit, type TechId } from '../data/ages';
 import { FACTION_DEFS, fbdef, fudef, type ArchStyle, type FactionId } from '../data/factions';
 import { generateMap, type GameMap, type MapId } from '../sim/map';
 import { computeVisibility, type PlacementView, type VisionSource } from '../sim/rules';
@@ -55,8 +56,37 @@ export class ClientState {
   arch(owner: number): ArchStyle {
     return owner < 0 ? 'angeln' : FACTION_DEFS[this.faction(owner)].arch;
   }
-  ud(owner: number, t: UnitType) {
-    return fudef(owner < 0 ? null : this.faction(owner), t);
+  ud(owner: number, t: UnitType): UnitDef {
+    const base = fudef(owner < 0 ? null : this.faction(owner), t);
+    const techs = this.players[owner]?.techs;
+    return techs?.length ? techUnit(base, techs, t) : base;
+  }
+  /** Zeitalter eines Spielers (1 = 17. Jh.) */
+  age(owner: number): number {
+    return this.players[owner]?.age ?? 1;
+  }
+  hasTech(id: TechId): boolean {
+    return !!this.mePlayer?.techs?.includes(id);
+  }
+  /** Spiegel der Prüfung für den Zeitalter-Aufstieg */
+  ageBlock(b: CBuilding): string | null {
+    if (b.t !== 'dorfzentrum' || b.o !== this.me) return 'Nur im eigenen Dorfzentrum.';
+    if (!b.b) return 'Das Dorfzentrum ist noch nicht fertig.';
+    const age = this.age(this.me);
+    if (age >= MAX_AGE) return 'Letztes Zeitalter erreicht.';
+    if (b.u !== undefined) return 'Im Dorfzentrum läuft bereits ein Vorhaben.';
+    const next = AGES[age + 1];
+    const have = next.requires.filter((t) => this.bestLevel(t) > 0);
+    return have.length < next.need ? `Benötigt ${next.need} dieser Gebäude (fertig): ${next.requires.map((t) => this.bd(this.me, t).name).join(', ')}.` : null;
+  }
+  techBlock(b: CBuilding, id: TechId): string | null {
+    const t = TECHS[id];
+    if (!b.b) return 'Das Gebäude ist noch nicht fertig.';
+    if (this.hasTech(id)) return 'Bereits erforscht.';
+    if (this.age(this.me) < t.age) return `Erst im ${AGES[t.age].name}.`;
+    if (b.u !== undefined) return 'In diesem Gebäude läuft bereits ein Vorhaben.';
+    for (const o of this.buildings.values()) if (o.o === this.me && o.uk === id) return 'Wird bereits erforscht.';
+    return null;
   }
   bd(owner: number, t: BuildingType) {
     if (t === 'brarupmarkt') return (this.marketDef ??= { ...fbdef(null, t), name: this.map.marketName });

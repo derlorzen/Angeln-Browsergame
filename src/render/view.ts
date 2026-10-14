@@ -123,10 +123,12 @@ export abstract class BaseRenderer {
   floatText(x: number, y: number, text: string, color: string, now: number): void {
     this.addEffect({ k: 'text', x, y, t0: now, dur: 1800, text, color });
   }
-  shot(x: number, y: number, tx: number, ty: number, now: number, kind: 0 | 1 | 2): void {
+  shot(x: number, y: number, tx: number, ty: number, now: number, kind: 0 | 1 | 2 | 3 | 4): void {
     const d = Math.hypot(tx - x, ty - y);
-    this.addEffect({ k: 'shot', x, y, tx, ty, t0: now, dur: kind === 2 ? 60 + d * 12 : 120 + d * 60, r: kind });
-    if (kind === 2) this.addEffect({ k: 'dust', x: x + (tx - x) * 0.08, y: y + (ty - y) * 0.08, t0: now, dur: 1200, r: 2 });
+    const dur = kind === 2 ? 60 + d * 12 : kind === 4 ? 160 : kind === 3 ? 200 + d * 40 : 120 + d * 60;
+    this.addEffect({ k: 'shot', x, y, tx, ty, t0: now, dur, r: kind });
+    if (kind === 3) this.addEffect({ k: 'dust', x: tx, y: ty, t0: now + dur, dur: 1400 });
+    if (kind === 2 || kind === 3) this.addEffect({ k: 'dust', x: x + (tx - x) * 0.08, y: y + (ty - y) * 0.08, t0: now, dur: 1200, r: 2 });
   }
   death(x: number, y: number, unit: boolean, now: number): void {
     this.addEffect({ k: unit ? 'die' : 'dust', x, y, t0: now, dur: unit ? 3500 : 2500 });
@@ -203,7 +205,7 @@ export abstract class BaseRenderer {
     for (const u of c.units.values()) {
       const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
       const [px, py] = this.toScreen(ux, uy);
-      const hw = (UNITS[u.t].mounted ? 14 : 9) * z * UNIT_SCALE, hh = (UNITS[u.t].mounted ? 30 : 26) * z * UNIT_SCALE;
+      const hw = ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 14 : 9) * z * UNIT_SCALE, hh = ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 30 : 26) * z * UNIT_SCALE;
       if (sx >= px - hw && sx <= px + hw && sy >= py - hh && sy <= py + 4 * z) {
         const d = Math.abs(sx - px) + Math.abs(sy - (py - hh / 2));
         if (d < bd) {

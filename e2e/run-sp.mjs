@@ -167,6 +167,27 @@ try {
   check('Ausbau per Befehlskarte: Dorfzentrum erreicht Stufe II', !!upBtn && lvl === 2, `Stufe ${lvl}`);
   await page.screenshot({ path: OUT + 'sp-upgrade.png' });
 
+  // Zeitalter-Aufstieg über die Befehlskarte (Taste A am Dorfzentrum)
+  await page.evaluate(() => {
+    const G = window.__game, w = G.driver.world, c = G.client;
+    const dz = [...w.ents.values()].find((e) => e.kind === 'b' && e.owner === 0 && e.type === 'dorfzentrum');
+    // Voraussetzungen direkt setzen (zwei fertige Gebäude), dann Dorfzentrum wählen
+    w.addBuilding('markt', 0, dz.x + 5, dz.y - 6, true);
+    w.addBuilding('kaserne', 0, dz.x - 6, dz.y + 5, true);
+    G.driver.tick();
+    G.selected.clear();
+    G.selected.add([...c.buildings.values()].find((b) => b.o === c.me && b.t === 'dorfzentrum').i);
+    G.hud.update(true);
+  });
+  await page.waitForTimeout(300);
+  const ageBtn = await page.evaluate(() => [...document.querySelectorAll('#cmdcard .cmd .lbl')].map((e) => e.textContent).find((t) => t.startsWith('Ins ')) ?? '');
+  await page.keyboard.press('a');
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { const d = window.__game.driver; d.paused = true; for (let i = 0; i < 650; i++) d.tick(); d.paused = false; });
+  await page.waitForTimeout(500);
+  const ageInfo = await page.evaluate(() => ({ age: window.__game.client.age(0), top: document.querySelector('#topbar [data-r=age] b').textContent }));
+  check('Zeitalter-Aufstieg per Befehlskarte: 18. Jahrhundert erreicht', ageBtn === 'Ins 18. Jh.' && ageInfo.age === 2 && ageInfo.top === '18. Jh.', `${ageBtn} → ${JSON.stringify(ageInfo)}`);
+
   // Dezenter Geländehinweis beim Verweilen
   await page.evaluate(() => { const G = window.__game; G.selected.clear(); G.hud.update(true); });
   let hint = '';

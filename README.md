@@ -7,6 +7,7 @@ Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Lands
 
 - Sechs Karten zwischen Rendsburg und Esbjerg (Schlei, Flensburger Förde, Danewerk, Eider, Nordfriesische Marsch,
   Ribe/Kongeå) und eine bei jedem Start neu erzeugte **Zufallskarte**, alle mit fair ausgeglichenen Startplätzen
+- **Vier Zeitalter** (17., 18., 20. und 22. Jahrhundert) mit je neuen Gebäuden, Einheiten und Forschungen
 - Gebäude-Ausbaustufen II und III, automatisches Sichern mit „Letzte Partie fortsetzen“, dezente Geländehinweise
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
 - Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
@@ -141,6 +142,23 @@ einen fertigen Markt.
 Befehlskarte unten rechts (Tasten Q W E R / A S D F / Y X C V), Pfeiltasten/Bildrand/mittlere Maustaste bewegen die
 Kamera, Mausrad zoomt, Minikarte anklicken. Im Spiel: **F1** Hilfe, **F2** Lehrmeister, **F3** Leistungsanzeige,
 **Esc** Menü (Speichern im Einzelspiel), **Strg+Zahl** Gruppen.
+
+### Zeitalter
+
+Die Siedlung entwickelt sich vom **17. Jahrhundert** (um 1600) über das **18.** (um 1750) und **20.** (um 1950) bis ins
+**22. Jahrhundert** (um 2150). Der Aufstieg erfolgt im ausgewählten Dorfzentrum (Taste **A**), kostet Rohstoffe und Zeit
+und setzt zwei fertige Gebäude der Vorepoche voraus. Ab dem 20. Jahrhundert ändern Dorfzentrum, Wohnhäuser, Kaserne und
+Markt ihr Aussehen; ältere Gebäude bleiben als Altbestand stehen. Die neuen Gebäude stehen auf der zweiten Bauseite der
+Arbeiter (Taste **V** „Epochenbauten“), Forschungen an den genannten Gebäuden (Tasten A/S/D/F).
+
+| Zeitalter | Voraussetzung (2 davon) | Neue Gebäude | Neue Einheiten | Forschungen |
+|---|---|---|---|---|
+| 18. Jh. – Aufklärung | Markt, Kaserne, Bockmühle, Räucherei | Leinenmanufaktur (Getreide+Holz → Waren), Hafen mit Kuttern, Sternschanze | Füsilier, Feldkanone | Fruchtwechsel (Hof), Schubkarren (Holzfäller), Exerzierreglement (Kaserne) |
+| 20. Jh. – Eisenbahn und Industrie | Manufaktur, Hafen, Schanze | Bahnhof (+25 % Taler), Konservenfabrik, Bunker | Infanterist, Panzerwagen (Landsknecht/Armbrust/Kanone entfallen) | Kunstdünger, Dampfmaschine (Mühle), Motorisierung |
+| 22. Jh. – Fusionszeitalter | Bahnhof, Fabrik, Bunker | Vertikalfarm, Gezeitenkraftwerk, Schildturm | Exo-Soldat, Kampfdrohne (fliegt über Wasser, Knicks, Deiche) | Pflanzengenetik (Vertikalfarm), Nanopanzerung, Robotik (Dorfzentrum) |
+
+Die neuen Gebäude haben eigene Ausbaustufen II/III. Die Spezialeinheiten der Parteien bleiben in allen Zeitaltern
+verfügbar. Jeder Aufstieg bringt etwas Prestige (10/15/20). Am Markt lässt sich jetzt auch Getreide kaufen.
 
 ## Code-Austausch im Mehrspieler (Kurzfassung)
 

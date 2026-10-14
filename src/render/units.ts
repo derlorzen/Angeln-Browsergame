@@ -286,6 +286,46 @@ const hats = {
       g.stroke();
     }
   },
+  dreispitz: (c: string, trim = '#e8dcc0'): Hat => (g, hx, hy) => {
+    g.fillStyle = c;
+    g.beginPath();
+    g.moveTo(hx - 4.4, hy - 1.4);
+    g.quadraticCurveTo(hx - 1, hy - 5.4, hx + 3.8, hy - 2.4);
+    g.quadraticCurveTo(hx + 1, hy - 1.2, hx - 4.4, hy - 1.4);
+    g.fill();
+    g.strokeStyle = trim;
+    g.lineWidth = 0.45;
+    g.stroke();
+    dot(g, hx - 1.4, hy - 3.2, 0.7, '#c03028');
+  },
+  stahlhelm: (c: string): Hat => (g, hx, hy) => {
+    g.fillStyle = c;
+    g.beginPath();
+    g.ellipse(hx - 0.2, hy - 1.6, 3.4, 2.7, 0, Math.PI, 0);
+    g.fill();
+    g.fillStyle = shade(c, -0.25);
+    g.fillRect(hx - 3.8, hy - 1.8, 7.4, 0.9);
+    g.strokeStyle = 'rgba(40,40,30,0.6)';
+    g.lineWidth = 0.3;
+    g.beginPath();
+    g.moveTo(hx - 2.6, hy - 1.2);
+    g.lineTo(hx - 1.8, hy + 1.4);
+    g.stroke();
+  },
+  exohelm: (c: string): Hat => (g, hx, hy) => {
+    g.fillStyle = '#e4e9ec';
+    g.beginPath();
+    g.ellipse(hx + 0.1, hy - 0.8, 3.3, 3.4, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#18323c';
+    g.beginPath();
+    g.ellipse(hx + 1.3, hy - 0.4, 2.1, 1.2, 0.1, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(120,230,255,0.9)';
+    g.fillRect(hx + 0.4, hy - 0.8, 2.6, 0.5);
+    g.fillStyle = c;
+    g.fillRect(hx - 3, hy - 3.2, 1.6, 2.2);
+  },
   topfhelm: (plume: string): Hat => (g, hx, hy) => {
     g.fillStyle = '#c4c9ce';
     g.beginPath();
@@ -339,6 +379,12 @@ function outfit(type: UnitType, fac: FactionId, color: string): Outfit {
       return { body: B('#3e5a78', '#3e5a78', '#4a4a44', '#4a4a44', { beard: '#c8a060', hair: '#c8a060', boot: '#2a2420' }), hat: hats.strick(color), sash: 'diag' };
     case 'musketier':
       return { body: B(color, CREAM, '#3a3530', '#3a3530'), hat: hats.morion('#f2ecd8', '#c03028'), sash: 'kreuz' };
+    case 'fuesilier':
+      return { body: B(color, shade(color, -0.15), '#e8e2d0', '#e8e2d0', { boot: '#1e1a16', belt: '#f2ecdc' }), hat: hats.dreispitz('#22201c'), sash: 'kreuz' };
+    case 'infanterist':
+      return { body: B('#5f6644', '#59603f', '#565c3c', '#565c3c', { boot: '#2a241c', belt: '#3a3424', hair: '#4a3a2a' }), hat: hats.stahlhelm('#5a6040'), sash: 'diag' };
+    case 'exosoldat':
+      return { body: B('#d9dee2', '#c8ced3', '#b8bec4', '#b8bec4', { boot: '#4a5056', belt: color }), hat: hats.exohelm(color), cuirass: true };
     default:
       return { body: B(color, color, '#4a4238', '#4a4238'), hat: hats.breit(color) };
   }
@@ -525,6 +571,7 @@ function ranged(g: Ctx, color: string, f: number, type: UnitType, fac: FactionId
   const p = pose(f);
   const aim = f >= 5;
   const o = outfit(type, fac, color);
+  if (type === 'fuesilier' || type === 'infanterist' || type === 'exosoldat') return rifleman(g, color, f, type, o, p, aim);
   const musket = type === 'musketier';
   const back = () => {
     g.save();
@@ -604,6 +651,159 @@ function ranged(g: Ctx, color: string, f: number, type: UnitType, fac: FactionId
   if (f === 5) limb(g, 1.6, -0.2, 6, -0.2, 0.5, '#9a8a6a');
   g.restore();
   frontArm(g, sx, sy, sx + (aim ? 2.2 : 1.6), sy + (aim ? 1 : 3.2), cbx + 1, cby + 0.6, o.body.sleeve);
+}
+
+/** Füsilier (Steinschlossflinte mit Bajonett), Infanterist (Repetiergewehr), Exo-Soldat (Strahlgewehr). */
+function rifleman(g: Ctx, color: string, f: number, type: UnitType, o: Outfit, p: Pose, aim: boolean): void {
+  const exo = type === 'exosoldat';
+  const back = () => {
+    // Tornister bzw. Energiepack
+    g.fillStyle = exo ? '#aab2b8' : type === 'infanterist' ? '#4a4f34' : '#6b4a2c';
+    g.fillRect(-5.4, -18.5 - p.bob, 3.2, 6);
+    if (exo) dot(g, -3.8, -15.5 - p.bob, 0.9, 'rgba(120,230,255,0.95)');
+  };
+  const s = figure(g, p, o.body, (hx, hy) => o.hat(g, hx, hy), back);
+  sashes(g, o, color, p.bob);
+  if (type === 'infanterist') {
+    // Armbinde in Spielerfarbe
+    ell(g, 1.6, -15.4 - p.bob, 1.1, 0.8, color);
+  }
+  const { sx, sy } = s;
+  const stock = exo ? '#e8ecee' : type === 'infanterist' ? '#4a3a26' : '#6b4a2c';
+  const metal = exo ? '#5a6870' : '#4a4a4a';
+  const walking = f >= 1 && f <= 4;
+  if (!aim) {
+    // geschultert
+    limb(g, sx - 5, sy + 6, sx + 6, sy - 8, exo ? 1.6 : 1.1, stock);
+    limb(g, sx + 2, sy - 3, sx + 6, sy - 8, 0.7, metal);
+    if (type === 'fuesilier') limb(g, sx + 6, sy - 8, sx + 7.6, sy - 11, 0.35, '#d8dde0');
+    frontArm(g, sx, sy, sx + 2, sy + 2, walking ? sx + 1.5 : sx + 2.4, walking ? sy + 1 : sy + 2.6, o.body.sleeve);
+    return;
+  }
+  const mx = sx + 1, my = sy + 0.5;
+  limb(g, mx - 2.5, my + 0.8, mx + 4.5, my, exo ? 1.9 : 1.3, stock);
+  limb(g, mx + 4.5, my, mx + 12, my - 0.4, exo ? 1.2 : 0.7, metal);
+  if (type === 'fuesilier') limb(g, mx + 12, my - 0.4, mx + 15, my - 0.6, 0.35, '#d8dde0');
+  if (exo) dot(g, mx + 6, my - 0.9, 0.8, 'rgba(120,230,255,0.95)');
+  frontArm(g, sx, sy, sx + 2.6, sy + 1.6, mx + 4.6, my + 0.6, o.body.sleeve);
+  if (f === 6) {
+    if (exo) {
+      limb(g, mx + 12.5, my - 0.4, mx + 19, my - 0.8, 0.9, 'rgba(140,240,255,0.95)');
+      dot(g, mx + 12.5, my - 0.4, 1.4, 'rgba(200,250,255,0.9)');
+    } else {
+      dot(g, mx + 13, my - 0.4, 1.2, '#ffd060');
+      dot(g, mx + 13.5, my - 0.4, 0.6, '#fff4c0');
+      ell(g, mx + 15.5, my - 1.2, type === 'fuesilier' ? 2.4 : 1.2, type === 'fuesilier' ? 1.6 : 0.9, 'rgba(220,220,215,0.8)');
+    }
+  }
+}
+
+// ------------------------------------------------------------------ Fahrzeuge
+function wheel(g: Ctx, x: number, y: number, r: number, f: number, col: string): void {
+  g.strokeStyle = col;
+  g.lineWidth = 0.9;
+  g.beginPath();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.stroke();
+  const a0 = (f % 4) * 0.4;
+  g.lineWidth = 0.45;
+  for (let k = 0; k < 4; k++) {
+    const a = a0 + (k * Math.PI) / 4;
+    g.beginPath();
+    g.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r);
+    g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    g.stroke();
+  }
+  dot(g, x, y, 0.7, shade(col, -0.2));
+}
+function kanone(g: Ctx, color: string, f: number): void {
+  ell(g, 0.5, -0.4, 10, 2.2, 'rgba(15,20,10,0.28)');
+  const recoil = f === 6 ? -1.2 : 0;
+  // Lafette
+  limb(g, -10, -1.5, 3, -6.5, 1.8, '#6b4a2c');
+  g.fillStyle = color;
+  g.fillRect(-6, -5.4, 4, 1.1);
+  // Rohr (Bronze)
+  g.save();
+  g.translate(recoil, 0);
+  limb(g, -2, -8.4, 11, -10.6, 2.4, '#a8803a');
+  limb(g, 9, -10.2, 11.6, -10.6, 2.8, '#8a6a2a');
+  dot(g, -2.4, -8.4, 1.4, '#8a6a2a');
+  g.restore();
+  wheel(g, 1, -4.6, 4.4, f, '#4a3220');
+  if (f === 6) {
+    dot(g, 13, -10.8, 1.8, '#ffd060');
+    ell(g, 16, -12, 3.6, 2.4, 'rgba(225,225,220,0.9)');
+    ell(g, 19, -14, 3, 2, 'rgba(225,225,220,0.6)');
+  }
+}
+function panzer(g: Ctx, color: string, f: number): void {
+  ell(g, 0.5, -0.6, 15.5, 2.6, 'rgba(15,20,10,0.28)');
+  const hull = '#5d6446';
+  // Ketten
+  g.fillStyle = '#2a2a26';
+  g.beginPath();
+  g.moveTo(-14, -2);
+  g.lineTo(13, -2);
+  g.quadraticCurveTo(16, -2, 15.5, -5);
+  g.lineTo(14, -7.5);
+  g.lineTo(-13, -7.5);
+  g.quadraticCurveTo(-16.5, -5, -14, -2);
+  g.fill();
+  for (let k = 0; k < 6; k++) wheel(g, -10.5 + k * 4.4, -4.6, 1.6, f, '#6a6a60');
+  g.strokeStyle = '#4a4a44';
+  g.lineWidth = 0.4;
+  for (let k = 0; k < 12; k++) {
+    const x = -14 + ((k * 2.5 + (f % 4) * 0.6) % 29);
+    g.beginPath();
+    g.moveTo(x, -2);
+    g.lineTo(x, -1.2);
+    g.stroke();
+  }
+  // Wanne
+  g.fillStyle = hull;
+  g.beginPath();
+  g.moveTo(-15, -7.5);
+  g.lineTo(14, -7.5);
+  g.lineTo(11, -12);
+  g.lineTo(-13, -12);
+  g.closePath();
+  g.fill();
+  g.fillStyle = color;
+  g.fillRect(-12, -10.2, 6, 1.6);
+  // Turm und Kanone
+  const recoil = f === 6 ? -1 : 0;
+  g.fillStyle = shade(hull, 0.08);
+  g.beginPath();
+  g.ellipse(-1, -14, 7, 3.6, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillRect(-7, -16, 11, 3);
+  limb(g, 3 + recoil, -15.2, 17 + recoil, -16.2, 1.3, shade(hull, -0.15));
+  dot(g, -3, -17.4, 1.2, shade(hull, -0.2));
+  if (f === 6) {
+    dot(g, 18.5, -16.3, 1.8, '#ffd060');
+    ell(g, 20, -17, 2.6, 1.8, 'rgba(225,225,220,0.85)');
+  }
+}
+function drohne(g: Ctx, color: string, f: number): void {
+  // Schatten am Boden, Drohne schwebt
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.beginPath();
+  g.ellipse(0, 0, 8, 2.6, 0, 0, Math.PI * 2);
+  g.fill();
+  const hy = -20 - Math.sin(f * 1.3) * 0.8;
+  for (const [dx, dy] of [[-8, -1.5], [8, -1.5], [-5, 1.5], [5, 1.5]]) {
+    limb(g, 0, hy, dx, hy + dy, 0.7, '#9aa4aa');
+    g.fillStyle = 'rgba(200,215,225,0.55)';
+    g.beginPath();
+    g.ellipse(dx, hy + dy - 0.8, 4, 1, (f % 2) * 0.3, 0, Math.PI * 2);
+    g.fill();
+  }
+  ell(g, 0, hy, 4.2, 2.6, '#e2e8ec');
+  ell(g, 0.8, hy + 0.8, 2.2, 1.2, '#2a3a44');
+  dot(g, -2.6, hy - 0.6, 0.9, color);
+  dot(g, 1.4, hy + 0.9, 0.5, 'rgba(120,230,255,0.95)');
+  if (f === 6) limb(g, 2, hy + 1.6, 12, hy + 10, 0.8, 'rgba(140,240,255,0.95)');
 }
 
 /** Grabenspringer: Friese mit langem Springstock (Teller am Fuß). */
@@ -795,7 +995,13 @@ function drawUnit(g: Ctx, type: UnitType, color: string, f: number, fac: Faction
     case 'landsknecht':
     case 'knickwaechter': return infantry(g, color, f, type, fac);
     case 'schuetze':
-    case 'musketier': return ranged(g, color, f, type, fac);
+    case 'musketier':
+    case 'fuesilier':
+    case 'infanterist':
+    case 'exosoldat': return ranged(g, color, f, type, fac);
+    case 'kanone': return kanone(g, color, f);
+    case 'panzer': return panzer(g, color, f);
+    case 'drohne': return drohne(g, color, f);
     case 'grabenspringer': return springer(g, color, f, fac);
     case 'spaeher':
     case 'gutsreiter': return horseman(g, color, f, type, fac);

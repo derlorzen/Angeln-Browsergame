@@ -104,8 +104,9 @@ export function fillFace(g: Ctx, f: Face, color: string): void {
 }
 
 /** Wand mit Material: 'putz' (Fachwerk), 'ziegel', 'holz', 'stein'. */
-export type WallMat = 'fachwerk' | 'ziegel' | 'holz' | 'stein' | 'putz' | 'klinker';
+export type WallMat = 'fachwerk' | 'ziegel' | 'holz' | 'stein' | 'putz' | 'klinker' | 'beton' | 'glas' | 'blech' | 'paneel';
 export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): void {
+  if (mat === 'beton' || mat === 'glas' || mat === 'blech' || mat === 'paneel') return modernWall(g, f, mat, light, seed);
   if (mat === 'putz') {
     // weiß gekalkter Putz mit leichter Textur
     fillFace(g, f, shade('#ece5d4', light));
@@ -200,6 +201,129 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
   g.moveTo(f.bl[0], f.bl[1]);
   g.lineTo(f.br[0], f.br[1]);
   g.stroke();
+}
+
+/** Wände des 20./22. Jahrhunderts: Sichtbeton, Glasfassade, Wellblech, helle Verbundpaneele. */
+function modernWall(g: Ctx, f: Face, mat: 'beton' | 'glas' | 'blech' | 'paneel', light: number, seed: number): void {
+  const base = { beton: '#a7a49c', glas: '#4f7f9a', blech: '#8d9498', paneel: '#e9ecec' }[mat];
+  fillFace(g, f, shade(base, light));
+  g.save();
+  poly(g, [f.bl, f.br, f.tr, f.tl]);
+  g.clip();
+  const r = prng(seed);
+  const len = Math.hypot(f.br[0] - f.bl[0], f.br[1] - f.bl[1]);
+  const hgt = Math.hypot(f.tl[0] - f.bl[0], f.tl[1] - f.bl[1]);
+  const line = (u0: number, v0: number, u1: number, v1: number, col: string, w: number) => {
+    const a = faceAt(f, u0, v0), b = faceAt(f, u1, v1);
+    g.strokeStyle = col;
+    g.lineWidth = w;
+    g.beginPath();
+    g.moveTo(a[0], a[1]);
+    g.lineTo(b[0], b[1]);
+    g.stroke();
+  };
+  if (mat === 'beton') {
+    // Schalungsfugen und Ankerlöcher
+    const cols = Math.max(2, Math.round(len / 22)), rows = Math.max(2, Math.round(hgt / 16));
+    for (let c = 1; c < cols; c++) line(c / cols, 0, c / cols, 1, shade(base, light - 0.18), 1);
+    for (let k = 1; k < rows; k++) line(0, k / rows, 1, k / rows, shade(base, light - 0.12), 1);
+    for (let k = 0; k < len * hgt * 0.004; k++) {
+      const p = faceAt(f, r(), r());
+      g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)';
+      g.fillRect(p[0], p[1], 3, 2);
+    }
+  } else if (mat === 'glas') {
+    // Pfosten-Riegel-Fassade mit Spiegelung
+    const cols = Math.max(2, Math.round(len / 12)), rows = Math.max(2, Math.round(hgt / 10));
+    const gr = g.createLinearGradient(f.bl[0], f.tl[1], f.br[0], f.bl[1]);
+    gr.addColorStop(0, 'rgba(210,235,250,0.35)');
+    gr.addColorStop(0.5, 'rgba(255,255,255,0)');
+    gr.addColorStop(1, 'rgba(180,215,235,0.25)');
+    g.fillStyle = gr;
+    poly(g, [f.bl, f.br, f.tr, f.tl]);
+    g.fill();
+    for (let c = 0; c <= cols; c++) line(c / cols, 0, c / cols, 1, shade('#2e3b44', light), 1.4);
+    for (let k = 0; k <= rows; k++) line(0, k / rows, 1, k / rows, shade('#2e3b44', light), 1);
+  } else if (mat === 'blech') {
+    // Wellblech: dichte senkrechte Rillen
+    const n = Math.max(6, Math.round(len / 3));
+    for (let c = 0; c < n; c++) line(c / n, 0, c / n, 1, c % 2 ? shade(base, light - 0.15) : shade(base, light + 0.12), 1);
+    const p = faceAt(f, 0.2 + r() * 0.5, 0.3);
+    g.fillStyle = 'rgba(120,70,40,0.18)';
+    g.fillRect(p[0], p[1], 6, 10);
+  } else {
+    // helle Verbundpaneele mit feinen Fugen und Lichtband
+    const cols = Math.max(2, Math.round(len / 16));
+    for (let c = 1; c < cols; c++) line(c / cols, 0, c / cols, 1, shade(base, light - 0.12), 0.8);
+    line(0, 0.62, 1, 0.62, 'rgba(90,200,230,0.85)', 2);
+  }
+  g.restore();
+  g.strokeStyle = 'rgba(30,30,30,0.45)';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(f.bl[0], f.bl[1]);
+  g.lineTo(f.br[0], f.br[1]);
+  g.stroke();
+}
+
+/** Flachdach mit Attika. */
+export function flatRoof(g: Ctx, iso: Iso, x0: number, y0: number, x1: number, y1: number, H: number, color = '#6e6a62', attika = 3): void {
+  poly(g, [iso.p(x0, y0, H), iso.p(x1, y0, H), iso.p(x1, y1, H), iso.p(x0, y1, H)], color, 'rgba(30,30,30,0.5)', 1);
+  if (attika) {
+    poly(g, [iso.p(x0, y1, H), iso.p(x1, y1, H), iso.p(x1, y1, H + attika), iso.p(x0, y1, H + attika)], shade(color, 0.12));
+    poly(g, [iso.p(x1, y1, H), iso.p(x1, y0, H), iso.p(x1, y0, H + attika), iso.p(x1, y1, H + attika)], shade(color, -0.1));
+  }
+}
+
+/** Solarmodule auf einer Dach- oder Bodenfläche. */
+export function solarPanels(g: Ctx, iso: Iso, x0: number, y0: number, x1: number, y1: number, z: number, rows = 2, cols = 3): void {
+  const dx = (x1 - x0) / cols, dy = (y1 - y0) / rows;
+  for (let a = 0; a < cols; a++)
+    for (let b = 0; b < rows; b++) {
+      const px = x0 + a * dx + dx * 0.08, py = y0 + b * dy + dy * 0.08;
+      const pts: Pt[] = [iso.p(px, py, z + 2), iso.p(px + dx * 0.84, py, z + 2), iso.p(px + dx * 0.84, py + dy * 0.84, z + 5), iso.p(px, py + dy * 0.84, z + 5)];
+      poly(g, pts, '#1f3550', '#9fb4c8', 0.8);
+      const m0 = iso.p(px + dx * 0.42, py, z + 2), m1 = iso.p(px + dx * 0.42, py + dy * 0.84, z + 5);
+      g.strokeStyle = 'rgba(160,190,215,0.6)';
+      g.lineWidth = 0.6;
+      g.beginPath();
+      g.moveTo(m0[0], m0[1]);
+      g.lineTo(m1[0], m1[1]);
+      g.stroke();
+    }
+}
+
+/** Kuppel (Halbkugel) über einem Mittelpunkt, isometrisch als Ellipsen. */
+export function dome(g: Ctx, iso: Iso, cx: number, cy: number, r: number, z: number, color: string, glass = false): void {
+  const c = iso.p(cx, cy, z);
+  const rx = r * (TW / 2) * S * 1.42, ry = rx * 0.5;
+  const h = rx * 0.9;
+  const gr = g.createRadialGradient(c[0] - rx * 0.35, c[1] - h * 0.7, rx * 0.1, c[0], c[1] - h * 0.3, rx * 1.2);
+  gr.addColorStop(0, glass ? 'rgba(220,245,255,0.95)' : shade(color, 0.35));
+  gr.addColorStop(1, glass ? 'rgba(70,120,150,0.9)' : shade(color, -0.25));
+  g.fillStyle = gr;
+  g.beginPath();
+  g.ellipse(c[0], c[1], rx, ry, 0, 0, Math.PI);
+  g.lineTo(c[0] - rx, c[1]);
+  g.ellipse(c[0], c[1], rx, h, 0, Math.PI, Math.PI * 2);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(30,40,50,0.5)';
+  g.lineWidth = 1;
+  g.stroke();
+  if (glass) {
+    g.strokeStyle = 'rgba(40,70,90,0.6)';
+    for (let k = 1; k < 4; k++) {
+      g.beginPath();
+      g.ellipse(c[0], c[1], rx * (1 - k * 0.22), h, 0, Math.PI, Math.PI * 2);
+      g.stroke();
+    }
+    for (let k = 1; k < 3; k++) {
+      g.beginPath();
+      g.ellipse(c[0], c[1] - h * k * 0.3, rx * Math.sqrt(1 - (k * 0.3) ** 2), ry * Math.sqrt(1 - (k * 0.3) ** 2), 0, Math.PI, Math.PI * 2);
+      g.stroke();
+    }
+  }
 }
 
 export function windowOn(g: Ctx, f: Face, u: number, v: number, du: number, dv: number, light: number): void {

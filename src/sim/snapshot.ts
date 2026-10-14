@@ -1,7 +1,8 @@
 // Erzeugt pro Empfänger gefilterte Zustandsbilder. Der Empfänger erhält nur, was er sehen darf:
 // eigene Objekte, sichtbare fremde Objekte, sichtbare Baumänderungen und sichtbare Ereignisse.
-import { UPGRADES, type BuildingType, type Res, type UnitType } from '../data/defs';
+import type { BuildingType, Res, UnitType } from '../data/defs';
 import type { FactionId } from '../data/factions';
+import type { TechId } from '../data/ages';
 import type { SimEvent } from './types';
 import type { World } from './world';
 
@@ -38,7 +39,8 @@ export interface BSnap {
   as?: 1;
   r?: [number, number];
   l?: number; // Ausbaustufe (ab II)
-  u?: number; // Ausbaufortschritt 0..100 (nur eigene)
+  u?: number; // Fortschritt des Vorhabens 0..100 (nur eigene)
+  uk?: 'lvl' | 'age' | TechId; // Art des Vorhabens
 }
 export type EntSnap = USnap | BSnap;
 
@@ -52,6 +54,8 @@ export interface PlayerSnap {
   res?: Record<Res, number>;
   pop?: number;
   popCap?: number;
+  age: number;
+  techs?: TechId[];
 }
 
 export interface Snapshot {
@@ -120,7 +124,10 @@ export class Snapshotter {
           if (e.staff.length) snap.st = e.staff;
           if (e.autoSell) snap.as = 1;
           if (e.rally) snap.r = [e.rally.x, e.rally.y];
-          if (e.up >= 0) snap.u = Math.floor((e.up / (UPGRADES[e.type]?.[e.lvl - 1]?.time ?? 1)) * 100);
+          if (e.up >= 0) {
+            snap.u = Math.floor((e.up / world.projectTime(e)) * 100);
+            snap.uk = e.upk ?? 'lvl';
+          }
         }
       }
       seen.add(e.id);
@@ -147,7 +154,8 @@ export class Snapshotter {
     }
     const ev = world.events.filter((e) => eventVisible(e, p, visible));
     const players: PlayerSnap[] = world.players.map((pl) => {
-      const ps: PlayerSnap = { id: pl.id, name: pl.name, color: pl.color, faction: pl.faction, prestige: Math.floor(pl.prestige), defeated: pl.defeated };
+      const ps: PlayerSnap = { id: pl.id, name: pl.name, color: pl.color, faction: pl.faction, prestige: Math.floor(pl.prestige), defeated: pl.defeated, age: pl.age ?? 1 };
+      if (pl.techs?.length) ps.techs = [...pl.techs];
       if (pl.id === p) {
         ps.res = { ...pl.res };
         ps.pop = pl.pop;
@@ -172,6 +180,9 @@ function eventVisible(e: SimEvent, p: number, visible: (x: number, y: number) =>
     case 'sold':
     case 'brarup':
       return e.p === p || e.e === 'brarup';
+    case 'tech':
+      return e.p === p;
+    case 'age':
     case 'moor':
     case 'defeat':
     case 'win':

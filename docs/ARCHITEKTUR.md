@@ -5,7 +5,8 @@ werden beim Start im Browser prozedural erzeugt.
 
 ```
 src/
-  data/defs.ts         Spieldaten: Ressourcen, Gebäude, Einheiten, Kosten, Bauzeiten, Raten, Regeln
+  data/defs.ts         Spieldaten: Ressourcen, Gebäude, Einheiten, Kosten, Bauzeiten, Raten, Regeln, Ausbaustufen
+  data/ages.ts         Zeitalter (Aufstieg, Voraussetzungen) und Forschungen samt Wirkung
   sim/                 Simulation (DOM-frei, auch in Node testbar)
     map.ts             Kartenkatalog (6 Karten) und Generator: geografische Maler je Karte (Länge/Breite →
                        Kachel, maßstabstreu in die Raute eingepasst), dann gemeinsame Pipeline: Ufer, Lehm, Wald,
@@ -30,6 +31,7 @@ src/
     pixi.ts            PixiRenderer (WebGL): Atlas, Chunks, Tiefensortierung, Nebel-Sprite, Stimmungseffekte
     renderer.ts        CanvasRenderer (Canvas 2D, Rückfallebene) und Minikarte
     factory.ts         Auswahl WebGL/Canvas
+    era.ts             Gebäude der späteren Zeitalter und moderne Fassungen alter Gebäude
     terrainmask.ts     Nachbarschaftsmasken für Knicks, Deiche, Wall, Gräben und Tore
     draw.ts, sprites.ts, props.ts, units.ts   prozedurale Sprites (Gelände, Gebäude, Requisiten, Figuren, Symbole)
   ui/                  HUD (Ressourcenleiste, Auswahlfenster, Befehlskarte, Tooltips), Menüs/Lobby, Lehrmeister, Texte

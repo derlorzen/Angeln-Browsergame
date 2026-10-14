@@ -2,9 +2,10 @@
 // Alle Spieleraktionen – Mensch, KI, Netzwerkgast – laufen über queueCommand() und werden hier geprüft.
 import {
   BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, RES, RULES, UNITS, UPGRADES, costText, isBuildingType, isUnitType, levelDef, levelFx,
-  type BuildingDef, type BuildingType, type Cost, type Res, type UnitType,
+  type BuildingDef, type BuildingType, type Cost, type Res, type UnitDef, type UnitType,
 } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
+import { AGES, MAX_AGE, TECHS, isTechId, techTotals, techUnit, unitAvailable, type TechId } from '../data/ages';
 import { generateMap, T, isWater, terrainCost, terrainWalkable, type GameMap, type MapId } from './map';
 import { findPath, nearestPassable, type PathGrid } from './path';
 import { Rng } from './rng';
@@ -43,6 +44,8 @@ export class World {
   readonly grid: PathGrid;
   /** Wegeraster für Einheiten, die Knicks überwinden (Grabenspringer) */
   readonly gridJump: PathGrid;
+  /** Flugeinheiten: nur Gebäude versperren */
+  readonly gridAir: PathGrid;
   readonly bocc: Int32Array; // Gebäude-ID je Kachel
   readonly field: Int32Array; // Bauernhof-ID je Feldkachel
   tick = 0;
@@ -81,6 +84,7 @@ export class World {
     const N = this.map.w * this.map.h;
     this.grid = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
     this.gridJump = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
+    this.gridAir = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N).fill(1), cost: new Float32Array(N).fill(1) };
     this.bocc = new Int32Array(N);
     this.field = new Int32Array(N);
     this.rng = new Rng(opts.seed * 7 + 13);
@@ -100,6 +104,7 @@ export class World {
         id, name: ps.name, color: ps.color, slot: ps.slot, res: withBonus(start, FACTION_DEFS[ps.faction ?? 'angeln'].startBonus), prestige: 0, defeated: false,
         isAI: ps.isAI, aiLevel: ps.aiLevel ?? 'normal', faction: ps.faction ?? 'angeln',
         stats: { gathered: zeroRes(), trained: 0, lost: 0, kills: 0, built: 0, sold: 0 }, pop: 0, popCap: 0,
+        age: 1, techs: [],
       });
       this.vis.push(new Uint8Array(N));
       this.attackedNote.push(-1000);
@@ -131,8 +136,63 @@ export class World {
     return e && e.kind === 'b' ? e : undefined;
   }
   /** Einheiten-/Gebäudewerte gemäß Partei des Besitzers */
-  ud(owner: number, t: UnitType) {
-    return fudef(this.players[owner]?.faction, t);
+  ud(owner: number, t: UnitType): UnitDef {
+    const pl = this.players[owner];
+    const base = fudef(pl?.faction, t);
+    if (!pl || !pl.techs?.length) return base;
+    const key = `${pl.techs.length}`;
+    let c = this.udCache[owner];
+    if (!c || c.key !== key) c = this.udCache[owner] = { key, m: new Map() };
+    let d = c.m.get(t);
+    if (!d) c.m.set(t, (d = techUnit(base, pl.techs, t)));
+    return d;
+  }
+  private udCache: { key: string; m: Map<UnitType, UnitDef> }[] = [];
+  /** Gesamtwirkung der Technologien eines Spielers */
+  tfx(p: number) {
+    const pl = this.players[p];
+    const key = pl?.techs?.length ?? 0;
+    let c = this.tfxCache[p];
+    if (!c || c.key !== key) c = this.tfxCache[p] = { key, v: techTotals(pl?.techs ?? []) };
+    return c.v;
+  }
+  private tfxCache: { key: number; v: ReturnType<typeof techTotals> }[] = [];
+  /** null = Aufstieg ins nächste Zeitalter möglich, sonst Begründung */
+  ageBlock(b: Building): string | null {
+    const pl = this.players[b.owner];
+    if (!pl || b.type !== 'dorfzentrum') return 'Nur im Dorfzentrum.';
+    if (!b.built) return 'Das Dorfzentrum ist noch nicht fertig.';
+    if (pl.age >= MAX_AGE) return 'Letztes Zeitalter erreicht.';
+    if (b.up >= 0) return 'Im Dorfzentrum läuft bereits ein Vorhaben.';
+    const next = AGES[pl.age + 1];
+    const have = next.requires.filter((t) => this.bestLevel(b.owner, t) > 0);
+    if (have.length < next.need) return `Benötigt ${next.need} dieser Gebäude (fertig): ${next.requires.map((t) => this.bd(b.owner, t).name).join(', ')}.`;
+    return null;
+  }
+  /** null = Technologie hier erforschbar, sonst Begründung */
+  techBlock(b: Building, id: TechId): string | null {
+    const pl = this.players[b.owner];
+    const t = TECHS[id];
+    if (!pl || !t || t.at !== b.type) return 'Hier nicht erforschbar.';
+    if (!b.built) return 'Das Gebäude ist noch nicht fertig.';
+    if (pl.techs.includes(id)) return 'Bereits erforscht.';
+    if (pl.age < t.age) return `Erst im ${AGES[t.age].name}.`;
+    if (b.up >= 0) return 'In diesem Gebäude läuft bereits ein Vorhaben.';
+    for (const e of this.ents.values()) if (e.kind === 'b' && e.owner === b.owner && e.up >= 0 && e.upk === id) return 'Wird bereits erforscht.';
+    return null;
+  }
+  /** Dauer des laufenden Vorhabens */
+  projectTime(b: Building): number {
+    const k = b.upk ?? 'lvl';
+    if (k === 'lvl') return UPGRADES[b.type]?.[b.lvl - 1]?.time ?? 1;
+    if (k === 'age') return AGES[Math.min(MAX_AGE, (this.players[b.owner]?.age ?? 1) + 1)].time;
+    return TECHS[k]?.time ?? 1;
+  }
+  projectCost(b: Building): Cost {
+    const k = b.upk ?? 'lvl';
+    if (k === 'lvl') return UPGRADES[b.type]?.[b.lvl - 1]?.cost ?? {};
+    if (k === 'age') return AGES[Math.min(MAX_AGE, (this.players[b.owner]?.age ?? 1) + 1)].cost;
+    return TECHS[k]?.cost ?? {};
   }
   bd(owner: number, t: BuildingType) {
     return fbdef(this.players[owner]?.faction, t);
@@ -164,7 +224,7 @@ export class World {
     return null;
   }
   gridFor(u: Unit): PathGrid {
-    return UNITS[u.type].knickJump ? this.gridJump : this.grid;
+    return UNITS[u.type].flying ? this.gridAir : UNITS[u.type].knickJump ? this.gridJump : this.grid;
   }
   isEnemy(a: number, b: number): boolean {
     return a !== b && a >= 0 && b >= 0;
@@ -233,6 +293,7 @@ export class World {
         this.bocc[i] = b.id;
         this.grid.pass[i] = 0;
         this.gridJump.pass[i] = 0;
+        this.gridAir.pass[i] = 0;
       }
     // Einheiten auf der Baufläche werden herausgeschoben
     for (const e of this.ents.values()) {
@@ -255,6 +316,7 @@ export class World {
     const free = !this.map.trees[i] && !this.bocc[i];
     this.grid.pass[i] = terrainWalkable(t) && free ? 1 : 0;
     this.gridJump.pass[i] = (terrainWalkable(t) || t === T.KNICK || t === T.GRABEN) && free ? 1 : 0;
+    this.gridAir.pass[i] = this.bocc[i] ? 0 : 1;
   }
 
   spawnUnit(type: UnitType, owner: number, from: Building): Unit | null {
@@ -396,6 +458,7 @@ export class World {
         if (!isBuildingType(cmd.b) || typeof cmd.x !== 'number' || typeof cmd.y !== 'number') return;
         const x = Math.floor(cmd.x), y = Math.floor(cmd.y);
         const def = this.bd(p, cmd.b);
+        if ((def.age ?? 1) > pl.age) return this.err(p, `${def.name}: erst im ${AGES[def.age ?? 1].name}.`);
         const why = checkPlacement(this.placementView(p), cmd.b, x, y);
         if (why) return this.err(p, why);
         if (!this.canAfford(p, def.cost)) return this.err(p, `${def.name}: ${this.missingText(p, def.cost)}`);
@@ -413,6 +476,7 @@ export class World {
         if (!def.trains?.includes(cmd.u)) return this.err(p, `${UNITS[cmd.u].name}: nur für ${this.uniqueOwnerName(cmd.u)}.`);
         if (b.queue.length >= 5) return this.err(p, 'Die Warteschlange ist voll (max. 5).');
         const ud = this.ud(p, cmd.u);
+        if (!unitAvailable(ud, pl.age)) return this.err(p, `${ud.name}: ${(ud.age ?? 1) > pl.age ? `erst im ${AGES[ud.age ?? 1].name}` : 'in diesem Zeitalter nicht mehr ausgebildet'}.`);
         if (!this.canAfford(p, ud.cost)) return this.err(p, `${ud.name}: ${this.missingText(p, ud.cost)}`);
         this.pay(p, ud.cost);
         b.queue.push(cmd.u);
@@ -427,13 +491,39 @@ export class World {
         if (!this.canAfford(p, up.cost)) return this.err(p, `${up.name}: ${this.missingText(p, up.cost)}`);
         this.pay(p, up.cost);
         b.up = 0;
+        b.upk = 'lvl';
+        break;
+      }
+      case 'age': {
+        const b = this.ownedBuilding(p, cmd.b);
+        if (!b) return;
+        const why = this.ageBlock(b);
+        if (why) return this.err(p, why);
+        const next = AGES[pl.age + 1];
+        if (!this.canAfford(p, next.cost)) return this.err(p, `${next.name}: ${this.missingText(p, next.cost)}`);
+        this.pay(p, next.cost);
+        b.up = 0;
+        b.upk = 'age';
+        break;
+      }
+      case 'research': {
+        const b = this.ownedBuilding(p, cmd.b);
+        if (!b || !isTechId(cmd.t)) return;
+        const why = this.techBlock(b, cmd.t);
+        if (why) return this.err(p, why);
+        const t = TECHS[cmd.t];
+        if (!this.canAfford(p, t.cost)) return this.err(p, `${t.name}: ${this.missingText(p, t.cost)}`);
+        this.pay(p, t.cost);
+        b.up = 0;
+        b.upk = cmd.t;
         break;
       }
       case 'upcancel': {
         const b = this.ownedBuilding(p, cmd.b);
         if (!b || b.up < 0) return;
-        this.refund(p, UPGRADES[b.type]![b.lvl - 1].cost, 1);
+        this.refund(p, this.projectCost(b), 1);
         b.up = -1;
+        b.upk = undefined;
         break;
       }
       case 'cancel': {
@@ -458,7 +548,7 @@ export class World {
       }
       case 'buy': {
         const b = this.ownedBuilding(p, cmd.b);
-        if (!b || b.type !== 'markt' || !b.built || (cmd.r !== 'holz' && cmd.r !== 'lehm')) return;
+        if (!b || b.type !== 'markt' || !b.built || (cmd.r !== 'holz' && cmd.r !== 'lehm' && cmd.r !== 'getreide')) return;
         const price = this.buyPrice(p);
         if (pl.res.taler < price) return this.err(p, `Zu wenig Taler (${price} nötig).`);
         pl.res.taler -= price;
@@ -498,7 +588,8 @@ export class World {
     const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
     if (pl.res.waren < s.waren) return false;
     const lv = levelFx('markt', Math.max(1, this.bestLevel(p, 'markt'))).taler ?? 1;
-    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1) * lv);
+    const bahn = this.bestLevel(p, 'bahnhof') ? (BUILDINGS.bahnhof.talerMul ?? 1) : 1;
+    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1) * lv * bahn);
     pl.res.waren -= s.waren;
     pl.res.taler += taler;
     const prestige = s.prestige * (FACTION_DEFS[pl.faction].marketPrestigeMul ?? 1);
@@ -537,7 +628,14 @@ export class World {
   /** Verteilt eine Gruppe auf freie Kacheln rund um das Ziel. */
   groupMove(us: Unit[], x: number, y: number, am: boolean): void {
     if (!us.length) return;
-    const start = nearestPassable(this.grid, Math.floor(x), Math.floor(y), 10);
+    // Flugeinheiten getrennt verteilen (sie dürfen auch über Wasser stehen)
+    const air = us.filter((u) => UNITS[u.type].flying);
+    if (air.length && air.length < us.length) {
+      this.groupMove(air, x, y, am);
+      us = us.filter((u) => !UNITS[u.type].flying);
+    }
+    const grid = air.length === us.length ? this.gridAir : this.grid;
+    const start = nearestPassable(grid, Math.floor(x), Math.floor(y), 10);
     if (start < 0) {
       this.err(us[0].owner, 'Dieser Ort ist nicht erreichbar.');
       return;
@@ -555,7 +653,7 @@ export class World {
           const nx = cx + dx, ny = cy + dy;
           if (!this.inMap(nx, ny)) continue;
           const ni = this.idx(nx, ny);
-          if (!seen.has(ni) && this.grid.pass[ni]) {
+          if (!seen.has(ni) && grid.pass[ni]) {
             seen.add(ni);
             q.push(ni);
           }
@@ -691,21 +789,40 @@ export class World {
     if (b.owner < 0 || !b.built) return;
     const def = this.bdl(b);
     const pl = this.players[b.owner];
-    // Ausbau
+    // Vorhaben: Ausbau, Zeitalter, Technologie
     if (b.up >= 0) {
-      const up = UPGRADES[b.type]?.[b.lvl - 1];
-      if (!up) b.up = -1;
-      else {
-        b.up += DT;
-        if (b.up >= up.time) {
-          b.up = -1;
-          b.lvl++;
-          const nd = this.bdl(b);
-          b.hp += nd.hp - b.maxHp;
-          b.maxHp = nd.hp;
-          if (b.type === 'bauernhof') this.allocateFields(b);
-          this.emit({ e: 'upgraded', x: b.x + b.w / 2, y: b.y + b.h / 2, o: b.owner, b: b.type, l: b.lvl });
-          this.updatePop();
+      const k = b.upk ?? 'lvl';
+      b.up += DT;
+      if (b.up >= this.projectTime(b)) {
+        b.up = -1;
+        b.upk = undefined;
+        if (k === 'lvl') {
+          if (UPGRADES[b.type]?.[b.lvl - 1]) {
+            b.lvl++;
+            const nd = this.bdl(b);
+            b.hp += nd.hp - b.maxHp;
+            b.maxHp = nd.hp;
+            if (b.type === 'bauernhof') this.allocateFields(b);
+            this.emit({ e: 'upgraded', x: b.x + b.w / 2, y: b.y + b.h / 2, o: b.owner, b: b.type, l: b.lvl });
+            this.updatePop();
+          }
+        } else if (k === 'age') {
+          if (pl.age < MAX_AGE) {
+            pl.age++;
+            pl.prestige += AGES[pl.age].prestige;
+            this.emit({ e: 'age', p: b.owner, age: pl.age });
+          }
+        } else if (!pl.techs.includes(k)) {
+          const hp0 = new Map<UnitType, number>();
+          for (const e of this.ents.values()) if (e.kind === 'u' && e.owner === b.owner && !hp0.has(e.type)) hp0.set(e.type, this.ud(b.owner, e.type).hp);
+          pl.techs.push(k);
+          // Lebenspunkt-Boni wirken auch auf vorhandene Einheiten
+          for (const e of this.ents.values())
+            if (e.kind === 'u' && e.owner === b.owner) {
+              const before = hp0.get(e.type) ?? 0, after = this.ud(b.owner, e.type).hp;
+              if (after > before) e.hp += after - before;
+            }
+          this.emit({ e: 'tech', p: b.owner, t: k });
         }
       }
     }
@@ -750,7 +867,7 @@ export class World {
         b.status = b.staff.length ? `${b.staff.length}/${def.staffSlots} Arbeiter` : 'Keine Arbeiter – Arbeiter per Rechtsklick zuweisen';
       } else b.status = 'Fängt Fisch';
       b.active = rate > 0;
-      b.timer += DT * rate;
+      b.timer += DT * rate * (this.tfx(b.owner).produce[b.type] ?? 1);
       if (b.timer >= def.produce.time) {
         b.timer -= def.produce.time;
         pl.res[def.produce.res] += def.produce.amount;
@@ -768,7 +885,7 @@ export class World {
         } else b.status = `Wartet auf ${costText(def.process.input)}`;
       } else {
         b.timer += DT;
-        if (b.timer >= def.process.time) {
+        if (b.timer >= def.process.time * (this.tfx(b.owner).process[b.type] ?? 1)) {
           this.refund(b.owner, def.process.output, 1);
           pl.stats.gathered.waren += def.process.output.waren ?? 0;
           b.active = false;
@@ -787,7 +904,7 @@ export class World {
         if (t && t.kind === 'u') {
           b.cd = def.attack.cooldown;
           this.damage(t, Math.max(1, def.attack.dmg - this.ud(t.owner, t.type).armor), b.owner, b.id);
-          this.emit({ e: 'shot', x: cx, y: cy, tx: t.x, ty: t.y, r: 1 });
+          this.emit({ e: 'shot', x: cx, y: cy, tx: t.x, ty: t.y, r: def.shot ?? 1 });
         }
       }
     }
@@ -993,7 +1110,7 @@ export class World {
         if (t.kind === 'u') dmg = Math.max(1, def.dmg - this.ud(t.owner, t.type).armor);
         else dmg = def.dmg * def.vsBuilding;
         this.damage(t, dmg, u.owner, u.id);
-        if (def.range > 2) this.emit({ e: 'shot', x: u.x, y: u.y, tx, ty, r: u.type === 'musketier' ? 2 : 0 });
+        if (def.range > 2) this.emit({ e: 'shot', x: u.x, y: u.y, tx, ty, r: def.shot ?? 0 });
         else this.emit({ e: 'hit', x: tx, y: ty, m: 1 });
       }
       return;
@@ -1065,7 +1182,8 @@ export class World {
       u.carry = 0;
       u.carryRes = null;
     }
-    if (u.carry >= RULES.carryCap) {
+    const cap = RULES.carryCap + this.tfx(u.owner).carry;
+    if (u.carry >= cap) {
       const d = this.dropoffFor(u);
       if (!d) {
         this.err(u.owner, 'Kein Abladeplatz für Holz – Holzfällerlager oder Dorfzentrum fehlt.');
@@ -1086,7 +1204,7 @@ export class World {
     if (!this.map.trees[o.tile]) {
       const nt = this.nearestTree((o.tile % w) + 0.5, Math.floor(o.tile / w) + 0.5, 9);
       if (nt < 0) {
-        if (u.carry > 0) u.carry = RULES.carryCap; // Rest abliefern
+        if (u.carry > 0) u.carry = cap; // Rest abliefern
         else {
           this.emit({ e: 'info', p: u.owner, msg: 'Ein Arbeiter findet hier keine Bäume mehr.' });
           this.setOrder(u, { k: 'none' });
@@ -1102,7 +1220,7 @@ export class World {
     if (r === 'arrived') {
       u.anim = 2;
       this.faceTo(u, tx + 0.5, ty + 0.5);
-      u.work += DT;
+      u.work += DT * this.tfx(u.owner).gather;
       if (u.work >= RULES.chopTime) {
         u.work = 0;
         u.carry++;
@@ -1139,8 +1257,9 @@ export class World {
       u.anim = 2;
       this.faceTo(u, b.x + b.w / 2, b.y + b.h / 2);
       const def = BUILDINGS[b.type];
-      b.prog += DT;
-      b.hp = Math.min(b.maxHp, b.hp + (b.maxHp * 0.9 * DT) / def.buildTime);
+      const bs = DT * this.tfx(u.owner).gather;
+      b.prog += bs;
+      b.hp = Math.min(b.maxHp, b.hp + (b.maxHp * 0.9 * bs) / def.buildTime);
       if (b.prog >= def.buildTime) {
         b.built = true;
         b.prog = def.buildTime;
@@ -1396,7 +1515,11 @@ export class World {
     w.tick = d.tick;
     w.nextId = d.nextId;
     w.players = d.players;
-    for (const p of w.players) p.faction ??= 'angeln';
+    for (const p of w.players) {
+      p.faction ??= 'angeln';
+      p.age ??= 1;
+      p.techs ??= [];
+    }
     w.map.trees.set(ub(d.trees));
     w.vis = d.vis.map(ub);
     w.attackedNote = w.players.map(() => -1000);
@@ -1416,6 +1539,7 @@ export class World {
             w.bocc[i] = e.id;
             w.grid.pass[i] = 0;
             w.gridJump.pass[i] = 0;
+            w.gridAir.pass[i] = 0;
           }
         for (const f of e.fields) w.field[f] = e.id;
         e.lvl ??= 1;

@@ -53,6 +53,9 @@ wie sie um 1600 verbreitet war.</li>
 <li><b>Karte „Die Schlei“:</b> Lage und Abstände von Kappeln, Arnis, Süderbrarup, Moor und Schlei sind stark vereinfacht und nicht
 maßstabsgetreu. Das Ostufer (Schwansen) ist nur Kulisse. Die Kirche am Brarup-Markt ist ein freies Motiv.</li>
 <li><b>Wirtschaft:</b> Taler, Prestige, Preise und Produktionsraten sind für die Spielbarkeit erfunden.</li>
+<li><b>Zeitalter:</b> Der Sprung vom 18. ins 20. Jahrhundert überspringt das 19. bewusst; Gebäude, Einheiten und Forschungen
+sind vereinfachte Sinnbilder ihrer Epoche. Das 22. Jahrhundert (Fusionsenergie, Vertikalfarmen, Drohnen, Kraftanzüge)
+ist reine Zukunftsfantasie.</li>
 </ul>
 <h3>Quellen</h3>
 <ul class="note">
@@ -90,6 +93,11 @@ nahe eigener fertiger Gebäude. Kosten, Bauzeit und Voraussetzungen zeigt der To
 <p><b>Ausbau:</b> Fertige Gebäude lassen sich zweimal ausbauen (Knopf „Stufe II/III“, Taste C): mehr Ertrag, schnellere
 Verarbeitung oder Ausbildung, mehr Wohnraum oder Lebenspunkte. Stufe II/III setzt ein Dorfzentrum derselben Stufe voraus,
 Stufe III des Dorfzentrums einen Markt. Das Gebäude arbeitet während des Ausbaus weiter.</p>
+<p><b>Zeitalter:</b> Im Dorfzentrum (Taste A) steigt die Siedlung vom 17. ins 18., 20. und schließlich 22. Jahrhundert
+auf. Jeder Aufstieg kostet Rohstoffe und Zeit und verlangt zwei fertige Gebäude der Vorepoche. Danach stehen neue
+Gebäude (zweite Bauseite der Arbeiter, Taste V), neue Einheiten in der Kaserne und neue Forschungen bereit; ab dem
+20. Jahrhundert ändern Dorfzentrum, Wohnhäuser, Kaserne und Markt ihr Aussehen. Kampfdrohnen fliegen über Wasser,
+Knicks und Deiche hinweg.</p>
 <p><b>Sichern:</b> Die Partie wird regelmäßig automatisch gesichert. Nach versehentlichem Schließen bietet das Hauptmenü
 „Letzte Partie fortsetzen“ an.</p>
 <p><b>Kampf:</b> Kaserne bildet Späher (schnell, weite Sicht), Landsknechte (Nahkampf, stark gegen Gebäude) und

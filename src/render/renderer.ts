@@ -143,7 +143,7 @@ export class CanvasRenderer extends BaseRenderer {
       g.strokeStyle = u.o === c.me ? '#a8e070' : '#e05a4a';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.ellipse(sx, sy, (UNITS[u.t].mounted ? 14 : 9) * z, (UNITS[u.t].mounted ? 6 : 4.5) * z, 0, 0, Math.PI * 2);
+      g.ellipse(sx, sy, ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 14 : 9) * z, ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 6 : 4.5) * z, 0, 0, Math.PI * 2);
       g.stroke();
     }
 
@@ -300,7 +300,7 @@ export class CanvasRenderer extends BaseRenderer {
     const d = BUILDINGS[b.t];
     const color = playerColor(this.c, b.o);
     const [sx, sy] = this.toScreen(b.x, b.y);
-    const spr: BuildingSprite = buildingSprite(b.t, color, this.c.arch(b.o));
+    const spr: BuildingSprite = buildingSprite(b.t, color, this.c.arch(b.o), this.c.age(b.o));
     if (b.ghost) g.globalAlpha = 0.55;
     if (b.t === 'heringszaun') this.drawFences(b, sx, sy);
     if (!b.b) {
@@ -491,7 +491,7 @@ export class CanvasRenderer extends BaseRenderer {
       u.hitFlash = Math.max(0, u.hitFlash - 0.08);
     }
     const max = this.c.ud(u.o, u.t).hp;
-    if (ui.selected.has(u.i) || u.h < max || ui.hover === u.i) this.hpBar(sx, sy - ((UNITS[u.t].mounted ? 30 : 26) * UNIT_SCALE + 4 + this.hop(u, now)) * z, 20 * z, u.h / max);
+    if (ui.selected.has(u.i) || u.h < max || ui.hover === u.i) this.hpBar(sx, sy - (((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 30 : 26) * UNIT_SCALE + 4 + this.hop(u, now)) * z, 20 * z, u.h / max);
   }
 
   private hpBar(cx: number, y: number, w: number, f: number): void {
@@ -518,7 +518,7 @@ export class CanvasRenderer extends BaseRenderer {
       }
     const [sx, sy] = this.toScreen(p.x, p.y);
     g.globalAlpha = 0.6;
-    this.drawSprite(buildingSprite(p.type, playerColor(this.c, this.c.me), this.c.arch(this.c.me)), sx, sy);
+    this.drawSprite(buildingSprite(p.type, playerColor(this.c, this.c.me), this.c.arch(this.c.me), this.c.age(this.c.me)), sx, sy);
     g.globalAlpha = 1;
   }
 
@@ -527,7 +527,24 @@ export class CanvasRenderer extends BaseRenderer {
     this.pruneEffects(now);
     for (const e of this.effects) {
       const k = (now - e.t0) / e.dur;
-      if (e.k === 'shot') {
+      if (e.k === 'shot' && e.r === 4) {
+        const [ax, ay] = this.toScreen(e.x, e.y), [bx, by] = this.toScreen(e.tx!, e.ty!);
+        g.globalAlpha = 1 - k;
+        g.strokeStyle = '#8cf0ff';
+        g.lineWidth = 2.2 * z;
+        g.beginPath();
+        g.moveTo(ax, ay - 18 * z);
+        g.lineTo(bx, by - 12 * z);
+        g.stroke();
+        g.globalAlpha = 1;
+      } else if (e.k === 'shot' && e.r === 3) {
+        const x = e.x + (e.tx! - e.x) * k, y = e.y + (e.ty! - e.y) * k;
+        const [sx, sy] = this.toScreen(x, y);
+        g.fillStyle = '#1e1e1e';
+        g.beginPath();
+        g.arc(sx, sy - (Math.sin(k * Math.PI) * 26 + 14) * z, 2.2 * z, 0, Math.PI * 2);
+        g.fill();
+      } else if (e.k === 'shot') {
         const x = e.x + (e.tx! - e.x) * k, y = e.y + (e.ty! - e.y) * k;
         const [sx, sy] = this.toScreen(x, y);
         const arc = Math.sin(k * Math.PI) * (e.r === 1 ? 30 : e.r === 2 ? 2 : 12) * z;

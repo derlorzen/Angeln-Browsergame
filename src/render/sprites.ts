@@ -5,6 +5,7 @@ import {
   wall, windowOn, type Ctx, type Face, type Pt, type RoofMat, type WallMat,
 } from './draw';
 import { FACTION_DEFS, type ArchStyle, type FactionId } from '../data/factions';
+import { ERA_SIZE, drawEra, eraTop } from './era';
 import { animal, bands, frontispiz, spire, brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
 
 export const PLAYER_COLORS = ['#b3342b', '#2f5ea6', '#d4a21f', '#3f8a3c'];
@@ -542,17 +543,17 @@ function stall(g: Ctx, iso: Iso, x: number, y: number, color: string, goods: num
   poly(g, pts, undefined, 'rgba(40,30,20,0.5)', 1);
 }
 
-function drawBuilding(type: BuildingType, color: string, arch: ArchStyle): BuildingSprite {
-  const tops: Record<BuildingType, number> = {
+function drawBuilding(type: BuildingType, color: string, arch: ArchStyle, age = 1): BuildingSprite {
+  const tops: Partial<Record<BuildingType, number>> = {
     dorfzentrum: 124, wohnhaus: 62, holzfaeller: 50, bauernhof: 56, muehle: 92, heringszaun: 50, raeucherei: 80,
     lehmgrube: 40, markt: 50, kaserne: 96, brarupmarkt: 74,
   };
-  const size: Record<BuildingType, number> = {
+  const size: Partial<Record<BuildingType, number>> = {
     dorfzentrum: 3, wohnhaus: 2, holzfaeller: 2, bauernhof: 2, muehle: 2, heringszaun: 2, raeucherei: 2, lehmgrube: 2,
     markt: 3, kaserne: 3, brarupmarkt: 3,
   };
-  const n = size[type];
-  const B = bcanvas(n, n, tops[type]);
+  const n = size[type] ?? ERA_SIZE[type]?.n ?? 2;
+  const B = bcanvas(n, n, eraTop(type, age) ?? tops[type] ?? ERA_SIZE[type]?.top ?? 80);
   const { g, iso } = B;
   const out: BuildingSprite = { c: B.c, ax: B.ax, ay: B.ay };
   const to1x = (p: Pt): Pt => [p[0] / S - B.ax, p[1] / S - B.ay];
@@ -778,6 +779,8 @@ function drawBuilding(type: BuildingType, color: string, arch: ArchStyle): Build
     }
     woodpile(g, iso, 1.78, 0.5, 3);
   };
+
+  if (drawEra(type, age, { g, iso, out, to1x, W, banner, color })) return out;
 
   switch (type) {
     case 'dorfzentrum': {
@@ -1527,11 +1530,16 @@ const ARCH: Record<ArchStyle, { house: WallMat; houseOpts: WallOpts; houseRoof: 
 };
 
 const buildingCache = new Map<string, BuildingSprite>();
-export function buildingSprite(type: BuildingType, color: string, arch: ArchStyle = 'angeln'): BuildingSprite {
-  const k = `${type}|${color}|${arch}`;
+/** Zeitalter für die Darstellung: alte Gebäude ändern ihr Aussehen erst ab dem 20. und 22. Jahrhundert. */
+export function lookAge(age: number): number {
+  return age >= 4 ? 4 : age >= 3 ? 3 : 1;
+}
+export function buildingSprite(type: BuildingType, color: string, arch: ArchStyle = 'angeln', age = 1): BuildingSprite {
+  const la = lookAge(age);
+  const k = `${type}|${color}|${arch}|${la}`;
   let s = buildingCache.get(k);
   if (!s) {
-    s = drawBuilding(type, color, arch);
+    s = drawBuilding(type, color, arch, la);
     buildingCache.set(k, s);
   }
   return s;
@@ -1692,15 +1700,15 @@ export function resIcon(r: Res | 'pop' | 'prestige'): string {
   return url;
 }
 
-export function portrait(kind: 'b' | 'u', type: string, color: string, fac: FactionId = 'angeln'): string {
-  const k = `p:${kind}:${type}:${color}:${fac}`;
+export function portrait(kind: 'b' | 'u', type: string, color: string, fac: FactionId = 'angeln', age = 1): string {
+  const k = `p:${kind}:${type}:${color}:${fac}:${kind === 'b' ? lookAge(age) : 1}`;
   const hit = iconCache.get(k);
   if (hit) return hit;
   const [c, g] = canvas(64, 64);
   g.fillStyle = '#3a3226';
   g.fillRect(0, 0, 64, 64);
   if (kind === 'b') {
-    const s = buildingSprite(type as BuildingType, color, FACTION_DEFS[fac].arch);
+    const s = buildingSprite(type as BuildingType, color, FACTION_DEFS[fac].arch, age);
     const sc = Math.min(60 / s.c.width, 60 / s.c.height);
     g.drawImage(s.c, (64 - s.c.width * sc) / 2, (64 - s.c.height * sc) / 2, s.c.width * sc, s.c.height * sc);
   } else {

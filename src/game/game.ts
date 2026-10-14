@@ -13,6 +13,7 @@ import { Tutorial } from '../ui/tutorial';
 import type { ClientState } from './client';
 import type { Driver } from './drivers';
 import { terrainHint } from '../ui/terrainhint';
+import { AGES, TECHS } from '../data/ages';
 
 export interface GameOptions {
   tutorial: boolean;
@@ -369,6 +370,17 @@ export class Game {
           sound.play('built', 500);
         }
         break;
+      case 'age':
+        sound.play('age');
+        if (e.p === me) this.hud.message(`Eure Siedlung erreicht das ${AGES[e.age].name} (${AGES[e.age].title})! Neue Gebäude, Einheiten und Forschungen sind verfügbar.`, 'good');
+        else this.hud.message(`${c.players[e.p]?.name ?? 'Der Gegner'} erreicht das ${AGES[e.age].name}.`, 'alert');
+        break;
+      case 'tech':
+        if (e.p === me) {
+          this.hud.message(`Erforscht: ${TECHS[e.t].name} – ${TECHS[e.t].desc}`, 'good');
+          sound.play('built', 500);
+        }
+        break;
       case 'upgraded':
         if (e.o === me) {
           this.hud.message(`Ausbau fertig: ${UPGRADES[e.b]?.[e.l - 2]?.name ?? c.bd(me, e.b).name} (Stufe ${LEVEL_ROMAN[e.l]}).`, 'good');
@@ -380,7 +392,7 @@ export class Game {
         break;
       case 'shot':
         r.shot(e.x, e.y, e.tx, e.ty, now, e.r);
-        if (this.onScreen(e.x, e.y)) sound.play(e.r === 2 ? 'musket' : 'shot', 120);
+        if (this.onScreen(e.x, e.y)) sound.play(e.r === 2 ? 'musket' : e.r === 3 ? 'cannon' : e.r === 4 ? 'laser' : 'shot', 120);
         break;
       case 'hit':
         if (this.onScreen(e.x, e.y)) sound.play('hit', 90);

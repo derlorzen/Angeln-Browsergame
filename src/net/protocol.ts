@@ -1,11 +1,12 @@
 // Nachrichtenformat zwischen Host und Gast (JSON über DataChannel) und strikte Prüfung eingehender Daten.
 import { RULES, isBuildingType, isUnitType } from '../data/defs';
 import { isFaction, type FactionId } from '../data/factions';
+import { isTechId } from '../data/ages';
 import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 3; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“
+export const PROTOCOL_VERSION = 4; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter
 const goalOf = (g: unknown): number => ((RULES.prestigeGoals as readonly number[]).includes(g as number) ? (g as number) : RULES.prestigeGoalDefault);
 
 export interface LobbyPlayer {
@@ -81,14 +82,18 @@ export function validateCommand(raw: unknown): Command | null {
     case 'train':
       if (!isInt(c.b, 1, 1e9) || !isUnitType(c.u)) return null;
       return { c: 'train', b: c.b, u: c.u };
+    case 'research':
+      if (!isInt(c.b, 1, 1e9) || !isTechId(c.t)) return null;
+      return { c: 'research', b: c.b, t: c.t };
     case 'cancel':
+    case 'age':
     case 'upgrade':
     case 'upcancel':
     case 'sell':
       if (!isInt(c.b, 1, 1e9)) return null;
       return { c: c.c, b: c.b };
     case 'buy':
-      if (!isInt(c.b, 1, 1e9) || (c.r !== 'holz' && c.r !== 'lehm')) return null;
+      if (!isInt(c.b, 1, 1e9) || (c.r !== 'holz' && c.r !== 'lehm' && c.r !== 'getreide')) return null;
       return { c: 'buy', b: c.b, r: c.r };
     case 'auto':
       if (!isInt(c.b, 1, 1e9) || typeof c.on !== 'boolean') return null;

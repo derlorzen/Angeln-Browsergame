@@ -60,7 +60,7 @@ export class Menu {
     const fake = (i: number, t: Parameters<typeof c.buildings.set>[1]['t'], x: number, y: number, o = 0) =>
       c.buildings.set(i, { i, k: 1, t, o, x, y, h: 1, m: 1, b: 1, p: 100, ac: 1 });
     const fac = FACTIONS[Math.floor(Math.random() * FACTIONS.length)];
-    c.players = [{ id: 0, name: '', color: FACTIONS.indexOf(fac), faction: fac, prestige: 0, defeated: false }];
+    c.players = [{ id: 0, name: '', color: FACTIONS.indexOf(fac), faction: fac, prestige: 0, defeated: false, age: 1 }];
     fake(1, 'dorfzentrum', sl.x, sl.y);
     fake(2, 'muehle', sl.x - 4, sl.y + 1);
     fake(3, 'wohnhaus', sl.x + 4, sl.y - 1);
@@ -132,7 +132,7 @@ export class Menu {
         <button class="btn" data-a="bg">Hintergrund &amp; Quellen</button>
         <button class="btn" data-a="settings">Einstellungen &amp; Netzwerk</button>
       </div>
-      <p class="note" style="text-align:center;margin-top:12px">Version 0.2 · Alle Grafiken und Klänge werden im Browser erzeugt · Kein Server nötig</p>`);
+      <p class="note" style="text-align:center;margin-top:12px">Version 0.3 · Alle Grafiken und Klänge werden im Browser erzeugt · Kein Server nötig</p>`);
     this.bind(box, {
       resume: () => this.resumeAuto(),
       sp: () => this.singleSetup(),

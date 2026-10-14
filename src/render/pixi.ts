@@ -8,7 +8,7 @@ import { T, isBarrier, isWater } from '../sim/map';
 import { barrierMask, barrierStyle, ditchMask, gateAlongX } from './terrainmask';
 import { S, TH, TW, canvas as mkCanvas, prng } from './draw';
 import {
-  buildingSprite, foundationSprite, makeGate, makeKnicks, makeTerrain, makeTrees, unitFrame, unitSprites, type BuildingSprite,
+  buildingSprite, lookAge, foundationSprite, makeGate, makeKnicks, makeTerrain, makeTrees, unitFrame, unitSprites, type BuildingSprite,
   type Sprite as CSprite,
 } from './sprites';
 import { BaseRenderer, UNIT_SCALE, playerColor, type UIOverlay } from './view';
@@ -413,7 +413,7 @@ export class PixiRenderer extends BaseRenderer {
       const u = c.units.get(id);
       if (!u) continue;
       const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
-      const big = !!UNITS[u.t].mounted;
+      const big = !!(UNITS[u.t].mounted || UNITS[u.t].vehicle);
       d.ellipse(isoX(ux, uy), isoY(ux, uy), big ? 14 : 9, big ? 6 : 4.5).stroke({ width: 1.5 / z, color: u.o === c.me ? 0xa8e070 : 0xe05a4a });
     }
 
@@ -492,7 +492,7 @@ export class PixiRenderer extends BaseRenderer {
       seen.add(b.i);
       const d = BUILDINGS[b.t];
       const color = playerColor(c, b.o);
-      const key = `${b.t}|${color}|${b.b}|${c.arch(b.o)}`;
+      const key = `${b.t}|${color}|${b.b}|${c.arch(b.o)}|${lookAge(c.age(b.o))}`;
       let v = this.bviews.get(b.i);
       if (!v || v.key !== key) {
         if (v) {
@@ -500,7 +500,7 @@ export class PixiRenderer extends BaseRenderer {
           v.found?.destroy();
           v.dyn.destroy();
         }
-        const sprite = buildingSprite(b.t, color, c.arch(b.o));
+        const sprite = buildingSprite(b.t, color, c.arch(b.o), c.age(b.o));
         const spr = new Sprite(tex(sprite.c));
         spr.scale.set(1 / S);
         const dyn = new Graphics();
@@ -695,7 +695,7 @@ export class PixiRenderer extends BaseRenderer {
       const max = c.ud(u.o, u.t).hp;
       if (!(ui.selected.has(u.i) || u.h < max || ui.hover === u.i)) continue;
       const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
-      this.hpBar(g, isoX(ux, uy), isoY(ux, uy) - (UNITS[u.t].mounted ? 30 : 26) * UNIT_SCALE - 4 - this.hop(u, now), 20, u.h / max);
+      this.hpBar(g, isoX(ux, uy), isoY(ux, uy) - ((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 30 : 26) * UNIT_SCALE - 4 - this.hop(u, now), 20, u.h / max);
     }
     for (const b of c.buildings.values()) {
       const d = BUILDINGS[b.t];
@@ -710,7 +710,7 @@ export class PixiRenderer extends BaseRenderer {
         }
       }
       if (b.o >= 0 && (sel || b.h < b.m || ui.hover === b.i) && !b.ghost) {
-        const spr = buildingSprite(b.t, playerColor(c, b.o), c.arch(b.o));
+        const spr = buildingSprite(b.t, playerColor(c, b.o), c.arch(b.o), c.age(b.o));
         this.hpBar(g, isoX(b.x + d.w / 2, b.y + d.h / 2), isoY(b.x + d.w / 2, b.y + d.h / 2) - (spr.ay * 0.7 + 4), 46, b.h / b.m);
       }
     }
@@ -724,7 +724,7 @@ export class PixiRenderer extends BaseRenderer {
           g.poly([isoX(x, y), isoY(x, y), isoX(x + 1, y), isoY(x + 1, y), isoX(x + 1, y + 1), isoY(x + 1, y + 1), isoX(x, y + 1), isoY(x, y + 1)])
             .fill({ color: p.valid ? 0x78dc5a : 0xe63c28, alpha: p.valid ? 0.35 : 0.4 });
         }
-      const s = buildingSprite(p.type, playerColor(c, c.me), c.arch(c.me));
+      const s = buildingSprite(p.type, playerColor(c, c.me), c.arch(c.me), c.age(c.me));
       this.placeSpr.texture = tex(s.c);
       this.placeSpr.scale.set(1 / S);
       this.placeSpr.position.set(isoX(p.x, p.y) - s.ax, isoY(p.x, p.y) - s.ay);
@@ -735,7 +735,15 @@ export class PixiRenderer extends BaseRenderer {
     this.pruneEffects(now);
     for (const e of this.effects) {
       const k = (now - e.t0) / e.dur;
-      if (e.k === 'shot') {
+      if (e.k === 'shot' && e.r === 4) {
+        // Energiestrahl: gerade Linie, verblassend
+        g.moveTo(isoX(e.x, e.y), isoY(e.x, e.y) - 18).lineTo(isoX(e.tx!, e.ty!), isoY(e.tx!, e.ty!) - 12).stroke({ width: 2.2, color: 0x8cf0ff, alpha: 1 - k });
+        g.circle(isoX(e.tx!, e.ty!), isoY(e.tx!, e.ty!) - 12, 3 + k * 4).fill({ color: 0xc8faff, alpha: 0.8 * (1 - k) });
+      } else if (e.k === 'shot' && e.r === 3) {
+        // Granate: Bogen, dunkle Kugel
+        const x = e.x + (e.tx! - e.x) * k, y = e.y + (e.ty! - e.y) * k;
+        g.circle(isoX(x, y), isoY(x, y) - Math.sin(k * Math.PI) * 26 - 14, 2.2).fill(0x1e1e1e);
+      } else if (e.k === 'shot') {
         const x = e.x + (e.tx! - e.x) * k, y = e.y + (e.ty! - e.y) * k;
         const arc = Math.sin(k * Math.PI) * (e.r === 1 ? 30 : e.r === 2 ? 2 : 12);
         const ang = Math.atan2(isoY(e.tx!, e.ty!) - isoY(e.x, e.y), isoX(e.tx!, e.ty!) - isoX(e.x, e.y));

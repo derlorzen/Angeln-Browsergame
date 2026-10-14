@@ -1,7 +1,8 @@
 // Einfache, regelbasierte KI. Sie liest den Weltzustand und gibt ausschließlich normale Spielerbefehle
 // über world.queueCommand() ab – dieselben Regeln, Kosten und Prüfungen wie für Menschen.
 // Vereinfachung: Die KI kennt die Startplätze der Gegner (die Karte ist allen bekannt).
-import { BUILDINGS, RULES, UNITS, UPGRADES, type BuildingType, type UnitType } from '../data/defs';
+import { BUILDINGS, RULES, UNITS, UPGRADES, type BuildingType, type Cost, type UnitType } from '../data/defs';
+import { AGES, MAX_AGE, TECHS, TECH_IDS, unitAvailable } from '../data/ages';
 import { FACTION_DEFS } from '../data/factions';
 import { T } from '../sim/map';
 import { checkPlacement } from '../sim/rules';
@@ -16,6 +17,9 @@ export interface AIState {
   scoutStep: number;
   lastAttackTick: number;
   attackers: number[];
+  /** seit wann für das nächste Zeitalter gespart wird, und bis wann eine Sparpause läuft */
+  saveSince?: number;
+  saveBreak?: number;
 }
 
 const PLAN: [BuildingType, number][] = [
@@ -36,7 +40,27 @@ const PLAN: [BuildingType, number][] = [
   ['bauernhof', 4],
   ['heringszaun', 3],
   ['muehle', 3],
+  // spätere Zeitalter (werden erst ab dem jeweiligen Zeitalter angegangen)
+  ['manufaktur', 1],
+  ['hafen', 1],
+  ['schanze', 1],
+  ['bahnhof', 1],
+  ['fabrik', 1],
+  ['bunker', 1],
+  ['vertikalfarm', 2],
+  ['gezeitenwerk', 1],
+  ['schildturm', 1],
+  ['manufaktur', 2],
+  ['fabrik', 2],
 ];
+
+/** Einheitenmix an das Zeitalter anpassen (Spezialeinheit bleibt). */
+function modernize(ut: UnitType, age: number, k: number): UnitType {
+  if (age >= 4) return ut === 'spaeher' ? 'drohne' : ['landsknecht', 'schuetze', 'fuesilier', 'infanterist'].includes(ut) ? (k % 3 === 0 ? 'drohne' : 'exosoldat') : ut === 'kanone' ? 'panzer' : ut;
+  if (age >= 3) return ['landsknecht', 'schuetze', 'fuesilier'].includes(ut) ? (k % 4 === 0 ? 'panzer' : 'infanterist') : ut === 'kanone' ? 'panzer' : ut;
+  if (age >= 2) return ut === 'schuetze' ? 'fuesilier' : ut === 'landsknecht' && k % 4 === 0 ? 'kanone' : ut;
+  return ut;
+}
 
 export class AI {
   s: AIState;
@@ -51,7 +75,7 @@ export class AI {
   }
 
   update(w: World): void {
-    const period = this.s.level === 'leicht' ? 20 : 10;
+    const period = this.s.level === 'leicht' ? 30 : 10;
     if ((w.tick + this.s.p * 3) % period !== 0) return;
     const p = this.s.p;
     this.reserved.clear();
@@ -76,19 +100,40 @@ export class AI {
     const military = units.filter((u) => UNITS[u.type].military && u.type !== 'spaeher');
     const aggr = easy ? 1 : fd.aiAggression;
     const unbuilt = blds.filter((b) => !b.built);
+    // Sparen für das nächste Zeitalter (leichte KI höchstens ins 18. Jh.)
+    const ageCap = easy ? 2 : MAX_AGE;
+    let saving = me.age < ageCap && dz.up < 0 && !w.ageBlock(dz) && w.tick > (6 + me.age * 4) * 60 * RULES.tickRate && w.tick > (this.s.saveBreak ?? 0);
+    if (saving) {
+      this.s.saveSince ??= w.tick;
+      // Nach 4 Minuten erfolglosen Sparens 3 Minuten normal weiterwirtschaften
+      if (w.tick - this.s.saveSince > 4 * 60 * RULES.tickRate) {
+        this.s.saveBreak = w.tick + 3 * 60 * RULES.tickRate;
+        this.s.saveSince = undefined;
+        saving = false;
+      }
+    } else if (dz.up >= 0 || me.age >= ageCap) this.s.saveSince = undefined;
     const queued = blds.reduce((n, b) => n + b.queue.length, 0);
 
     // Markt automatisch verkaufen lassen
-    for (const b of blds) if (b.type === 'markt' && b.built && !b.autoSell) this.cmd(w, { c: 'auto', b: b.id, on: true });
+    // beim Sparen auf Waren den Verkauf anhalten
+    const keepWaren = saving && (AGES[me.age + 1].cost.waren ?? 0) > me.res.waren;
+    for (const b of blds) if (b.type === 'markt' && b.built && b.autoSell === keepWaren) this.cmd(w, { c: 'auto', b: b.id, on: !keepWaren });
     const markt = blds.find((b) => b.type === 'markt' && b.built);
+    // Notfall: ohne Getreide keine Arbeiter – am Markt zukaufen
+    if (markt && workers.length < 6 && me.res.getreide < w.ud(p, 'arbeiter').cost.getreide! + 10 && me.res.taler >= w.buyPrice(p))
+      this.cmd(w, { c: 'buy', b: markt.id, r: 'getreide' });
     if (markt && me.res.taler > 160) {
-      if (me.res.holz < 120) this.cmd(w, { c: 'buy', b: markt.id, r: 'holz' });
-      else if (me.res.lehm < 80) this.cmd(w, { c: 'buy', b: markt.id, r: 'lehm' });
+      const need = saving ? AGES[me.age + 1].cost : {};
+      const tal = (need.taler ?? 0) + 100;
+      if (me.res.holz < Math.max(120, need.holz ?? 0) && me.res.taler > tal) this.cmd(w, { c: 'buy', b: markt.id, r: 'holz' });
+      else if (me.res.lehm < Math.max(80, need.lehm ?? 0) && me.res.taler > tal) this.cmd(w, { c: 'buy', b: markt.id, r: 'lehm' });
+      else if (me.res.getreide < Math.max(me.res.taler > 800 ? 150 : 0, need.getreide ?? 0) && me.res.taler > tal) this.cmd(w, { c: 'buy', b: markt.id, r: 'getreide' });
     }
 
     // Arbeiter ausbilden
-    const wantWorkers = easy ? 11 : 17;
-    if (workers.length + dz.queue.length < wantWorkers && dz.queue.length < 2 && w.canAfford(p, w.ud(p, 'arbeiter').cost))
+    const wantWorkers = easy ? 9 : 17;
+    const keep = saving ? AGES[me.age + 1].cost : {};
+    if (workers.length + dz.queue.length < wantWorkers && dz.queue.length < 2 && w.canAfford(p, w.ud(p, 'arbeiter').cost) && (workers.length < 12 || this.leaves(me.res, w.ud(p, 'arbeiter').cost, keep)))
       this.cmd(w, { c: 'train', b: dz.id, u: 'arbeiter' });
 
     // Wohnraum
@@ -98,27 +143,43 @@ export class AI {
     else if (unbuilt.filter((b) => b.type !== 'wohnhaus').length === 0) {
       // Bauplan abarbeiten
       for (const [t, n] of plan) {
+        if ((BUILDINGS[t].age ?? 1) > me.age) continue;
         if (count(t) >= n) continue;
         if (easy && n > 2) break;
         if ((this.noSpot.get(t) ?? -1) > w.tick) continue; // kürzlich kein Bauplatz gefunden
         if (!w.canAfford(p, w.bd(p, t).cost)) break; // sparen
+        if (saving && !this.leaves(me.res, w.bd(p, t).cost, AGES[me.age + 1].cost)) break; // Rücklage fürs Zeitalter
         if (this.tryBuild(w, t, dz, workers)) break;
         this.noSpot.set(t, w.tick + 600);
       }
     }
 
+    const spare = (cost: Cost, reserve = 80) => Object.entries(cost).every(([r, v]) => me.res[r as keyof typeof me.res] >= (v ?? 0) + (r === 'taler' ? reserve / 2 : reserve));
+    // Zeitalter: aufsteigen, sobald die Voraussetzungen stehen und die Kosten angespart sind
+    if (saving && w.canAfford(p, AGES[me.age + 1].cost)) this.cmd(w, { c: 'age', b: dz.id });
+    // Technologien
+    if (!easy)
+      for (const id of TECH_IDS) {
+        const t = TECHS[id];
+        if (t.age > me.age || me.techs.includes(id)) continue;
+        const at = blds.find((b) => b.type === t.at && b.built && b.up < 0 && (b.type !== 'dorfzentrum' || me.age >= MAX_AGE));
+        if (at && !w.techBlock(at, id) && spare(t.cost, 120) && (!saving || this.leaves(me.res, t.cost, AGES[me.age + 1].cost))) {
+          this.cmd(w, { c: 'research', b: at.id, t: id });
+          break;
+        }
+      }
+
     // Ausbau: eine Baustelle zur Zeit, erst wenn der Grundplan steht und Vorräte übrig sind
-    if (!blds.some((b) => b.up >= 0) && count('markt') + count('kaserne') >= (easy ? 1 : 2)) {
+    if (!blds.some((b) => b.up >= 0 && b.upk === 'lvl') && count('markt') + count('kaserne') >= (easy ? 1 : 2)) {
       const order: BuildingType[] = ['dorfzentrum', 'bauernhof', 'heringszaun', 'muehle', 'raeucherei', 'markt', 'kaserne', 'lehmgrube', 'wohnhaus'];
       const maxL = easy ? 2 : 3;
       outer: for (let lv = 1; lv < maxL; lv++)
         for (const t of order)
           for (const b of blds) {
             if (b.type !== t || b.lvl !== lv || w.upgradeBlock(b)) continue;
-            const cost = UPGRADES[t]![lv - 1].cost;
             // Rücklage: Ausbau nur aus Überschuss
-            const spare = Object.entries(cost).every(([r, v]) => me.res[r as keyof typeof me.res] >= (v ?? 0) + (r === 'taler' ? 40 : 80));
-            if (spare) this.cmd(w, { c: 'upgrade', b: b.id });
+            const uc = UPGRADES[t]![lv - 1].cost;
+            if (spare(uc) && (!saving || this.leaves(me.res, uc, AGES[me.age + 1].cost))) this.cmd(w, { c: 'upgrade', b: b.id });
             break outer;
           }
     }
@@ -174,11 +235,13 @@ export class AI {
 
     // Militär ausbilden
     const kaserne = blds.find((b) => b.type === 'kaserne' && b.built);
-    const maxArmy = easy ? 12 : 30;
-    if (kaserne && kaserne.queue.length < 2 && workers.length >= (easy ? 8 : 12) && military.length < maxArmy) {
+    const maxArmy = easy ? 8 : 30;
+    if (kaserne && kaserne.queue.length < 2 && workers.length >= (easy ? 8 : 12) && military.length < (saving ? Math.min(maxArmy, 16) : maxArmy)) {
       const mix = fd.aiArmy;
-      const ut: UnitType = mix[(military.length + this.s.wave) % mix.length];
-      if (w.canAfford(p, w.ud(p, ut).cost)) this.cmd(w, { c: 'train', b: kaserne.id, u: ut });
+      const k = military.length + this.s.wave;
+      let ut: UnitType = modernize(mix[k % mix.length], me.age, k);
+      if (!unitAvailable(UNITS[ut], me.age)) ut = fd.unique;
+      if (w.canAfford(p, w.ud(p, ut).cost) && (military.length < 6 || this.leaves(me.res, w.ud(p, ut).cost, keep))) this.cmd(w, { c: 'train', b: kaserne.id, u: ut });
     }
 
     // Späher: erst das Moor erkunden, dann den Markt beobachten
@@ -253,6 +316,11 @@ export class AI {
     }
   }
 
+  /** Bleibt nach Ausgabe von `cost` die Rücklage `keep` erhalten? */
+  private leaves(res: Record<string, number>, cost: Cost, keep: Cost): boolean {
+    return Object.entries(cost).every(([r, v]) => res[r] - (v ?? 0) >= (keep[r as keyof Cost] ?? 0));
+  }
+
   private tryBuild(w: World, t: BuildingType, dz: Building, workers: Unit[]): boolean {
     const spot = findSpot(w, this.s.p, t, dz);
     if (!spot) return false;
@@ -313,7 +381,7 @@ export function findSpot(w: World, p: number, t: BuildingType, dz: Building): { 
       ax = tr % W;
       ay = Math.floor(tr / W);
     }
-  } else if (t === 'heringszaun') {
+  } else if (BUILDINGS[t].placement === 'ufer') {
     const sh = nearestTile((i) => w.map.terrain[i] === T.UFER && !w.bocc[i], 12);
     if (sh >= 0) {
       ax = sh % W;

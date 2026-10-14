@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 60/60 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 66/66 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -35,6 +35,7 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Prestige | Ziel „aus“ verhindert den wirtschaftlichen Sieg; Schwansener +50 % Prestige je Verkauf; Protokoll akzeptiert nur die wählbaren Ziele |
 | Geländehinweise | nur für erkundete Kacheln, mit Gelände und nächstem Ortsnamen |
 | Zufallskarte | gleicher Seed ergibt dieselbe Karte (Mehrspieler); 12 Seeds ergeben ≥ 5 unterschiedliche Grundformen und ≥ 6 verschiedene Ortsnamen; Fairnessprüfung mit 40 Seeds |
+| Zeitalter | Aufstieg nur mit 2 Voraussetzungsgebäuden, Kosten und Dauer, Prestige; Gebäude und Einheiten an das Zeitalter gebunden, Landsknechte ab dem 20. Jh. abgelöst; Vertikalfarm erzeugt Getreide; Forschung wirkt parteiweit (auch auf vorhandene Soldaten), späte Forschung abgelehnt, Abbruch erstattet; Drohne fliegt über Wasser; Zeitalter im Zustand für beide Spieler, im Spielstand und im Protokoll; KI erreicht in 40 Minuten das 20. Jh. und baut Epochengebäude |
 | KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
 ## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
@@ -58,12 +59,13 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 **STUN-Modus im Container:** Einladung entsteht nach ~11 s (Zeitlimit der ICE-Sammlung), nur Kandidaten vom Typ
 `host`, weil ausgehendes UDP zum STUN-Server dort nicht möglich ist; die Oberfläche weist darauf hin.
 
-## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 18/18 bestanden
+## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 19/19 bestanden
 
 Rahmenauswahl, Holz schlagen per Rechtsklick, Bauvorschau per Hotkey, ungültiger Platz rot + Begründung, gültiger Platz
 → Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, **Ausbau des Dorfzentrums per Taste C auf
 Stufe II**, **Geländehinweis nach kurzem Verweilen**, **Zurück-Taste öffnet nur das Menü und sichert**, **nach Neuladen
-„Letzte Partie fortsetzen“ mit identischem Takt und Ausbaustufe**, keine Skriptfehler.
+„Letzte Partie fortsetzen“ mit identischem Takt und Ausbaustufe**, **Zeitalter-Aufstieg per Taste A ins 18. Jahrhundert
+(Anzeige oben „18. Jh.“)**, keine Skriptfehler.
 
 ## 3c. Prestige-Tempo (KI gegen KI, normal, 12 Partien auf allen Karten)
 
@@ -85,6 +87,17 @@ Hohner See (≈3 km falsch nördlich), Audorfer See (≈3,5 km falsch südlich) 
 12 an der Förde. Dabei fiel auf, dass die Förde in meiner Karte über die Halbinsel Holnis lief – jetzt korrigiert. Für die
 dänische Küste ist diese Prüfung nicht möglich (dänische Gemeinden reichen ins Meer).
 
+
+## 3d. Zeitalter und KI-Stufen (KI gegen KI)
+
+Gefundene und behobene Fehler: Eine KI ohne Arbeiter und ohne Getreide konnte sich nie erholen (Getreide ist jetzt am
+Markt kaufbar, die KI nutzt das); beim Sparen für das 20. Jh. verkaufte die KI die nötigen Waren sofort wieder.
+**Leicht gegen normal** (6 Seeds × beide Startplätze): vor den Zeitaltern gewann die normale KI nur **4 von 12**, nach den
+Änderungen (leichte KI langsamer, weniger Arbeiter und Soldaten) **11 von 12**. Gegen eine schwache KI erreicht die normale
+KI 400 Prestige teils schon nach rund 20 Minuten, weil der neutrale Markt unbestritten bleibt.
+
+Grafik: `node e2e/sheet-ages.mjs buildings|units` (Entwicklungsserver) zeigt alle neuen Gebäude und Einheiten,
+`node e2e/showcase-ages.mjs` eine Siedlung im 20. und 22. Jahrhundert im echten Spiel.
 
 ## 3a. Balance der Parteien (KI gegen KI, einmalige Auswertung)
 

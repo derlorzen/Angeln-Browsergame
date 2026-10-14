@@ -1,5 +1,6 @@
 import type { BuildingType, Res, UnitType } from '../data/defs';
 import type { FactionId } from '../data/factions';
+import type { TechId } from '../data/ages';
 
 export type Order =
   | { k: 'none' }
@@ -63,7 +64,9 @@ export interface Building {
   autoSell: boolean;
   cd: number;
   lvl: number; // Ausbaustufe 1..3
-  up: number; // Ausbaufortschritt in Sekunden, -1 = kein Ausbau
+  up: number; // Fortschritt des laufenden Vorhabens in Sekunden, -1 = keins
+  /** laufendes Vorhaben: Ausbaustufe, Zeitalter oder Technologie */
+  upk?: 'lvl' | 'age' | TechId;
 }
 
 export type Entity = Unit | Building;
@@ -91,15 +94,19 @@ export interface PlayerState {
   stats: PlayerStats;
   pop: number;
   popCap: number;
+  age: number; // 1 = 17. Jh. … 4 = 22. Jh.
+  techs: TechId[];
 }
 
 export type SimEvent =
-  | { e: 'shot'; x: number; y: number; tx: number; ty: number; r: 0 | 1 | 2 } // r: 0 Bolzen, 1 Pfeil vom Dorfzentrum, 2 Musketenkugel
+  | { e: 'shot'; x: number; y: number; tx: number; ty: number; r: 0 | 1 | 2 | 3 | 4 } // r: 0 Bolzen, 1 Pfeil, 2 Kugel, 3 Granate, 4 Energiestrahl
   | { e: 'hit'; x: number; y: number; m: 0 | 1 } // m: 1 Nahkampf
   | { e: 'die'; x: number; y: number; u: 0 | 1; o: number }
   | { e: 'built'; x: number; y: number; o: number; b: BuildingType }
   | { e: 'trained'; x: number; y: number; o: number; u: UnitType }
   | { e: 'upgraded'; x: number; y: number; o: number; b: BuildingType; l: number }
+  | { e: 'age'; p: number; age: number }
+  | { e: 'tech'; p: number; t: TechId }
   | { e: 'chop'; x: number; y: number }
   | { e: 'err'; p: number; msg: string }
   | { e: 'info'; p: number; msg: string }
@@ -122,9 +129,11 @@ export type Command =
   | { c: 'train'; b: number; u: UnitType }
   | { c: 'cancel'; b: number }
   | { c: 'upgrade'; b: number }
+  | { c: 'age'; b: number }
+  | { c: 'research'; b: number; t: TechId }
   | { c: 'upcancel'; b: number }
   | { c: 'sell'; b: number }
-  | { c: 'buy'; b: number; r: 'holz' | 'lehm' }
+  | { c: 'buy'; b: number; r: 'holz' | 'lehm' | 'getreide' }
   | { c: 'auto'; b: number; on: boolean }
   | { c: 'rally'; b: number; x: number; y: number }
   | { c: 'resign' };
