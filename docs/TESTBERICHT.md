@@ -79,8 +79,11 @@ weiter entfernt und zieht bei Holzmangel Arbeiter von vollen Höfen ab.
 `node e2e/showcase-maps.mjs` startet jede der sechs Karten im echten Spiel (WebGL), lässt die KI 5 Minuten aufbauen und
 speichert je ein Bild der Startsiedlung und eine aufgedeckte Übersicht. Geprüft wurden u. a. Förde zwischen
 Glücksburg und Gravenstein, Danewerk als durchgehender Wall mit Toren, Eider mit Mooren und Rendsburger Insel,
-Deiche, Gräben und Watt in der Marsch, Wattenmeer und Heide bei Ribe. Die Geografie wurde **nicht** mit Google Maps
-abgeglichen (im Container nicht abrufbar); Grundlage sind bekannte Ortskoordinaten, auf etwa ±2 km genau.
+Deiche, Gräben und Watt in der Marsch, Wattenmeer und Heide bei Ribe. **Abgleich mit TomTom:** 35 Ortslagen per Geocoding geprüft; korrigiert wurden u. a. Gråsten (≈2 km),
+Hohner See (≈3 km falsch nördlich), Audorfer See (≈3,5 km falsch südlich) und das Westende des Danewerks
+(Hollingstedt). Per Rückwärtssuche (Land = Gemeinde, Watt/See = keine Gemeinde) geprüft: 50 Punkte in der Marsch und
+12 an der Förde. Dabei fiel auf, dass die Förde in meiner Karte über die Halbinsel Holnis lief – jetzt korrigiert. Für die
+dänische Küste ist diese Prüfung nicht möglich (dänische Gemeinden reichen ins Meer).
 
 
 ## 3a. Balance der Parteien (KI gegen KI, einmalige Auswertung)

@@ -380,7 +380,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Flensburger Förde
   foerde: (p) => {
-    const S0: [number, number] = [9.57, 54.83], S1: [number, number] = [9.6, 54.905], M: [number, number] = [9.425, 54.79], F: [number, number] = [9.36, 54.84];
+    // Koordinaten per TomTom-Geocoding geprüft (Glücksburg, Gråsten, Flensburg)
+    const S0: [number, number] = [9.547, 54.834], S1: [number, number] = [9.594, 54.922], M: [number, number] = [9.433, 54.785], F: [number, number] = [9.36, 54.84];
     p.fit([S0, S1, M, F, [9.7, 54.86]]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     p.each((x, y, _u, _v, i) => {
@@ -388,11 +389,13 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.terrain[i] = lon > 9.76 + (p.n1(x, y) - 0.5) * 0.05 ? T.WASSER : T.GRAS;
     });
     // Förde: von Flensburg (Spitze) nach Norden, dann nach Osten aufweitend
-    p.river([L(9.435, 54.795), L(9.455, 54.815), L(9.48, 54.84), L(9.53, 54.857)], 3, T.WASSER, 0.8);
-    p.river([L(9.53, 54.857), L(9.6, 54.868)], 4, T.WASSER, 0.8);
-    p.river([L(9.6, 54.868), L(9.68, 54.862), L(9.76, 54.858), L(9.9, 54.855)], 6, T.WASSER, 1.5);
-    const holnis = L(9.585, 54.862);
-    p.blob(holnis.x, holnis.y, 1.8, (x, y) => p.set(x, y, T.GRAS), 0.5);
+    // Innenförde nach Nordost, nördlich um Holnis herum, dann die breite Außenförde nach Osten
+    // (Wasser-/Landpunkte per TomTom-Rückwärtssuche geprüft: Holnis ist Land, die Rinne liegt bei 54,88° N)
+    p.river([L(9.435, 54.795), L(9.455, 54.815), L(9.48, 54.84), L(9.525, 54.862)], 3, T.WASSER, 0.8);
+    p.river([L(9.525, 54.862), L(9.57, 54.878), L(9.61, 54.885)], 3.6, T.WASSER, 0.6);
+    p.river([L(9.61, 54.885), L(9.64, 54.865), L(9.7, 54.852), L(9.8, 54.85), L(9.9, 54.85)], 6.5, T.WASSER, 1.5);
+    const holnis = L(9.592, 54.864);
+    p.blob(holnis.x, holnis.y, 2, (x, y) => p.set(x, y, T.GRAS), 0.5);
     for (const [lon, lat, r] of [[9.52, 54.815, 3], [9.47, 54.865, 3], [9.65, 54.905, 2.6], [9.63, 54.82, 2.8], [9.38, 54.78, 2.6], [9.42, 54.88, 2.4]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     return {
@@ -408,8 +411,9 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Danewerk / Schleswig
   danewerk: (p) => {
-    const S0: [number, number] = [9.476, 54.53], S1: [number, number] = [9.508, 54.405], M: [number, number] = [9.47, 54.474], H: [number, number] = [9.56, 54.488];
-    p.fit([S0, S1, M, H, [9.37, 54.47]]);
+    // Koordinaten per TomTom-Geocoding geprüft (Schuby, Kropp, Haddeby, Hollingstedt, Dannewerk)
+    const S0: [number, number] = [9.48, 54.518], S1: [number, number] = [9.513, 54.411], M: [number, number] = [9.47, 54.474], H: [number, number] = [9.565, 54.493];
+    p.fit([S0, S1, M, H, [9.36, 54.46]]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     p.each((x, y, _u, _v, i) => {
       const { lon } = p.lonlat(x, y);
@@ -428,12 +432,12 @@ const PAINTERS: Record<MapId, MapPainter> = {
     for (const [lon, lat, r] of [[9.42, 54.55, 3], [9.42, 54.41, 3]] as const) p.paintBlob(L(lon, lat).x, L(lon, lat).y, r, T.MOOR, [T.GRAS, T.HEIDE]);
     for (const [lon, lat, r] of [[9.6, 54.43, 3.6], [9.64, 54.46, 2.6], [9.53, 54.55, 2.6], [9.45, 54.42, 2.6], [9.43, 54.56, 2.4], [9.57, 54.41, 2.4]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
-    const wallPts = [L(9.3, 54.462), L(9.38, 54.466), L(9.43, 54.471), L(9.5, 54.477), L(9.556, 54.481)];
+    const wallPts = [L(9.336, 54.457), L(9.4, 54.465), L(9.47, 54.474), L(9.51, 54.482), L(9.558, 54.488)];
     return {
       slots: [L(...S0), L(...S1), L(9.6, 54.56), L(9.38, 54.39)],
       market: L(...M), site: L(...H),
       labels: [
-        { name: 'Schleswig', ...L(9.6, 54.522) }, { name: 'Schlei', ...L(9.68, 54.525) },
+        { name: 'Schleswig', ...L(9.585, 54.522) }, { name: 'Hollingstedt', ...L(9.34, 54.45) }, { name: 'Schlei', ...L(9.68, 54.525) },
         { name: 'Danewerk', ...L(9.41, 54.478) }, { name: 'Hüttener Berge', ...L(9.62, 54.42) }, { name: 'Rheider Au', ...L(9.37, 54.53) },
       ],
       lines: [{ kind: 'wall', pts: wallPts, gates: [L(9.4, 54.468), { ...L(9.47, 54.474), r: 3 }] }],
@@ -443,7 +447,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Eider und Rendsburg
   eider: (p) => {
-    const S0: [number, number] = [9.6, 54.385], S1: [number, number] = [9.655, 54.225], R: [number, number] = [9.665, 54.302], G: [number, number] = [9.45, 54.296];
+    // Koordinaten per TomTom-Geocoding geprüft (Owschlag, Jevenstedt, Rendsburg, Hohn, Hohner und Audorfer See)
+    const S0: [number, number] = [9.601, 54.392], S1: [number, number] = [9.664, 54.232], R: [number, number] = [9.664, 54.303], G: [number, number] = [9.45, 54.296];
     p.fit([S0, S1, R, G]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     const lowland = (x: number, y: number) => Math.abs(p.lonlat(x, y).lat - 54.303) < 0.022 + (p.n1(x, y) - 0.5) * 0.014;
@@ -453,7 +458,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
     });
     const eider = [L(9.9, 54.31), L(9.78, 54.305), L(9.7, 54.3), L(9.64, 54.305), L(9.56, 54.3), L(9.48, 54.308), L(9.4, 54.3), L(9.3, 54.305)];
     p.river(eider, 3, T.WASSER, 1.4);
-    const hs = L(9.49, 54.33), as = L(9.73, 54.288);
+    const hs = L(9.47, 54.307), as = L(9.705, 54.317);
     p.blob(hs.x, hs.y, 2.6, (x, y) => p.set(x, y, T.WASSER), 1.5);
     p.blob(as.x, as.y, 2, (x, y) => p.set(x, y, T.WASSER), 1.2);
     // Rendsburg: Insel mit Brücken nach Nord und Süd
@@ -469,7 +474,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
       slots: [L(...S0), L(...S1), L(9.48, 54.39), L(9.8, 54.24)],
       market: rb, site: L(...G),
       labels: [
-        { name: 'Eider', ...L(9.56, 54.312) }, { name: 'Rendsburg', ...L(9.665, 54.316) }, { name: 'Hohner See', ...L(9.49, 54.345) },
+        { name: 'Eider', ...L(9.56, 54.312) }, { name: 'Rendsburg', ...L(9.665, 54.316) }, { name: 'Hohner See', ...L(9.47, 54.318) }, { name: 'Audorfer See', ...L(9.71, 54.33) },
         { name: 'Schleswig', ...L(9.68, 54.37) }, { name: 'Holstein', ...L(9.6, 54.26) },
       ],
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : lowland(x, y) ? 'graben' : 'knick'),
@@ -479,12 +484,13 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Nordfriesische Marsch
   marsch: (p) => {
-    const S0: [number, number] = [9.065, 54.478], S1: [number, number] = [8.95, 54.33], M: [number, number] = [8.93, 54.378], Rh: [number, number] = [8.775, 54.432];
+    // Koordinaten per TomTom-Geocoding geprüft; Küstenverlauf per Rückwärtssuche (Watt gehört zu keiner Gemeinde)
+    const S0: [number, number] = [9.058, 54.484], S1: [number, number] = [8.94, 54.322], M: [number, number] = [8.94, 54.372], Rh: [number, number] = [8.775, 54.432];
     p.fit([S0, S1, M, Rh, [8.79, 54.33], [8.7, 54.46]]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     const land: [number, number][] = [
-      [9.3, 54.7], [9.0, 54.7], [8.98, 54.52], [9.03, 54.49], [8.98, 54.45], [8.9, 54.43], [8.75, 54.4], [8.62, 54.38],
-      [8.6, 54.33], [8.66, 54.29], [8.8, 54.3], [8.92, 54.3], [8.98, 54.31], [9.05, 54.29], [9.3, 54.27],
+      [9.3, 54.7], [8.9, 54.7], [8.9, 54.56], [8.87, 54.53], [8.95, 54.505], [9.03, 54.49], [8.97, 54.455], [8.93, 54.43], [8.75, 54.415], [8.69, 54.39], [8.685, 54.365],
+      [8.61, 54.33], [8.62, 54.3], [8.66, 54.285], [8.8, 54.3], [8.92, 54.3], [8.98, 54.31], [9.05, 54.29], [9.3, 54.27],
     ];
     const nordstrand: [number, number][] = [[8.78, 54.53], [8.9, 54.53], [8.93, 54.49], [8.84, 54.465], [8.76, 54.48]];
     const pellworm: [number, number][] = [[8.6, 54.55], [8.69, 54.55], [8.7, 54.5], [8.62, 54.49]];
@@ -502,7 +508,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
     p.river([L(8.97, 54.462), L(8.85, 54.445), L(8.7, 54.44), L(8.5, 54.45)], 1.6, T.WASSER, 2);
     p.river([L(9.0, 54.302), L(8.9, 54.288), L(8.75, 54.28), L(8.5, 54.27)], 2.4, T.WASSER, 1.5);
     p.river([L(9.3, 54.285), L(9.08, 54.292), L(9.0, 54.302)], 2.2, T.WASSER, 0.8);
-    p.river([L(9.2, 54.47), L(9.1, 54.473), L(9.03, 54.48)], 1.3, T.WASSER, 0.5);
+    p.river([L(9.2, 54.466), L(9.1, 54.468), L(9.035, 54.472)], 1.3, T.WASSER, 0.5);
     for (const [lon, lat, r] of [[9.1, 54.5, 3], [9.06, 54.36, 3], [9.12, 54.42, 2.6], [9.1, 54.55, 2.4], [8.88, 54.37, 2], [9.0, 54.4, 2]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     const dike = (pts: [number, number][]) => ({ kind: 'deich' as const, pts: pts.map(([lo, la]) => L(lo, la)) });
@@ -514,7 +520,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
         { name: 'Pellworm', ...L(8.65, 54.525) }, { name: 'Eider', ...L(8.9, 54.283) }, { name: 'Hever', ...L(8.85, 54.45) },
       ],
       lines: [
-        { ...dike([[8.965, 54.52], [8.985, 54.48], [8.93, 54.447], [8.8, 54.417], [8.67, 54.391], [8.63, 54.35], [8.67, 54.311], [8.85, 54.311], [8.97, 54.322], [9.06, 54.31]]), gates: [L(8.79, 54.415), L(8.94, 54.448)] },
+        { ...dike([[8.94, 54.515], [9.0, 54.483], [8.95, 54.443], [8.8, 54.42], [8.7, 54.394], [8.672, 54.362], [8.63, 54.33], [8.67, 54.3], [8.85, 54.311], [8.97, 54.322], [9.06, 54.31]]), gates: [L(8.79, 54.415), L(8.94, 54.448)] },
         dike([[8.95, 54.43], [8.92, 54.38], [8.9, 54.335]]),
       ],
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : p.lonlat(x, y).lon < 9.03 ? 'graben' : 'knick'),
@@ -524,7 +530,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
 
   // ---------------------------------------------------------------- Ribe und Kongeå (Südwestjütland)
   ribe: (p) => {
-    const S0: [number, number] = [8.52, 55.655], S1: [number, number] = [8.87, 54.958], M: [number, number] = [8.77, 55.345], G: [number, number] = [9.0, 55.28];
+    // Koordinaten per TomTom-Geocoding geprüft (Varde, Tønder, Ribe, Esbjerg, Fanø, Rømø, Mandø, Højer)
+    const S0: [number, number] = [8.49, 55.65], S1: [number, number] = [8.867, 54.958], M: [number, number] = [8.765, 55.342], G: [number, number] = [9.0, 55.28];
     p.fit([S0, S1, M, G]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     // Küstenlinie (Länge je Breite) und Marschsaum
@@ -553,18 +560,18 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.blob(c.x, c.y, r, (x, y) => p.set(x, y, T.GRAS), 1);
     };
     isle(8.41, 55.42, 3);
-    isle(8.53, 55.13, 3);
-    isle(8.565, 55.28, 1.4);
+    isle(8.545, 55.12, 3);
+    isle(8.54, 55.275, 1.4);
     // Varde Å, Kongeå (Grenzfluss), Ribe Å, Vidå
     p.river([L(8.7, 55.62), L(8.58, 55.625), L(8.5, 55.62), L(8.4, 55.6)], 1.6, T.WASSER, 1);
     p.river([L(9.2, 55.42), L(8.95, 55.41), L(8.8, 55.4), L(8.66, 55.39), L(8.55, 55.39)], 2.2, T.WASSER, 1.2);
     p.river([L(8.95, 55.325), L(8.8, 55.33), L(8.7, 55.33), L(8.58, 55.32)], 1.5, T.WASSER, 1);
-    p.river([L(9.05, 54.93), L(8.9, 54.93), L(8.75, 54.935), L(8.6, 54.94)], 1.5, T.WASSER, 1);
+    p.river([L(9.05, 54.926), L(8.9, 54.926), L(8.75, 54.932), L(8.6, 54.94)], 1.5, T.WASSER, 1);
     for (const [lon, lat] of [[8.74, 55.395], [8.98, 55.41]] as const) {
       const f = L(lon, lat);
       p.ford({ x: f.x - 4, y: f.y - 4 }, { x: f.x + 4, y: f.y + 4 });
     }
-    for (const [lon, lat] of [[8.77, 55.33], [8.86, 54.932], [8.5, 55.62]] as const) {
+    for (const [lon, lat] of [[8.77, 55.33], [8.86, 54.928], [8.5, 55.62]] as const) {
       const f = L(lon, lat);
       p.ford({ x: f.x - 3, y: f.y - 3 }, { x: f.x + 3, y: f.y + 3 });
     }

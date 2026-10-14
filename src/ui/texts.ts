@@ -16,9 +16,9 @@ zwischen Rendsburg an der Eider und Esbjerg in Südwestjütland.</p>
 <ul>
 ${MAP_IDS.map((m) => `<li><b>${MAP_INFO[m].name}</b> (${MAP_INFO[m].region}): ${MAP_INFO[m].desc}<br><span class="note"><i>Freiheiten:</i> ${MAP_INFO[m].liberties}</span></li>`).join('\n')}
 </ul>
-<p class="note">Die Lage der Orte, Flüsse und Küsten beruht auf bekannten Koordinaten (Länge/Breite, auf etwa ±2 km genau)
-aus allgemeinem geografischem Wissen; ein direkter Abgleich mit Google Maps oder OpenStreetMap war bei der Erstellung
-nicht möglich. Jede Karte wird maßstabstreu (Norden oben) in die Spielfläche eingepasst. Anschließend gleicht das Spiel
+<p class="note">Die Lage der Orte und Seen wurde mit dem TomTom-Kartendienst geprüft und korrigiert, ebenso der
+Verlauf der Flensburger Förde und die Küste von Eiderstedt und Husum. Flussläufe und die dänische Küste beruhen auf
+allgemeinem Kartenwissen. Jede Karte wird maßstabstreu (Norden oben) in die Spielfläche eingepasst. Anschließend gleicht das Spiel
 Wege, Holz, Acker, Lehm und Fischgründe der beiden Startplätze aus: Markt und Fundstelle werden so verschoben, dass
 beide Seiten etwa gleich weit laufen, Waldstücke und Ackerland werden angeglichen, und Startplätze ohne Ufer erhalten
 einen Fischteich. Dadurch weichen einzelne Orte von ihrer echten Lage ab.</p>

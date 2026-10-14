@@ -82,8 +82,11 @@ Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedl
 | **Ribe und Kongeå** | Varde / Tønder | Ochsenmarkt Ribe | Grabhügel auf der Heide | Wattenmeer mit Fanø und Rømø, Heide, Kongeå mit Furten |
 | **Zufallskarte** | zufällige Orte der Region | Markt in einem zufälligen Ort | Hünengrab, Runenstein, Opfermoor … | bei jedem Start neu: Startachse, Küste (ggf. mit Watt und Deich), Fluss mit Furten, Seen, Moore, Heide, Knicks oder Gräben |
 
-Die Orte wurden nach bekannten Koordinaten (etwa ±2 km genau) maßstabstreu und mit Norden oben eingepasst; ein Abgleich
-mit Google Maps war bei der Erstellung nicht möglich. Damit keine Seite bevorzugt wird, gleicht der Generator danach aus:
+Die Ortslagen (Startorte, Märkte, Seen, Danewerk-Endpunkte) wurden mit dem TomTom-Kartendienst geprüft und
+korrigiert, ebenso der Verlauf der Flensburger Förde um Holnis und die Küstenlinie von Eiderstedt und Husum
+(Rückwärtssuche: Watt und offene See gehören dort zu keiner Gemeinde). Flussläufe und die dänische Küste stammen
+weiterhin aus allgemeinem Kartenwissen, weil die dänischen Gemeindeflächen bis ins Meer reichen und sich so nicht
+abtasten lassen. Die Karten sind maßstabstreu und mit Norden oben eingepasst. Damit keine Seite bevorzugt wird, gleicht der Generator danach aus:
 Markt und Fundstelle liegen für beide gleich weit entfernt (gemessen als Laufweg), Holz und Acker in Reichweite werden
 angeglichen, jeder Startplatz hat Lehmboden, und Startplätze ohne Ufer bekommen einen Fischteich. Die Abweichungen von
 der echten Geografie sind im Spiel unter *Hintergrund & Quellen* je Karte gekennzeichnet. Im Mehrspieler wählt der Host
