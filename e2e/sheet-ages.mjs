@@ -16,6 +16,7 @@ await p.evaluate(async (what) => {
   const col = S.PLAYER_COLORS[1];
   if (what === 'buildings') {
     const rows = [
+      ['Speicher', [['speicher', 1], ['speicher', 2], ['speicher', 3], ['speicher', 4]]],
       ['18. Jh.', [['manufaktur', 2], ['hafen', 2], ['schanze', 2], ['meierei', 1], ['gestuet', 1], ['salzsiederei', 1], ['zollhaus', 1]]],
       ['20. Jh.', [['dorfzentrum', 3], ['wohnhaus', 3], ['kaserne', 3], ['markt', 3], ['bahnhof', 3], ['fabrik', 3], ['bunker', 3]]],
       ['22. Jh.', [['dorfzentrum', 4], ['wohnhaus', 4], ['kaserne', 4], ['markt', 4], ['vertikalfarm', 4], ['gezeitenwerk', 4], ['schildturm', 4]]],

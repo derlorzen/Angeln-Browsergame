@@ -11,7 +11,7 @@ import type { Building, Unit } from '../src/sim/types';
 import { World } from '../src/sim/world';
 
 const mk = (seed = 777) =>
-  new World({ seed, richStart: true, players: [
+  new World({ seed, richStart: true, storageLimit: false, players: [
     { name: 'A', color: 0, slot: 0, isAI: false }, { name: 'B', color: 1, slot: 1, isAI: false }] });
 const run = (w: World, secs: number) => {
   for (let i = 0; i < secs * RULES.tickRate; i++) w.step();

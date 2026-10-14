@@ -174,6 +174,8 @@ try {
     // Voraussetzungen direkt setzen (zwei fertige Gebäude), dann Dorfzentrum wählen
     w.addBuilding('markt', 0, dz.x + 5, dz.y - 6, true);
     w.addBuilding('kaserne', 0, dz.x - 6, dz.y + 5, true);
+    // Vorräte innerhalb der Lagergrenze (Dorfzentrum Stufe II: 550)
+    w.players[0].res = { holz: 540, getreide: 540, fisch: 300, lehm: 540, waren: 0, taler: 2000 };
     G.driver.tick();
     G.selected.clear();
     G.selected.add([...c.buildings.values()].find((b) => b.o === c.me && b.t === 'dorfzentrum').i);

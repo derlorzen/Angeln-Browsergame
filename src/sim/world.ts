@@ -1,7 +1,7 @@
 // Maßgebliche Simulation. Läuft mit festen Takten (RULES.tickRate) und kennt kein DOM.
 // Alle Spieleraktionen – Mensch, KI, Netzwerkgast – laufen über queueCommand() und werden hier geprüft.
 import {
-  BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, RES, RULES, UNITS, UPGRADES, costText, isBuildingType, isUnitType, levelDef, levelFx,
+  BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, RES, RES_NAME, RULES, UNITS, UPGRADES, costText, isBuildingType, isUnitType, levelDef, levelFx,
   type BuildingDef, type BuildingType, type Cost, type Res, type UnitDef, type UnitType,
 } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
@@ -30,6 +30,8 @@ export interface WorldOptions {
   players: PlayerSetup[];
   prestigeGoal?: number;
   richStart?: boolean;
+  /** Lagergrenzen (Standard an; Tests mit großen Vorräten schalten sie ab) */
+  storageLimit?: boolean;
 }
 
 const withBonus = (r: Record<Res, number>, b?: Cost): Record<Res, number> => {
@@ -76,6 +78,8 @@ export class World {
   private cells: Unit[][] = [];
   private cellsW: number;
   private attackedNote: number[] = [];
+  /** letzte „Speicher voll“-Meldung je Spieler und Rohstoff (nur Meldungsdrossel) */
+  private fullNote = new Map<string, number>();
   readonly opts: WorldOptions;
 
   constructor(opts: WorldOptions, skipSetup = false) {
@@ -103,7 +107,7 @@ export class World {
       this.players.push({
         id, name: ps.name, color: ps.color, slot: ps.slot, res: withBonus(start, FACTION_DEFS[ps.faction ?? 'angeln'].startBonus), prestige: 0, defeated: false,
         isAI: ps.isAI, aiLevel: ps.aiLevel ?? 'normal', faction: ps.faction ?? 'angeln',
-        stats: { gathered: zeroRes(), trained: 0, lost: 0, kills: 0, built: 0, sold: 0 }, pop: 0, popCap: 0,
+        stats: { gathered: zeroRes(), trained: 0, lost: 0, kills: 0, built: 0, sold: 0 }, pop: 0, popCap: 0, cap: 0,
         age: 1, techs: [],
       });
       this.vis.push(new Uint8Array(N));
@@ -547,6 +551,21 @@ export class World {
         }
         break;
       }
+      case 'demolish': {
+        const b = this.ownedBuilding(p, cmd.b);
+        if (!b) return;
+        if (!b.built) return this.applyCommand(p, { c: 'cancel', b: b.id });
+        if (b.type === 'dorfzentrum') return this.err(p, 'Das Dorfzentrum kann nicht abgerissen werden.');
+        if (b.up >= 0) return this.err(p, 'Erst das laufende Vorhaben abbrechen.');
+        for (const u of b.queue) this.refund(p, this.ud(p, u).cost, 1);
+        b.queue = [];
+        const f = RULES.demolishRefund * Math.max(0, b.hp / b.maxHp);
+        this.refund(p, this.bd(p, b.type).cost, f);
+        this.emit({ e: 'die', x: b.x + b.w / 2, y: b.y + b.h / 2, u: 0, o: p });
+        this.removeBuilding(b, false);
+        this.emit({ e: 'info', p, msg: `${this.bd(p, b.type).name} abgerissen – ${Math.round(f * 100)} % der Baukosten erstattet.` });
+        break;
+      }
       case 'sell': {
         const b = this.ownedBuilding(p, cmd.b);
         if (!b || b.type !== 'markt' || !b.built) return;
@@ -558,14 +577,16 @@ export class World {
         if (!b || b.type !== 'markt' || !b.built || (cmd.r !== 'holz' && cmd.r !== 'lehm' && cmd.r !== 'getreide')) return;
         const price = this.buyPrice(p);
         if (pl.res.taler < price) return this.err(p, `Zu wenig Taler (${price} nötig).`);
+        if (this.isFull(p, cmd.r)) return this.err(p, `Speicher voll: ${RES_NAME[cmd.r]}.`);
         pl.res.taler -= price;
         pl.res[cmd.r] += RULES.marketBuy.amount;
         break;
       }
       case 'auto': {
         const b = this.ownedBuilding(p, cmd.b);
-        if (!b || b.type !== 'markt') return;
-        b.autoSell = !!cmd.on;
+        if (!b) return;
+        if (b.type === 'markt') b.autoSell = !!cmd.on;
+        else if (BUILDINGS[b.type].process) b.halt = !cmd.on;
         break;
       }
       case 'rally': {
@@ -723,6 +744,7 @@ export class World {
     this.separate();
     this.cleanupDead();
     this.updatePop();
+    this.clampStorage();
     if (this.tick % 5 === 0) this.updateBrarup();
     if (this.tick % 5 === 2) this.checkMoor();
     if (this.tick % 2 === 0) this.updateVisibility();
@@ -730,16 +752,45 @@ export class World {
     this.tick++;
   }
 
+  /** Lagerplatz für Rohstoff r; Taler sind unbegrenzt. */
+  capOf(p: number, r: Res): number {
+    return r === 'taler' || this.opts.storageLimit === false ? Infinity : this.players[p].cap;
+  }
+  isFull(p: number, r: Res): boolean {
+    return this.players[p].res[r] >= this.capOf(p, r);
+  }
+  /** Überschuss über den Lagerplatz verfällt; der Spieler erhält höchstens alle 30 s eine Meldung je Rohstoff. */
+  private clampStorage(): void {
+    if (this.opts.storageLimit === false) return;
+    for (const pl of this.players) {
+      if (pl.defeated) continue;
+      for (const r of RES) {
+        if (r === 'taler' || pl.res[r] <= pl.cap) continue;
+        pl.res[r] = pl.cap;
+        const k = `${pl.id}:${r}`;
+        if (this.tick - (this.fullNote.get(k) ?? -1e9) > 300) {
+          this.fullNote.set(k, this.tick);
+          this.emit({ e: 'info', p: pl.id, msg: `Speicher voll: ${RES_NAME[r]} (${pl.cap}). Speicher bauen, das Dorfzentrum ausbauen oder Vorräte verbrauchen.` });
+        }
+      }
+    }
+  }
+
   updatePop(): void {
     for (const p of this.players) {
       p.pop = 0;
       p.popCap = 0;
+      p.cap = 0;
     }
     for (const e of this.ents.values()) {
       if (e.owner < 0) continue;
       const p = this.players[e.owner];
       if (e.kind === 'u') p.pop += UNITS[e.type].pop;
-      else if (e.built) p.popCap += (this.bdl(e).popCap ?? 0) + (e.type === 'wohnhaus' ? this.tfx(e.owner).popPer : 0);
+      else if (e.built) {
+        const d = this.bdl(e);
+        p.popCap += (d.popCap ?? 0) + (e.type === 'wohnhaus' ? this.tfx(e.owner).popPer : 0);
+        p.cap += d.storage ?? 0;
+      }
     }
     for (const p of this.players) p.popCap = Math.min(p.popCap, RULES.maxPop);
   }
@@ -880,6 +931,10 @@ export class World {
         if (b.type === 'bauernhof') rate *= Math.min(1, Math.max(0.34, b.fields.length / 3));
         b.status = b.staff.length ? `${b.staff.length}/${def.staffSlots} Arbeiter` : 'Keine Arbeiter – Arbeiter per Rechtsklick zuweisen';
       } else b.status = 'Fängt Fisch';
+      if (this.isFull(b.owner, def.produce.res)) {
+        rate = 0;
+        b.status = `Speicher voll (${RES_NAME[def.produce.res]})`;
+      }
       b.active = rate > 0;
       b.timer += DT * rate * (this.tfx(b.owner).produce[b.type] ?? 1);
       if (b.timer >= def.produce.time) {
@@ -891,7 +946,15 @@ export class World {
     // Verarbeitung
     if (def.process) {
       if (!b.active) {
-        if (this.canAfford(b.owner, def.process.input)) {
+        const res = pl.res;
+        // Die KI hält ihre Reserven selbst zurück (ai.ts, leaves()); die feste Reserve gilt nur für Menschen.
+        const keep = pl.isAI ? undefined : (Object.keys(def.process.input) as Res[]).find((r) => res[r] - (def.process!.input[r] ?? 0) < (RULES.processReserve[r] ?? 0));
+        const full = (Object.keys(def.process.output) as Res[]).find((r) => this.isFull(b.owner, r));
+        if (b.halt) b.status = 'Angehalten – verbraucht nichts';
+        else if (full) b.status = `Speicher voll (${RES_NAME[full]})`;
+        else if (keep && this.canAfford(b.owner, def.process.input))
+          b.status = `Wartet: hält ${RULES.processReserve[keep]} ${RES_NAME[keep]} als Reserve zurück`;
+        else if (this.canAfford(b.owner, def.process.input)) {
           this.pay(b.owner, def.process.input);
           b.active = true;
           b.timer = 0;
@@ -1568,6 +1631,7 @@ export class World {
       p.faction ??= 'angeln';
       p.age ??= 1;
       p.techs ??= [];
+      p.cap ??= 0;
     }
     w.map.trees.set(ub(d.trees));
     w.vis = d.vis.map(ub);

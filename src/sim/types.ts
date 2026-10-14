@@ -63,6 +63,8 @@ export interface Building {
   staff: number[];
   rally: { x: number; y: number } | null;
   autoSell: boolean;
+  /** Verarbeitung angehalten (Mühle & Co. verbrauchen dann nichts) */
+  halt?: boolean;
   cd: number;
   lvl: number; // Ausbaustufe 1..3
   up: number; // Fortschritt des laufenden Vorhabens in Sekunden, -1 = keins
@@ -97,6 +99,8 @@ export interface PlayerState {
   stats: PlayerStats;
   pop: number;
   popCap: number;
+  /** Lagerplatz je Rohstoff (Taler unbegrenzt) */
+  cap: number;
   age: number; // 1 = 17. Jh. … 4 = 22. Jh.
   techs: TechId[];
 }
@@ -136,6 +140,7 @@ export type Command =
   | { c: 'age'; b: number }
   | { c: 'research'; b: number; t: TechId }
   | { c: 'upcancel'; b: number }
+  | { c: 'demolish'; b: number }
   | { c: 'sell'; b: number }
   | { c: 'buy'; b: number; r: 'holz' | 'lehm' | 'getreide' }
   | { c: 'auto'; b: number; on: boolean }

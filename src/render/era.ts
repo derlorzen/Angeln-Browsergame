@@ -20,15 +20,61 @@ export const ERA_SIZE: Partial<Record<BuildingType, { n: number; top: number }>>
   bahnhof: { n: 3, top: 104 }, fabrik: { n: 3, top: 150 }, bunker: { n: 2, top: 44 },
   vertikalfarm: { n: 2, top: 170 }, gezeitenwerk: { n: 2, top: 84 }, schildturm: { n: 2, top: 160 },
   meierei: { n: 2, top: 66 }, gestuet: { n: 3, top: 70 }, salzsiederei: { n: 2, top: 70 }, zollhaus: { n: 2, top: 84 },
+  speicher: { n: 2, top: 86 },
 };
 /** Höhe der modernen Fassungen alter Gebäude */
 export function eraTop(type: BuildingType, age: number): number | undefined {
+  if (type === 'speicher') return age >= 4 ? 120 : age >= 3 ? 110 : undefined;
   if (age < 3) return undefined;
   const m: Partial<Record<BuildingType, number>> = age >= 4
     ? { dorfzentrum: 150, wohnhaus: 70, kaserne: 80, markt: 70 }
     : { dorfzentrum: 140, wohnhaus: 70, kaserne: 80, markt: 72 };
   return m[type];
 }
+
+/** Stehender Rundsilo mit Schattierung und Deckel. */
+const silo = (g: Ctx, iso: Iso, x: number, y: number, r: number, h: number, col: string, top: string) => {
+  const p = iso.p(x, y);
+  const rx = r * (TW / 2) * S * 1.42, ry = rx * 0.5;
+  const gr = g.createLinearGradient(p[0] - rx, 0, p[0] + rx, 0);
+  gr.addColorStop(0, shade(col, 0.12));
+  gr.addColorStop(0.55, col);
+  gr.addColorStop(1, shade(col, -0.3));
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.beginPath();
+  g.ellipse(p[0] + 4, p[1] + 2, rx * 1.1, ry * 1.1, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = gr;
+  g.beginPath();
+  g.ellipse(p[0], p[1], rx, ry, 0, 0, Math.PI);
+  g.lineTo(p[0] - rx, p[1] - h);
+  g.ellipse(p[0], p[1] - h, rx, ry, 0, Math.PI, 0, true);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = 'rgba(30,30,30,0.35)';
+  g.lineWidth = 0.7;
+  for (let k = 1; k < 5; k++) {
+    g.beginPath();
+    g.ellipse(p[0], p[1] - (h * k) / 5, rx, ry, 0, 0, Math.PI);
+    g.stroke();
+  }
+  g.fillStyle = top;
+  g.beginPath();
+  g.ellipse(p[0], p[1] - h, rx, ry, 0, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+};
+const sack = (g: Ctx, x: number, y: number) => {
+  g.fillStyle = '#d8c69a';
+  g.beginPath();
+  g.ellipse(x, y - 3, 4.5, 3.5, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(90,70,40,0.6)';
+  g.lineWidth = 0.7;
+  g.stroke();
+  g.fillStyle = '#b8a070';
+  g.fillRect(x - 1, y - 8, 2, 2);
+};
 
 const sandbags = (g: Ctx, iso: Iso, pts: [number, number][]) => {
   for (const [x, y] of pts) {
@@ -555,6 +601,75 @@ export function drawEra(type: BuildingType, age: number, x: EraCtx): boolean {
       tinyPerson(g, ...iso.p(1.75, 1.3), '#7a2a1e', '#2a2a2a', 21);
       const fp = iso.p(0.8, 0.8, 50);
       banner(fp[0], fp[1], 20, 2);
+      return true;
+    }
+    case 'speicher': {
+      if (age >= 4) {
+        // Hochregal-Lager mit zwei Kuppelsilos
+        pavement(g, iso, 2, '#d4d8d6', 281);
+        shadowDiamond(g, iso, 0.2, 0.2, 1.3, 1.85);
+        const f = boxFaces(iso, 0.2, 0.2, 1.25, 1.85, 0, 30);
+        W(f.left, 'paneel', 0.08, 281);
+        W(f.right, 'paneel', -0.15, 282);
+        flatRoof(g, iso, 0.2, 0.2, 1.25, 1.85, 30, '#e6ecec', 2);
+        solarPanels(g, iso, 0.3, 0.3, 1.15, 1.75, 30, 1, 3);
+        silo(g, iso, 1.6, 0.6, 0.32, 70, '#e8eef0', '#c8d4d8');
+        dome(g, iso, 1.6, 0.6, 0.32, 0, '#7fd8e8', true);
+        silo(g, iso, 1.6, 1.45, 0.32, 56, '#e8eef0', '#c8d4d8');
+        const fp = iso.p(0.7, 1.0, 30);
+        banner(fp[0], fp[1], 16, 2);
+        return true;
+      }
+      if (age >= 3) {
+        // Wellblechhalle mit Betonsilo und Förderband
+        pavement(g, iso, 2, '#8a8780', 291);
+        shadowDiamond(g, iso, 0.2, 0.5, 1.4, 1.85);
+        const f = boxFaces(iso, 0.2, 0.5, 1.4, 1.85, 0, 26);
+        W(f.left, 'blech', 0.08, 291);
+        W(f.right, 'blech', -0.15, 292);
+        plankDoor(g, f.left, 0.25, 0.05, 0.75, 0.08, '#5a6a72');
+        roof(g, iso, 0.2, 0.5, 1.4, 1.85, 26, 12, 'x', 'ziegel', 0, 293);
+        silo(g, iso, 1.6, 0.6, 0.34, 88, '#b8b4aa', '#8a8780');
+        const a = iso.p(1.2, 1.0, 30), b = iso.p(1.55, 0.6, 86);
+        g.strokeStyle = '#4a4a4a';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(a[0], a[1]);
+        g.lineTo(b[0], b[1]);
+        g.stroke();
+        car(g, ...iso.p(0.6, 1.95), '#5a7a3a');
+        const fp = iso.p(0.5, 0.9, 44);
+        banner(fp[0], fp[1], 16, 2);
+        return true;
+      }
+      // Fachwerk-Kornspeicher auf Sockel, mit Ladeluke, Kranbalken und Säcken
+      ground(g, iso, 0.05, 0.05, 1.95, 1.95, '#9a8a62');
+      shadowDiamond(g, iso, 0.3, 0.3, 1.6, 1.5);
+      const f = boxFaces(iso, 0.3, 0.3, 1.6, 1.5, 0, 34);
+      W(f.left, age >= 2 ? 'ziegel' : 'fachwerk', 0.08, 301, { sockel: true });
+      W(f.right, age >= 2 ? 'ziegel' : 'fachwerk', -0.15, 302, { sockel: true });
+      plankDoor(g, f.left, 0.36, 0.04, 0.42, 0.08, '#5a3a22');
+      plankDoor(g, f.left, 0.4, 0.62, 0.26, 0.08, '#5a3a22');
+      for (const u of [0.2, 0.65]) window4(g, f.right, u, 0.55, 0.15, 0.18, -0.15);
+      roof(g, iso, 0.3, 0.3, 1.6, 1.5, 34, 26, 'x', age >= 2 ? 'ziegel' : 'reet', 0.2, 303);
+      // Kranbalken mit Seil
+      const k0 = iso.p(0.95, 1.5, 58), k1 = iso.p(0.95, 1.85, 58);
+      g.strokeStyle = '#4a3222';
+      g.lineWidth = 2.4;
+      g.beginPath();
+      g.moveTo(k0[0], k0[1]);
+      g.lineTo(k1[0], k1[1]);
+      g.stroke();
+      g.strokeStyle = '#c8b890';
+      g.lineWidth = 0.8;
+      g.beginPath();
+      g.moveTo(k1[0], k1[1]);
+      g.lineTo(k1[0], k1[1] + 30);
+      g.stroke();
+      for (const [x, y] of [[1.7, 1.75], [1.85, 1.55], [1.55, 1.9], [0.4, 1.8]] as [number, number][]) sack(g, ...iso.p(x, y));
+      cart(g, iso, 1.75, 0.55, 'saecke');
+      const fp = iso.p(0.95, 0.9, 60);
+      banner(fp[0], fp[1], 16, 2);
       return true;
     }
     // ================================================================ moderne Fassungen alter Gebäude

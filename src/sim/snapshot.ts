@@ -37,6 +37,7 @@ export interface BSnap {
   st?: number[];
   ac?: 1;
   as?: 1;
+  ha?: 1;
   r?: [number, number];
   l?: number; // Ausbaustufe (ab II)
   u?: number; // Fortschritt des Vorhabens 0..100 (nur eigene)
@@ -54,6 +55,8 @@ export interface PlayerSnap {
   res?: Record<Res, number>;
   pop?: number;
   popCap?: number;
+  /** Lagerplatz je Rohstoff (fehlt = unbegrenzt) */
+  cap?: number;
   age: number;
   techs?: TechId[];
 }
@@ -123,6 +126,7 @@ export class Snapshotter {
           if (e.status) snap.s = e.status;
           if (e.staff.length) snap.st = e.staff;
           if (e.autoSell) snap.as = 1;
+          if (e.halt) snap.ha = 1;
           if (e.rally) snap.r = [e.rally.x, e.rally.y];
           if (e.up >= 0) {
             snap.u = Math.floor((e.up / world.projectTime(e)) * 100);
@@ -160,6 +164,7 @@ export class Snapshotter {
         ps.res = { ...pl.res };
         ps.pop = pl.pop;
         ps.popCap = pl.popCap;
+        if (world.opts.storageLimit !== false) ps.cap = pl.cap;
       }
       return ps;
     });

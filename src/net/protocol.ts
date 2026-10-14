@@ -6,7 +6,7 @@ import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 4; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter
+export const PROTOCOL_VERSION = 5; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter, 5: Verarbeitung anhalten
 const goalOf = (g: unknown): number => ((RULES.prestigeGoals as readonly number[]).includes(g as number) ? (g as number) : RULES.prestigeGoalDefault);
 
 export interface LobbyPlayer {
@@ -90,6 +90,7 @@ export function validateCommand(raw: unknown): Command | null {
     case 'age':
     case 'upgrade':
     case 'upcancel':
+    case 'demolish':
     case 'sell':
       if (!isInt(c.b, 1, 1e9)) return null;
       return { c: c.c, b: c.b };

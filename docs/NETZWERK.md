@@ -61,7 +61,7 @@ Ein optionaler Komfortmodus mit Raumcode und Signaling-Dienst wäre später erg�
   sichtbare Baumänderungen und sichtbare Ereignisse. Gegnerische Ressourcen und Warteschlangen werden nie gesendet
   (öffentlich ist nur das Prestige als Siegfortschritt). Zuletzt gesehene Gebäude merkt sich der Gast selbst.
 - Darstellung und Simulation sind getrennt: Der Gast interpoliert Positionen zwischen zwei Zuständen.
-- Stabile Objekt-IDs, Protokollversion (`PROTOCOL_VERSION = 1`) im Lobby-Handshake, Nachrichten > 256 kB werden verworfen,
+- Stabile Objekt-IDs, Protokollversion (`PROTOCOL_VERSION`, derzeit 5) im Lobby-Handshake, Nachrichten > 256 kB werden verworfen,
   Sendepuffer > 2 MB wird nicht weiter befüllt (Deltas pausieren, danach Vollzustand).
 - Heartbeat (Ping/Pong). Schließt der Host die Seite, sieht der Gast „Verbindung beendet … keine automatische
   Hostmigration“. Verlässt der Gast die Partie, übernimmt beim Host die KI dessen Siedlung.

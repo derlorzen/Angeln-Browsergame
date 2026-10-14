@@ -5,6 +5,7 @@ import { BUILDINGS, RULES } from '../src/data/defs';
 import { validateCommand } from '../src/net/protocol';
 import { checkPlacement } from '../src/sim/rules';
 import type { Building, Unit } from '../src/sim/types';
+import { Snapshotter } from '../src/sim/snapshot';
 import { World } from '../src/sim/world';
 
 const mk = (faction: 'angeln' | 'schwansen' | 'friesen' | 'daenen' = 'angeln', seed = 777) =>
@@ -129,5 +130,75 @@ describe('Neutraler Markt', () => {
     run(w, 90);
     expect(Math.hypot(sc.x - (m.x + 1.5), sc.y - (m.y + 1.5))).toBeLessThanOrEqual(RULES.brarupRadius);
     expect(w.brarup.controller).toBe(0);
+  });
+});
+
+describe('Verarbeitung', () => {
+  test('Mühle lässt eine Getreidereserve übrig und lässt sich anhalten', () => {
+    const w = mk('daenen');
+    const m = place(w, 'muehle');
+    const res = w.players[0].res;
+    res.getreide = 100;
+    run(w, 200);
+    expect(res.getreide).toBeGreaterThanOrEqual(RULES.processReserve.getreide!);
+    expect(res.getreide).toBeLessThan(RULES.processReserve.getreide! + 4);
+    expect(m.status).toMatch(/Reserve/);
+    res.getreide = 300;
+    w.queueCommand(0, { c: 'auto', b: m.id, on: false });
+    run(w, 30);
+    expect(m.halt).toBe(true);
+    expect(res.getreide).toBeGreaterThanOrEqual(296); // höchstens ein laufender Durchgang
+    const g0 = res.getreide;
+    run(w, 30);
+    expect(res.getreide).toBe(g0);
+    w.queueCommand(0, { c: 'auto', b: m.id, on: true });
+    run(w, 30);
+    expect(res.getreide).toBeLessThan(g0);
+    expect(World.deserialize(w.serialize()).ents.size).toBe(w.ents.size);
+  });
+});
+
+describe('Lager und Abreißen', () => {
+  const mkL = () => new World({ seed: 777, players: [
+    { name: 'A', color: 0, slot: 0, isAI: false, faction: 'daenen' }, { name: 'B', color: 1, slot: 1, isAI: false }] });
+  test('Lagergrenze: Dorfzentrum 400, Speicher +250; Überschuss verfällt mit Meldung, Höfe stoppen', () => {
+    const w = mkL();
+    const pl = w.players[0];
+    expect(pl.cap).toBe(400);
+    pl.res.holz = 1000;
+    pl.res.taler = 5000;
+    w.step();
+    expect(pl.res.holz).toBe(400);
+    expect(pl.res.taler).toBe(5000); // Taler unbegrenzt
+    expect(w.events.some((e) => e.e === 'info' && /Speicher voll: Holz/.test(e.msg))).toBe(true);
+    const sp = place(w, 'speicher');
+    w.updatePop();
+    expect(pl.cap).toBe(650);
+    sp.lvl = 3;
+    w.updatePop();
+    expect(pl.cap).toBe(400 + 600);
+    const hof = place(w, 'bauernhof');
+    pl.res.getreide = pl.cap;
+    const ws = units(w, 0, 'arbeiter').slice(0, 2);
+    w.queueCommand(0, { c: 'staff', ids: ws.map((u) => u.id), t: hof.id });
+    run(w, 30);
+    expect(pl.res.getreide).toBe(pl.cap);
+    expect(hof.status).toMatch(/Speicher voll/);
+    const s = new Snapshotter(0).make(w, true);
+    expect(s.players[0].cap).toBe(pl.cap);
+  });
+  test('Abreißen erstattet die Hälfte, Dorfzentrum nicht; Befehl wird geprüft', () => {
+    const w = mkL();
+    const m = place(w, 'muehle');
+    const holz0 = w.players[0].res.holz;
+    w.queueCommand(0, { c: 'demolish', b: m.id });
+    w.step();
+    expect(w.ents.has(m.id)).toBe(false);
+    expect(w.players[0].res.holz - holz0).toBe(Math.floor((BUILDINGS.muehle.cost.holz ?? 0) * RULES.demolishRefund));
+    const d = dz(w);
+    w.queueCommand(0, { c: 'demolish', b: d.id });
+    w.step();
+    expect(w.ents.has(d.id)).toBe(true);
+    expect(validateCommand({ c: 'demolish', b: 7 })).toEqual({ c: 'demolish', b: 7 });
   });
 });

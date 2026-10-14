@@ -42,6 +42,8 @@ export const BUILDING_TYPES = [
   'gestuet',
   'salzsiederei',
   'zollhaus',
+  // Lager
+  'speicher',
 ] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
 
@@ -84,6 +86,8 @@ export interface BuildingDef {
   faction?: 'angeln' | 'schwansen' | 'friesen' | 'daenen';
   /** Zeitfaktor für die Ausbildung in diesem Gebäude */
   trainMul?: number;
+  /** Lagerplatz je Rohstoff (außer Talern) */
+  storage?: number;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -91,7 +95,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     name: 'Dorfzentrum',
     desc: 'Herz der Siedlung. Bildet Arbeiter aus, nimmt alle Rohstoffe an und verteidigt sich mit Schützen. Wird es zerstört, ist die Partie verloren.',
     w: 3, h: 3, hp: 2000, cost: {}, buildTime: 120, placement: 'normal', buildable: false,
-    popCap: 10, dropoff: ['all'], trains: ['arbeiter'], vision: 9,
+    popCap: 10, dropoff: ['all'], trains: ['arbeiter'], vision: 9, storage: 400,
     attack: { dmg: 7, range: 7, cooldown: 2 },
   },
   wohnhaus: {
@@ -235,6 +239,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     w: 2, h: 2, hp: 700, cost: { holz: 80, lehm: 120 }, buildTime: 30, placement: 'normal', buildable: true, vision: 6,
     produce: { res: 'taler', amount: 1, time: 4, perWorker: false },
   },
+  speicher: {
+    name: 'Speicher',
+    desc: 'Kornboden und Lagerschuppen: +250 Lagerplatz je Rohstoff (Taler ausgenommen). Arbeiter können hier alle Rohstoffe abgeben.',
+    w: 2, h: 2, hp: 500, cost: { holz: 70, lehm: 30 }, buildTime: 22, placement: 'normal', buildable: true, vision: 5,
+    dropoff: ['all'], storage: 250,
+  },
 };
 
 export interface UnitDef {
@@ -353,6 +363,7 @@ export interface LevelFx {
   fields?: number; // zusätzliche Felder (Bauernhof)
   taler?: number; // Talerfaktor beim Verkauf
   vision?: number; // zusätzliche Sicht
+  storage?: number; // zusätzlicher Lagerplatz je Rohstoff
 }
 export interface UpgradeDef {
   name: string; // Name der erreichten Stufe
@@ -366,8 +377,8 @@ export const MAX_LEVEL = 3;
  * Dorfzentrum mindestens derselben Stufe; Stufe III des Dorfzentrums verlangt einen fertigen Markt. */
 export const UPGRADES: Partial<Record<BuildingType, UpgradeDef[]>> = {
   dorfzentrum: [
-    { name: 'Kirchspielort', desc: 'Steinsockel und Glockenturm: +50 % Lebenspunkte, +40 % Schaden, +5 Wohnraum, weitere Sicht. Schaltet Stufe II aller Gebäude frei.', cost: { holz: 200, lehm: 150, taler: 60 }, time: 45, fx: { hp: 1.5, dmg: 1.4, pop: 5, vision: 1 } },
-    { name: 'Marktflecken', desc: 'Backsteinbau mit Wehrgang: doppelte Lebenspunkte, +80 % Schaden, +1 Reichweite, +10 Wohnraum. Benötigt einen fertigen Markt; schaltet Stufe III frei.', cost: { holz: 300, lehm: 250, taler: 180 }, time: 70, fx: { hp: 2, dmg: 1.8, range: 1, pop: 10, vision: 2 } },
+    { name: 'Kirchspielort', desc: 'Steinsockel und Glockenturm: +50 % Lebenspunkte, +40 % Schaden, +5 Wohnraum, +150 Lager je Rohstoff, weitere Sicht. Schaltet Stufe II aller Gebäude frei.', cost: { holz: 200, lehm: 150, taler: 60 }, time: 45, fx: { hp: 1.5, dmg: 1.4, pop: 5, vision: 1, storage: 150 } },
+    { name: 'Marktflecken', desc: 'Backsteinbau mit Wehrgang: doppelte Lebenspunkte, +80 % Schaden, +1 Reichweite, +10 Wohnraum, +300 Lager je Rohstoff. Benötigt einen fertigen Markt; schaltet Stufe III frei.', cost: { holz: 300, lehm: 250, taler: 180 }, time: 70, fx: { hp: 2, dmg: 1.8, range: 1, pop: 10, vision: 2, storage: 300 } },
   ],
   wohnhaus: [
     { name: 'Doppelkate', desc: 'Anbau unter dem Reetdach: +3 Wohnraum.', cost: { holz: 50, lehm: 30 }, time: 15, fx: { pop: 3, hp: 1.3 } },
@@ -446,6 +457,10 @@ export const UPGRADES: Partial<Record<BuildingType, UpgradeDef[]>> = {
     { name: 'Große Siedepfannen', desc: '+30 % Salz.', cost: { holz: 120 }, time: 25, fx: { produce: 1.3 } },
     { name: 'Saline', desc: '+60 % Salz.', cost: { holz: 160, lehm: 80, taler: 60 }, time: 35, fx: { produce: 1.6, hp: 1.4 } },
   ],
+  speicher: [
+    { name: 'Großer Speicher', desc: 'Zweiter Boden: 400 statt 250 Lager je Rohstoff.', cost: { holz: 100, lehm: 60 }, time: 25, fx: { storage: 150, hp: 1.3 } },
+    { name: 'Lagerhaus', desc: 'Backsteinlager mit Kran: 600 Lager je Rohstoff.', cost: { holz: 150, lehm: 120, taler: 40 }, time: 35, fx: { storage: 350, hp: 1.6 } },
+  ],
   zollhaus: [
     { name: 'Zollamt', desc: '+30 % Zolleinnahmen.', cost: { lehm: 120, taler: 60 }, time: 25, fx: { produce: 1.3, hp: 1.3 } },
     { name: 'Oberzollamt', desc: '+60 % Zolleinnahmen.', cost: { lehm: 180, taler: 120 }, time: 35, fx: { produce: 1.6, hp: 1.6 } },
@@ -466,6 +481,7 @@ export function levelDef(def: BuildingDef, t: BuildingType, lvl: number): Buildi
   const fx = levelFx(t, lvl);
   const d: BuildingDef = { ...def, hp: Math.round(def.hp * (fx.hp ?? 1)), vision: def.vision + (fx.vision ?? 0) };
   if (def.popCap) d.popCap = def.popCap + (fx.pop ?? 0);
+  if (def.storage) d.storage = def.storage + (fx.storage ?? 0);
   if (def.staffSlots) d.staffSlots = def.staffSlots + (fx.staff ?? 0);
   if (def.produce) d.produce = { ...def.produce, time: def.produce.time / (fx.produce ?? 1) };
   if (def.process) d.process = { ...def.process, time: def.process.time * (fx.process ?? 1) };
@@ -486,6 +502,10 @@ export const RULES = {
   marketSell: { waren: 10, taler: 30, prestige: 1 },
   marketSellControlled: { waren: 10, taler: 40, prestige: 2 },
   marketBuy: { amount: 40, taler: 45 },
+  /** Verarbeitungsgebäude lassen so viel übrig, damit immer noch ein Arbeiter ausgebildet werden kann */
+  processReserve: { getreide: 40, fisch: 30 } as Partial<Record<Res, number>>,
+  /** Anteil der Baukosten, den das Abreißen eines fertigen, unbeschädigten Gebäudes erstattet */
+  demolishRefund: 0.5,
   brarupTrickle: { prestige: 1, every: 20 },
   brarupRadius: 6,
   moorReward: { prestige: 15, taler: 120 },
@@ -493,7 +513,7 @@ export const RULES = {
   /** Wählbare Prestigeziele; 0 = kein wirtschaftlicher Sieg */
   prestigeGoals: [250, 400, 600, 0],
   startRes: { holz: 200, getreide: 150, fisch: 60, lehm: 100, waren: 0, taler: 60 } as Record<Res, number>,
-  startResHigh: { holz: 500, getreide: 400, fisch: 200, lehm: 300, waren: 0, taler: 200 } as Record<Res, number>,
+  startResHigh: { holz: 400, getreide: 400, fisch: 200, lehm: 300, waren: 0, taler: 200 } as Record<Res, number>,
 };
 
 export function costText(c: Cost): string {

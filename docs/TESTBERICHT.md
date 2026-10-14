@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 74/74 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 77/77 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -37,6 +37,7 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Zufallskarte | gleicher Seed ergibt dieselbe Karte (Mehrspieler); 12 Seeds ergeben ≥ 5 unterschiedliche Grundformen und ≥ 6 verschiedene Ortsnamen; Fairnessprüfung mit 40 Seeds |
 | Zeitalter | Aufstieg nur mit 2 Voraussetzungsgebäuden, Kosten und Dauer, Prestige; Gebäude und Einheiten an das Zeitalter gebunden, Landsknechte ab dem 20. Jh. abgelöst; Vertikalfarm erzeugt Getreide; Forschung wirkt parteiweit (auch auf vorhandene Soldaten), späte Forschung abgelehnt, Abbruch erstattet; Drohne fliegt über Wasser; Zeitalter im Zustand für beide Spieler, im Spielstand und im Protokoll; KI erreicht in 40 Minuten das 20. Jh. und baut Epochengebäude |
 | Runde 4 | Arbeiter reparieren per Rechtsklick bis zu vollen LP und verbrauchen höchstens ⅓ der Holzkosten; ohne Holz Abbruch; Reparaturbefehl im Protokoll; jedes Grundgebäude hat mindestens eine Forschung im 17. Jh.; „Bessere Flügel“ beschleunigt die Mühle um 20 %; Kachelöfen +1 Wohnraum, Gezogene Läufe nur für Fernkämpfer; Parteigebäude nur für die eigene Partei baubar; Zollhaus bringt Taler, Meierei Waren, Gestüt bildet Gutsreiter schneller aus; Rechtsklick auf den neutralen Markt besetzt ihn |
+| Lager, Abreißen, Verarbeitung | Lagergrenze 400 am Start, Speicher +250 (Stufe III +600), Überschuss verfällt mit Meldung, Taler unbegrenzt, Hof ruht bei vollem Lager, Grenze im Zustand für den Spieler; Abreißen erstattet 50 %, Dorfzentrum nicht abreißbar, Befehl im Protokoll; Mühle lässt 40 Getreide übrig und lässt sich anhalten/fortsetzen |
 | KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
 ## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
@@ -142,3 +143,6 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 9. **Forschungen und Parteigebäude** sind nur per Einheitentest und KI-Partien geprüft; ob Zollhaus, Meierei, Gestüt und
    Salzsiederei untereinander ausgewogen sind, zeigt erst das Spiel mit Menschen. Der Mehrspieler-Ende-zu-Ende-Test lief
    einmal mit einer Zeitüberschreitung beim Verbindungsaufbau (10 s) ab und bestand beim zweiten Lauf mit 32/32.
+10. **Lagergrenzen** verändern das Spieltempo. In KI-gegen-KI-Partien (5 Seeds, 40 Minuten) erreichten die KIs mit
+    Lagergrenzen die Zeitalter 3/2/4/3/2, ohne sie 3/2/4/4/3; die KI baut Speicher, sobald Lager fast voll sind oder
+    das nächste Zeitalter mehr verlangt, als hineinpasst. Mit Menschen ist das noch nicht erprobt.

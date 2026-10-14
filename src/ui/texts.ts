@@ -89,6 +89,11 @@ sich in den gestrichelten Kreis. Er gehört euch, solange nur eure Einheiten dar
 <li><b>Fundstelle:</b> (je nach Karte z. B. Thorsberger Moor, Haithabu oder Grabhügel auf der Heide) Die erste Einheit
 an der Fundstelle („?“) bringt einmalig ${RULES.moorReward.prestige} Prestige und ${RULES.moorReward.taler} Taler.</li>
 </ul>
+<p><b>Lager:</b> Außer Talern passt jeder Rohstoff nur bis zur Lagergrenze (oben „Vorrat/Grenze“). Mehr Platz bringen
+Speicher (Arbeiter, Taste C) und der Ausbau des Dorfzentrums. Volle Lager: Überschuss verfällt, Höfe ruhen.</p>
+<p><b>Verarbeitung:</b> Mühle &amp; Co. verbrauchen Getreide bzw. Fisch selbstständig, lassen aber 40 Getreide bzw. 30 Fisch
+übrig. „Anhalten“ (Q) am Gebäude stoppt den Verbrauch ganz.</p>
+<p><b>Abreißen:</b> Gebäude wählen und „Abreißen“ (V oder Entf) zweimal drücken: Die Hälfte der Baukosten kommt zurück.</p>
 <p><b>Bauen:</b> Gebäude werden von Arbeitern errichtet und arbeiten erst nach Fertigstellung. Gebaut werden darf nur
 nahe eigener fertiger Gebäude. Kosten, Bauzeit und Voraussetzungen zeigt der Tooltip jedes Bauknopfs.</p>
 <p><b>Ausbau:</b> Fertige Gebäude lassen sich zweimal ausbauen (Knopf „Stufe II/III“, Taste C): mehr Ertrag, schnellere

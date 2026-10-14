@@ -75,6 +75,10 @@ a { color: #e8c86a; }
 .res img { width: 18px; height: 18px; }
 .res b { font-weight: normal; min-width: 30px; color: #fff3cf; }
 .res.low b { color: var(--bad); }
+.res:has(small.cap) b { min-width: 0; }
+.res small.cap { color: #a89878; font-size: 10px; margin-left: -2px; min-width: 32px; }
+.res.near b { color: #ffc050; }
+.res.full b, .res.full small.cap { color: var(--bad); }
 .res.goal { min-width: 140px; }
 .bar { position: relative; width: 70px; height: 8px; background: #1a120a; border: 1px solid #000; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#e8c86a, #a07a2a); }

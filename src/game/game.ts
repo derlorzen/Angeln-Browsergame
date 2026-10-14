@@ -114,6 +114,25 @@ export class Game {
   idleWorkers() {
     return [...this.client.units.values()].filter((u) => u.o === this.client.me && u.t === 'arbeiter' && u.a === 0 && !u.w);
   }
+  /** Abreißen mit Rückfrage: der erste Klick schärft, ein zweiter innerhalb von 4 s reißt ab. */
+  private demolish: { id: number; until: number } | null = null;
+  demolishArmed(id: number): boolean {
+    return !!this.demolish && this.demolish.id === id && performance.now() < this.demolish.until;
+  }
+  requestDemolish(id: number): void {
+    const b = this.client.buildings.get(id);
+    if (!b || b.o !== this.client.me) return;
+    if (this.demolishArmed(id)) {
+      this.demolish = null;
+      this.issue({ c: 'demolish', b: id });
+    } else {
+      this.demolish = { id, until: performance.now() + 4000 };
+      this.hud.message(`${this.client.bname(b)} abreißen? Nochmals klicken (oder Entf) zum Bestätigen.`);
+      setTimeout(() => this.hud.update(true), 4100);
+    }
+    this.hud.update(true);
+  }
+
   selectIdleWorker(): void {
     const idle = this.idleWorkers();
     if (!idle.length) {
@@ -736,7 +755,8 @@ export class Game {
     }
     if (k === 'Delete') {
       const b = [...this.selected].map((id) => this.client.buildings.get(id)).find((x) => x && x.o === this.client.me);
-      if (b) this.issue({ c: 'cancel', b: b.i });
+      if (b && (!b.b || b.q?.length)) this.issue({ c: 'cancel', b: b.i });
+      else if (b && b.t !== 'dorfzentrum') this.requestDemolish(b.i);
       return;
     }
     if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {

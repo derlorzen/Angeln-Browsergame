@@ -138,9 +138,17 @@ export class AI {
 
     // Wohnraum
     const houseBuilding = unbuilt.some((b) => b.type === 'wohnhaus');
+    // Lagerplatz: für das nächste Zeitalter muss alles hineinpassen; volle Lager erweitern
+    const STORE = ['holz', 'getreide', 'fisch', 'lehm', 'waren'] as const;
+    const storeNeed = saving ? Math.max(...STORE.map((r) => AGES[me.age + 1].cost[r] ?? 0)) : 0;
+    const nearFull = STORE.some((r) => r !== 'waren' && me.res[r] >= me.cap * 0.85);
+    const wantStore = w.opts.storageLimit !== false && !unbuilt.some((b) => b.type === 'speicher') &&
+      (storeNeed + 40 > me.cap || (nearFull && count('speicher') < 1 + me.age)) && w.canAfford(p, w.bd(p, 'speicher').cost);
     if (me.popCap - me.pop - queued <= 2 && me.popCap < RULES.maxPop && !houseBuilding)
       this.tryBuild(w, 'wohnhaus', dz, workers);
-    else if (unbuilt.filter((b) => b.type !== 'wohnhaus').length === 0) {
+    else if (wantStore && (this.noSpot.get('speicher') ?? -1) <= w.tick) {
+      if (!this.tryBuild(w, 'speicher', dz, workers)) this.noSpot.set('speicher', w.tick + 600);
+    } else if (unbuilt.filter((b) => b.type !== 'wohnhaus').length === 0) {
       // Bauplan abarbeiten
       for (const [t, n] of plan) {
         if ((BUILDINGS[t].age ?? 1) > me.age) continue;
@@ -233,7 +241,7 @@ export class AI {
       const job = blds.find((b) => {
         if (!b.built) return false;
         const slots = w.bdl(b).staffSlots ?? 0;
-        const want = b.type === 'lehmgrube' ? (me.res.lehm > 300 ? 1 : 2) : b.type === 'bauernhof' && me.res.getreide > 600 ? 1 : slots;
+        const want = b.type === 'lehmgrube' ? (me.res.lehm > Math.min(300, me.cap * 0.8) ? 1 : 2) : b.type === 'bauernhof' && me.res.getreide > Math.min(600, me.cap * 0.9) ? 1 : slots;
         return slots > 0 && workers.filter((x) => busy(x, 'staff', b.id)).length < want;
       });
       if (job) {

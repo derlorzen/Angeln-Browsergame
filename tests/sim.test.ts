@@ -123,6 +123,7 @@ describe('Wirtschaft', () => {
     const w = mkWorld(777, true);
     const ws = units(w, 0, 'arbeiter');
     const res = w.players[0].res;
+    res.getreide = 200; // unter der Lagergrenze, damit der Zuwachs sichtbar ist
     const holz0 = res.holz, lehm0 = res.lehm;
     const farm = build(w, 0, 'bauernhof', ws.slice(0, 3));
     expect(res.holz).toBe(holz0 - 60);

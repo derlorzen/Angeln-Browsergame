@@ -36,6 +36,10 @@ const KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Y', 'X', 'C', 'V'];
 /** Gebäude, das nur eine Partei bauen kann */
 const FACTION_BUILDING: Record<string, BuildingType> = { angeln: 'meierei', schwansen: 'gestuet', friesen: 'salzsiederei', daenen: 'zollhaus' };
 
+/** Mindestreserve, die ein Verarbeitungsgebäude von seinen Eingangsrohstoffen übrig lässt */
+const reserveFor = (input: Cost): Cost =>
+  Object.fromEntries(Object.entries(RULES.processReserve).filter(([r]) => r in input));
+
 export class Hud {
   private top = document.getElementById('topbar')!;
   private sel = document.getElementById('selinfo')!;
@@ -45,6 +49,7 @@ export class Hud {
   buttons: CmdButton[] = [];
   /** Bauseite der Arbeiter: false = Grundbauten, true = Epochenbauten */
   buildPage = false;
+  private resTips: Record<string, string> = {};
   private cardKey = '';
   private selKey = '';
   private tipSrc: (() => string) | null = null;
@@ -56,16 +61,16 @@ export class Hud {
 
   // ---------------------------------------------------------------- Ressourcenleiste
   private buildTop(): void {
-    const tips: Record<string, string> = {
+    const tips: Record<string, string> = (this.resTips = {
       holz: 'Holz: von Arbeitern im Wald geschlagen. Für fast alle Gebäude nötig.',
       getreide: 'Getreide: vom Bauernhof (Arbeiter zuweisen). Für Arbeiter, Soldaten und die Mühle.',
       fisch: 'Fisch: vom Heringszaun am Ufer (Meer, Fluss, See, Watt oder Fischteich). Für Soldaten, Späher und die Räucherei.',
       lehm: 'Lehm: aus der Lehmgrube (nur auf Lehmboden). Für Gebäude.',
       waren: 'Waren: Mehl aus der Mühle und Bückling aus der Räucherei. Am Markt verkaufen.',
-      taler: 'Taler: Erlös aus dem Warenverkauf. Für Soldaten und Zukäufe am Markt.',
-    };
+      taler: 'Taler: Erlös aus dem Warenverkauf. Für Soldaten und Zukäufe am Markt. Unbegrenzt lagerbar.',
+    });
     const parts: string[] = [];
-    for (const r of RES) parts.push(`<div class="res" data-r="${r}" data-tip="${esc(tips[r])}"><img src="${resIcon(r)}" alt=""><b>0</b></div>`);
+    for (const r of RES) parts.push(`<div class="res" data-r="${r}" data-tip="${esc(tips[r])}"><img src="${resIcon(r)}" alt=""><b>0</b>${r === 'taler' ? '' : '<small class="cap"></small>'}</div>`);
     parts.push(`<div class="res" data-r="pop" data-tip="Bevölkerung / Obergrenze. Wohnhäuser erhöhen die Grenze um 5 (max. ${RULES.maxPop})."><img src="${resIcon('pop')}" alt=""><b>0</b></div>`);
     parts.push(`<div class="res goal" data-r="prestige" data-tip=""><img src="${resIcon('prestige')}" alt=""><b>0</b><span class="bar"><i></i></span><span class="bar enemy"><i></i></span></div>`);
     parts.push(`<div class="res" data-r="brarup" data-tip="${esc(this.game.client.map.marketName)} (neutral, ⚑) – Klick zeigt ihn. Besetzen: Einheiten wählen und Rechtsklick auf den Markt. Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
@@ -121,6 +126,15 @@ export class Hud {
       const el = this.resEls.get(r)!;
       const v = Math.floor(me.res?.[r] ?? 0);
       el.querySelector('b')!.textContent = String(v);
+      const cap = r === 'taler' ? undefined : me.cap;
+      const capEl = el.querySelector('small');
+      if (capEl) capEl.textContent = cap ? `/${cap}` : '';
+      el.classList.toggle('full', !!cap && v >= cap);
+      el.classList.toggle('near', !!cap && v < cap && v >= cap * 0.9);
+      const tip = cap
+        ? `${this.resTips[r]}<br><b>Lager:</b> ${v} / ${cap}${v >= cap ? ' – <span class="c-bad">Speicher voll, Überschuss verfällt!</span>' : ''}<br>Mehr Platz: Speicher bauen (Arbeiter, Taste C) oder das Dorfzentrum ausbauen.`
+        : this.resTips[r];
+      if (el.dataset.tip !== tip) el.dataset.tip = tip;
     }
     const pop = this.resEls.get('pop')!;
     pop.querySelector('b')!.textContent = `${me.pop ?? 0}/${me.popCap ?? 0}`;
@@ -239,7 +253,7 @@ export class Hud {
     } else if (units.length > 1) key = 'm' + units.map((u) => `${u.i}:${u.h}`).join(',');
     else if (blds.length) {
       const b = blds[0];
-      key = `b${b.i}:${b.h}:${b.p}:${b.q?.join()}:${b.qp}:${b.s}:${b.st?.length}:${b.as}:${b.ac}:${c.brarup.c}`;
+      key = `b${b.i}:${b.h}:${b.p}:${b.q?.join()}:${b.qp}:${b.s}:${b.st?.length}:${b.as}:${b.ha}:${b.ac}:${c.brarup.c}`;
     } else key = 'none';
     if (force || key !== this.selKey) {
       this.selKey = key;
@@ -247,7 +261,7 @@ export class Hud {
     }
     // Befehlskarte
     const res = c.mePlayer?.res;
-    const ckey = `${ids.join(',')}|${blds.map((b) => `${b.b}${b.q?.length}${b.as}${b.l ?? 1}${b.u === undefined ? '' : 'u' + b.uk}${b.h < b.m ? 'd' : ''}`).join()}|${c.age(c.me)}|${c.mePlayer?.techs?.length ?? 0}|${this.buildPage}|${res ? RES.map((r) => Math.floor(res[r])).join(',') : ''}|${g.attackMove}|${g.placement?.type}`;
+    const ckey = `${ids.join(',')}|${blds.map((b) => `${b.b}${b.q?.length}${b.as}${b.ha}${b.l ?? 1}${b.u === undefined ? '' : 'u' + b.uk}${b.h < b.m ? 'd' : ''}`).join()}|${c.age(c.me)}|${c.mePlayer?.techs?.length ?? 0}|${this.buildPage}|${res ? RES.map((r) => Math.floor(res[r])).join(',') : ''}|${g.attackMove}|${g.placement?.type}`;
     if (force || ckey !== this.cardKey) {
       this.cardKey = ckey;
       this.buttons = this.makeButtons(units, blds);
@@ -316,7 +330,10 @@ export class Hud {
       } else if (mine) {
         if (b.s) lines.push(esc(b.s));
         if (d.staffSlots) lines.push(`Arbeiter: ${b.st?.length ?? 0}/${d.staffSlots}${b.t === 'bauernhof' ? ` · Felder: ${b.f?.length ?? 0}` : ''}`);
-        if (d.process) lines.push(`${costText(d.process.input)} → ${costText(d.process.output)} (${d.process.time} s)`);
+        if (d.process) {
+          lines.push(`${costText(d.process.input)} → ${costText(d.process.output)} (${d.process.time} s)`);
+          lines.push(b.ha ? 'Angehalten – verbraucht nichts' : `Lässt mindestens ${costText(reserveFor(d.process!.input))} übrig`);
+        }
         if (b.t === 'markt') {
           const ctrl = c.brarup.c === c.me;
           const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
@@ -381,9 +398,16 @@ export class Hud {
           act: () => g.beginPlacement(facB),
         });
       } else out.push(null as unknown as CmdButton);
-      out.push(workers.length
-        ? { key: 'C', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (C)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.', state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }) }
-        : { key: 'C', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (C)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.', state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }) });
+      if (workers.length && !this.buildPage) {
+        const d = c.bd(c.me, 'speicher');
+        out.push({
+          key: 'C', icon: portrait('b', 'speicher', color, c.faction(c.me), c.age(c.me)), label: d.name,
+          tip: () => `${this.buildingTip('speicher')}<div class="row2">Lager jetzt: ${c.mePlayer?.cap ?? '∞'} je Rohstoff</div>`,
+          state: () => (!this.canAfford(d.cost) ? 'poor' : g.placement?.type === 'speicher' ? 'on' : 'ok'),
+          act: () => g.beginPlacement('speicher'),
+        });
+      } else
+        out.push({ key: 'C', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (C)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.', state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }) });
       if (workers.length) {
         while (out.length < 11) out.push(null as unknown as CmdButton);
         const era = this.buildPage;
@@ -431,6 +455,13 @@ export class Hud {
         out.push({
           key: 'V', glyph: '✖', label: 'Abbrechen', tip: () => '<h4>Ausbildung abbrechen (V)</h4>Entfernt die letzte Einheit aus der Warteschlange und erstattet die Kosten.',
           state: () => (b.q?.length ? 'ok' : 'na'), act: () => g.issue({ c: 'cancel', b: b.i }),
+        });
+      }
+      if (d.process) {
+        out.push({
+          key: 'Q', glyph: b.ha ? '▶' : '⏸', label: b.ha ? 'Fortsetzen' : 'Anhalten',
+          tip: () => `<h4>${b.ha ? 'Verarbeitung fortsetzen' : 'Verarbeitung anhalten'} (Q)</h4>${d.name} verbraucht ${costText(d.process!.input)} je Durchgang, sobald genug da ist, und lässt dabei mindestens ${costText(reserveFor(d.process!.input))} übrig. Angehalten verbraucht es nichts.`,
+          state: () => (b.ha ? 'on' : 'ok'), act: () => g.issue({ c: 'auto', b: b.i, on: !!b.ha }),
         });
       }
       if (b.t === 'markt') {
@@ -554,6 +585,15 @@ export class Hud {
             act: () => g.issue({ c: 'upgrade', b: b.i }),
           };
         }
+      }
+      // Abreißen (V); bei Ausbildungsgebäuden nur, solange die Warteschlange leer ist
+      if (b.b && b.t !== 'dorfzentrum' && b.u === undefined && !b.q?.length) {
+        while (out.length < 12) out.push(null as unknown as CmdButton);
+        out[11] = {
+          key: 'V', glyph: '⚒', label: g.demolishArmed(b.i) ? 'Wirklich?' : 'Abreißen',
+          tip: () => `<h4>Abreißen (V oder Entf)</h4>Reißt ${esc(c.bname(b))} ab und erstattet ${Math.round(RULES.demolishRefund * 100)} % der Baukosten (anteilig weniger bei Schäden). Zur Sicherheit zweimal klicken.`,
+          state: () => (g.demolishArmed(b.i) ? 'on' : 'ok'), act: () => g.requestDemolish(b.i),
+        };
       }
     }
     return out;

@@ -8,7 +8,7 @@ Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Lands
 - Sechs Karten zwischen Rendsburg und Esbjerg (Schlei, Flensburger Förde, Danewerk, Eider, Nordfriesische Marsch,
   Ribe/Kongeå) und eine bei jedem Start neu erzeugte **Zufallskarte**, alle mit fair ausgeglichenen Startplätzen
 - **Vier Zeitalter** (17., 18., 20. und 22. Jahrhundert) mit je neuen Gebäuden, Einheiten und Forschungen
-- **31 Forschungen** an den Gebäuden (zehn schon im 17. Jh., z. B. „Bessere Flügel“ an der Mühle), **ein eigenes Gebäude je
+- **Lagergrenzen und Speicher**, **Abreißen**, anhaltbare Verarbeitung, **31 Forschungen** an den Gebäuden (zehn schon im 17. Jh., z. B. „Bessere Flügel“ an der Mühle), **ein eigenes Gebäude je
   Partei**, **Reparieren** beschädigter Gebäude, Anzeige und Schnellwahl **untätiger Arbeiter**
 - Gebäude-Ausbaustufen II und III, automatisches Sichern mit „Letzte Partie fortsetzen“, dezente Geländehinweise
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
@@ -120,6 +120,17 @@ für die Besetzung des neutralen Markts (1 alle 20 s) und einmalig für die Fund
 | Taler | Warenverkauf am Markt | Soldaten, Holz/Lehm zukaufen |
 
 - **Bevölkerung** begrenzt Arbeiter und Soldaten; Wohnhäuser +5 (max. 80).
+- **Lagerplatz:** Jeder Rohstoff außer Talern passt nur bis zur Lagergrenze (oben neben dem Vorrat, z. B. „270/400“).
+  Das Dorfzentrum fasst 400 (Stufe II 550, Stufe III 700), jeder **Speicher** (Arbeiter, Taste **C**) +250, ausgebaut
+  +400/+600. Ist ein Lager voll, verfällt der Überschuss, Höfe und Fanggründe ruhen („Speicher voll“), und die Zahl wird
+  rot. Für die späten Zeitalter (bis 700 Lehm und 500 Waren) braucht man daher mehr Speicher. Arbeiter können im
+  Speicher auch alle Rohstoffe abgeben.
+- **Verarbeitung anhalten:** Mühle, Räucherei, Meierei, Manufaktur und Fabrik verbrauchen ihre Rohstoffe selbstständig,
+  lassen aber immer mindestens 40 Getreide bzw. 30 Fisch übrig, damit noch Arbeiter ausgebildet werden können. Mit
+  **Anhalten (Q)** am Gebäude verbrauchen sie gar nichts mehr. (Die KI hält ihre Rücklagen selbst zurück.)
+- **Abreißen:** Fertiges Gebäude wählen, **Abreißen (V oder Entf)** zweimal drücken – erstattet die Hälfte der
+  Baukosten (anteilig weniger bei Schäden). Das Dorfzentrum lässt sich nicht abreißen; Baustellen werden wie bisher
+  abgebrochen (75 %).
 - **Neutraler Markt** (⚑, je Karte ein anderer Ort, z. B. Brarup-Markt): Wer ihn allein mit Einheiten besetzt,
   verkauft teurer, erhält doppeltes Prestige je Verkauf und laufend Prestige → umkämpfter Verkehrsknoten.
   **So besetzt man ihn:** beliebige eigene Einheiten (auch Arbeiter) wählen und den Markt **rechts anklicken** – sie
@@ -161,7 +172,8 @@ einen fertigen Markt.
 **Steuerung:** Linksklick wählt, Rahmen ziehen wählt mehrere, Rechtsklick bewegt/arbeitet/greift an,
 Befehlskarte unten rechts (Tasten Q W E R / A S D F / Y X C V), Pfeiltasten/Bildrand/mittlere Maustaste bewegen die
 Kamera, Mausrad zoomt, Minikarte anklicken. Im Spiel: **F1** Hilfe, **F2** Lehrmeister, **F3** Leistungsanzeige,
-**Esc** Menü (Speichern im Einzelspiel), **Strg+Zahl** Gruppen, **.** nächster untätiger Arbeiter.
+**Esc** Menü (Speichern im Einzelspiel), **Strg+Zahl** Gruppen, **.** nächster untätiger Arbeiter, **Entf** abreißen bzw.
+Bau abbrechen. Bei Arbeitern liegt „Halt“ auf der zweiten Bauseite (V).
 
 ### Zeitalter
 
