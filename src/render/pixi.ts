@@ -4,7 +4,8 @@
 import { Application, Container, Graphics, Matrix, Rectangle, Sprite, Text, Texture, TilingSprite } from 'pixi.js';
 import { BUILDINGS, RULES, UNITS } from '../data/defs';
 import type { CBuilding, CUnit, ClientState } from '../game/client';
-import { T, isWater } from '../sim/map';
+import { T, isBarrier, isWater } from '../sim/map';
+import { barrierMask, barrierStyle, ditchMask, gateAlongX } from './terrainmask';
 import { S, TH, TW, canvas as mkCanvas, prng } from './draw';
 import {
   buildingSprite, foundationSprite, makeGate, makeKnicks, makeTerrain, makeTrees, unitFrame, unitSprites, type BuildingSprite,
@@ -91,7 +92,7 @@ export class PixiRenderer extends BaseRenderer {
   private chunks: { c: Container; base: Container; waves: Container; ix0: number; ix1: number; iy0: number; iy1: number }[] = [];
   private groundSpr: Sprite[] = [];
   private waveSpr: { s: Sprite; v: number }[] = [];
-  private tGround!: { gras: Texture[]; lehm: Texture[]; ufer: Texture[]; moor: Texture[]; wasser: Texture[]; flach: Texture[]; feld: Texture[]; wave: Texture[]; road: Texture[] };
+  private tGround!: Record<'gras' | 'lehm' | 'ufer' | 'moor' | 'wasser' | 'flach' | 'feld' | 'wave' | 'road' | 'heide' | 'watt' | 'ditch', Texture[]>;
   private trees: { i: number; s: Sprite }[] = [];
   private treeTex: Texture[] = [];
   private treeSprites: CSprite[] = [];
@@ -136,22 +137,29 @@ export class PixiRenderer extends BaseRenderer {
     const c = this.c;
     // Geländetexturen in einen Atlas packen
     const t = makeTerrain();
-    const groups = [t.gras, t.lehm, t.ufer, t.moor, t.wasser, t.flach, t.feld, t.wave, t.road];
+    const groups = [t.gras, t.lehm, t.ufer, t.moor, t.wasser, t.flach, t.feld, t.wave, t.road, t.heide, t.watt, t.ditch];
     const all = atlas(groups.flat());
     let k = 0;
     const take = (n: number) => all.slice(k, (k += n));
     this.tGround = {
       gras: take(t.gras.length), lehm: take(t.lehm.length), ufer: take(t.ufer.length), moor: take(t.moor.length),
       wasser: take(t.wasser.length), flach: take(t.flach.length), feld: take(t.feld.length), wave: take(t.wave.length), road: take(t.road.length),
+      heide: take(t.heide.length), watt: take(t.watt.length), ditch: take(t.ditch.length),
     };
     // Bäume, Knicks, Tore
     this.treeSprites = makeTrees();
     const knicks = makeKnicks();
+    const deiche = makeKnicks('deich');
+    const walls = makeKnicks('wall');
     const gates = [makeGate('x'), makeGate('y')];
-    const objTex = atlas([...this.treeSprites.map((s) => s.c), ...knicks.map((s) => s.c), ...gates.map((s) => s.c)]);
+    const all2 = [...this.treeSprites, ...knicks, ...deiche, ...walls, ...gates];
+    const objTex = atlas(all2.map((s) => s.c));
     this.treeTex = objTex.slice(0, this.treeSprites.length);
-    const knickTex = objTex.slice(this.treeSprites.length, this.treeSprites.length + knicks.length);
-    const gateTex = objTex.slice(this.treeSprites.length + knicks.length);
+    let o0 = this.treeSprites.length;
+    const sliceOf = (n: number) => objTex.slice(o0, (o0 += n));
+    const barrierTex = { knick: sliceOf(knicks.length), deich: sliceOf(deiche.length), wall: sliceOf(walls.length) };
+    const barrierSpr = { knick: knicks, deich: deiche, wall: walls };
+    const gateTex = sliceOf(gates.length);
 
     this.app.stage.addChild(this.world, this.screen);
     this.objs.sortableChildren = true;
@@ -172,20 +180,16 @@ export class PixiRenderer extends BaseRenderer {
         s.zIndex = x + y + 1;
         this.objs.addChild(s);
         this.trees.push({ i, s });
-      } else if (terrain[i] === T.KNICK || terrain[i] === T.TOR) {
+      } else if (isBarrier(terrain[i]) || terrain[i] === T.TOR) {
         let s: Sprite;
-        if (terrain[i] === T.KNICK) {
-          const kn = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < W && yy < H && (terrain[yy * W + xx] === T.KNICK || terrain[yy * W + xx] === T.TOR);
-          let m = 0;
-          if (kn(x + 1, y)) m |= 1;
-          if (kn(x - 1, y)) m |= 2;
-          if (kn(x, y + 1)) m |= 4;
-          if (kn(x, y - 1)) m |= 8;
-          if (v % 5 === 0) m |= 16;
-          s = new Sprite(knickTex[m]);
-          s.anchor.set((knicks[m].ax * S) / knicks[m].c.width, (knicks[m].ay * S) / knicks[m].c.height);
+        const st = barrierStyle(terrain[i]);
+        if (st) {
+          const m = barrierMask(c.map, x, y);
+          s = new Sprite(barrierTex[st][m]);
+          const bs = barrierSpr[st][m];
+          s.anchor.set((bs.ax * S) / bs.c.width, (bs.ay * S) / bs.c.height);
         } else {
-          const alongX = terrain[y * W + x + 1] === T.KNICK || terrain[y * W + x - 1] === T.KNICK;
+          const alongX = gateAlongX(c.map, x, y);
           const gs = gates[alongX ? 1 : 0];
           s = new Sprite(gateTex[alongX ? 1 : 0]);
           s.anchor.set((gs.ax * S) / gs.c.width, (gs.ay * S) / gs.c.height);
@@ -197,7 +201,7 @@ export class PixiRenderer extends BaseRenderer {
         this.statics.push({ i, s });
       }
     }
-    this.moorG.zIndex = c.map.moor.x + c.map.moor.y + 1;
+    this.moorG.zIndex = c.map.site.x + c.map.site.y + 1;
     this.objs.addChild(this.moorG);
 
     // Wolkenschatten (zieht langsam über das Land)
@@ -271,6 +275,8 @@ export class PixiRenderer extends BaseRenderer {
       case T.UFER: return G.ufer[v % 3];
       case T.MOOR: return G.moor[v % 3];
       case T.LEHM: return G.lehm[v & 1];
+      case T.HEIDE: return G.heide[v % 3];
+      case T.WATT: return G.watt[v % 3];
       default: return G.gras[v & 3];
     }
   }
@@ -293,7 +299,12 @@ export class PixiRenderer extends BaseRenderer {
             base.addChild(s);
             this.groundSpr[i] = s;
             const t = terrain[i];
-            if (t === T.WEG || t === T.TOR) {
+            if (t === T.GRABEN) {
+              const ds = new Sprite(this.tGround.ditch[ditchMask(this.c.map, x, y)]);
+              ds.position.set(isoX(x, y) - HW, isoY(x, y));
+              ds.scale.set(1 / S);
+              base.addChild(ds);
+            } else if (t === T.WEG || t === T.TOR) {
               let m = 0;
               if (road(x + 1, y)) m |= 1;
               if (road(x - 1, y)) m |= 2;
@@ -442,7 +453,7 @@ export class PixiRenderer extends BaseRenderer {
 
   private drawMoor(now: number): void {
     const g = this.moorG, c = this.c;
-    const mo = c.map.moor;
+    const mo = c.map.site;
     g.clear();
     if (!c.vis[mo.y * c.map.w + mo.x]) return;
     const x = isoX(mo.x + 0.5, mo.y + 0.5), y = isoY(mo.x + 0.5, mo.y + 0.5);

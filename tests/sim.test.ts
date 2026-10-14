@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { AI } from '../src/ai/ai';
-import { BUILDINGS, RULES } from '../src/data/defs';
+import { RULES } from '../src/data/defs';
 import { T, isWater } from '../src/sim/map';
 import { findPath } from '../src/sim/path';
 import { checkPlacement } from '../src/sim/rules';
@@ -78,7 +78,7 @@ describe('Karte', () => {
       };
       expect(reach(w.map.slots[1].x, w.map.slots[1].y), `seed ${seed}: Arnis`).toBe(true);
       expect(reach(w.map.market.x, w.map.market.y), `seed ${seed}: Markt`).toBe(true);
-      expect(reach(w.map.moor.x - 1, w.map.moor.y - 1), `seed ${seed}: Moor`).toBe(true);
+      expect(reach(w.map.site.x - 1, w.map.site.y - 1), `seed ${seed}: Moor`).toBe(true);
       // Schlei, Knicks, Lehm und Ufer existieren
       let water = 0, knick = 0, lehm = 0, ufer = 0, tor = 0;
       for (const t of w.map.terrain) {
@@ -214,7 +214,16 @@ describe('Bauplätze', () => {
     expect(wx).toBeGreaterThanOrEqual(0);
     expect(checkPlacement(v, 'wohnhaus', wx, wy)).not.toBeNull();
     // zu weit von der Siedlung
-    expect(checkPlacement(v, 'wohnhaus', w.map.slots[1].x + 5, w.map.slots[1].y + 5)).toMatch(/weit|belegt|Bäume|Wegen/);
+    let fx = -1, fy = -1;
+    const s1 = w.map.slots[1];
+    for (let r = 4; r < 12 && fx < 0; r++)
+      for (let k = 0; k < 16 && fx < 0; k++) {
+        const x = Math.round(s1.x + Math.cos(k / 2.5) * r), y = Math.round(s1.y + Math.sin(k / 2.5) * r);
+        let ok = true;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) if (w.map.terrain[w.idx(x + dx, y + dy)] !== T.GRAS || w.map.trees[w.idx(x + dx, y + dy)]) ok = false;
+        if (ok) [fx, fy] = [x, y];
+      }
+    expect(checkPlacement(v, 'wohnhaus', fx, fy)).toMatch(/weit|belegt/);
     w.vis[0].fill(0);
     expect(checkPlacement(v, 'wohnhaus', d.x + 4, d.y)).toMatch(/unerforscht/);
     w.updateVisibility();
@@ -363,7 +372,7 @@ describe('Kampf und Sieg', () => {
     const w = mkWorld(777);
     const u = units(w, 0, 'spaeher')[0];
     const t0 = w.players[0].res.taler;
-    w.queueCommand(0, { c: 'move', ids: [u.id], x: w.map.moor.x + 0.5, y: w.map.moor.y + 0.5 });
+    w.queueCommand(0, { c: 'move', ids: [u.id], x: w.map.site.x + 0.5, y: w.map.site.y + 0.5 });
     run(w, 60);
     expect(w.moorFoundBy).toBe(0);
     expect(w.players[0].prestige).toBe(RULES.moorReward.prestige);
@@ -426,10 +435,12 @@ describe('KI', () => {
     });
     const ais = [new AI(0, 'normal'), new AI(1, 'normal')];
     let maxArmy = 0, attackSeen = false;
+    const everBuilt = [new Set<string>(), new Set<string>()];
     for (let t = 0; t < 10 * 60 * 40 && w.winner < 0; t++) {
       ais.forEach((a) => a.update(w));
       w.step();
       if (t % 100 === 0) {
+        for (const p of [0, 1]) for (const b of blds(w, p)) everBuilt[p].add(b.type);
         maxArmy = Math.max(maxArmy, units(w, 0).filter((u) => u.type === 'landsknecht' || u.type === 'schuetze').length);
         // Angriff: Soldaten nahe eines gegnerischen Dorfzentrums
         for (const p of [0, 1]) {
@@ -439,10 +450,9 @@ describe('KI', () => {
       }
     }
     for (const p of [0, 1]) {
-      const types = new Set(blds(w, p).map((b) => b.type));
-      if (w.players[p].defeated) continue;
+      const types = everBuilt[p]; // im Kampf zerstörte Gebäude zählen mit
       for (const t of ['holzfaeller', 'bauernhof', 'lehmgrube', 'heringszaun', 'muehle', 'kaserne', 'markt', 'wohnhaus'])
-        expect(types.has(t as keyof typeof BUILDINGS), `Spieler ${p} baut ${t}`).toBe(true);
+        expect(types.has(t), `Spieler ${p} baut ${t}`).toBe(true);
     }
     expect(maxArmy).toBeGreaterThan(3);
     expect(w.players[0].stats.sold + w.players[1].stats.sold).toBeGreaterThan(50);

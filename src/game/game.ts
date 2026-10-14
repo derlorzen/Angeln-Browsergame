@@ -86,6 +86,8 @@ export class Game {
     this.hud.message(`Willkommen, ${this.client.mePlayer?.name ?? ''}! Ihr führt die ${fd.name} in ${this.client.map.slots[this.mySlot()]?.name ?? ''}. ${fd.motto}`, 'good');
     const foes = this.client.players.filter((p) => p.id !== this.client.me).map((p) => `${p.name} (${FACTION_DEFS[p.faction].name})`);
     if (foes.length) this.hud.message(`Gegner: ${foes.join(', ')}.`);
+    const m = this.client.map;
+    this.hud.message(`Karte: ${m.name}. Der neutrale ${m.marketName} liegt ${this.client.dirTo(m.market.x + 1.5, m.market.y + 1.5)}.`);
   }
 
   private mySlot(): number {
@@ -278,12 +280,12 @@ export class Game {
       case 'moor':
         sound.play('discover');
         if (e.p === me)
-          this.hud.message(`Fundstelle im Thorsberger Moor erkundet: Torfstecher zeigen alte Funde – Bericht an den Landesherrn: +${RULES.moorReward.prestige} Prestige, +${RULES.moorReward.taler} Taler.`, 'good');
-        else this.hud.message(`${c.players[e.p]?.name ?? 'Der Gegner'} hat die Fundstelle im Thorsberger Moor zuerst erkundet.`, 'alert');
+          this.hud.message(`${c.map.site.name} erkundet: ${c.map.site.text}: +${RULES.moorReward.prestige} Prestige, +${RULES.moorReward.taler} Taler.`, 'good');
+        else this.hud.message(`${c.players[e.p]?.name ?? 'Der Gegner'} hat die Fundstelle „${c.map.site.name}“ zuerst erkundet.`, 'alert');
         break;
       case 'brarup':
-        if (e.p === me) this.hud.message('Ihr kontrolliert den Brarup-Markt: bessere Preise und mehr Prestige.', 'good');
-        else this.hud.message(`${c.players[e.p]?.name ?? 'Der Gegner'} kontrolliert jetzt den Brarup-Markt!`, 'alert');
+        if (e.p === me) this.hud.message(`Ihr kontrolliert den ${c.map.marketName}: bessere Preise und mehr Prestige.`, 'good');
+        else this.hud.message(`${c.players[e.p]?.name ?? 'Der Gegner'} kontrolliert jetzt den ${c.map.marketName}!`, 'alert');
         break;
       case 'built':
         if (e.o === me) {

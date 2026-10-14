@@ -90,7 +90,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   heringszaun: {
     name: 'Heringszaun',
-    desc: 'Stationäre Fangvorrichtung aus trichterförmigen Flechtzäunen in der Schlei. Fängt selbstständig 1 Fisch alle 2,5 s. Nur am Ufer baubar.',
+    desc: 'Stationäre Fangvorrichtung aus trichterförmigen Flechtzäunen im Uferwasser – berühmt ist der Kappelner Heringszaun in der Schlei. Fängt selbstständig 1 Fisch alle 2,5 s. Nur am Ufer baubar.',
     w: 2, h: 2, hp: 300, cost: { holz: 60 }, buildTime: 20, placement: 'ufer', buildable: true,
     vision: 5, produce: { res: 'fisch', amount: 1, time: 2.5, perWorker: false },
   },
@@ -120,7 +120,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   brarupmarkt: {
     name: 'Brarup-Markt',
-    desc: 'Neutraler Handelsplatz in Süderbrarup. Wer ihn mit eigenen Einheiten allein besetzt, erhält bessere Preise, doppeltes Prestige je Verkauf und stetig Prestige.',
+    desc: 'Neutraler Handelsplatz. Wer ihn mit eigenen Einheiten allein besetzt, erhält bessere Preise, doppeltes Prestige je Verkauf und stetig Prestige.',
     w: 3, h: 3, hp: 99999, cost: {}, buildTime: 1, placement: 'normal', buildable: false, vision: 0,
   },
 };

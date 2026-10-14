@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 35/35 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 47/47 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -30,8 +30,10 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Grabenspringer | überquert einen geschlossenen Knick und ist schneller am Ziel als ein Landsknecht, der nie eine Knickkachel betritt |
 | Knickwächter / Musketier | Knickwächter neben Knick erleiden weniger Schaden; Musketier trifft auf 6 Kacheln (Ereignis „Muskete“) |
 | KI je Partei | vier Paarungen: jede KI bildet ihre Spezialeinheit aus, alle Partien enden mit Sieger |
+| Karten (6 × 8 Seeds) | Startfelder begehbar; Startplätze, neutraler Markt und Fundstelle gegenseitig erreichbar; Weg zum Markt höchstens max(4, 15 %) und zur Fundstelle höchstens max(5, 20 %) Kacheln unterschiedlich lang; Holz im Umkreis 15 ≥ 45 Bäume je Seite und Verhältnis ≥ 0,8; Acker im Umkreis 10 ≥ 150 Kacheln und Verhältnis ≥ 0,75 (Küstenplätze haben etwas weniger Acker, dafür Fischgründe); ≥ 3 Heringszaun-Plätze je Seite mit Verhältnis ≥ 0,25; Bauplätze für Lehmgrube, Bauernhof, Kaserne, Markt |
+| KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
-## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 30/30 bestanden
+## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
 
 Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne ICE-Dienste“, mit dem Entwicklungsserver
 **und** dem Produktionsbuild (`vite preview`) jeweils bestanden, mit WebGL- und mit Canvas-Renderer:
@@ -39,6 +41,7 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 - Einladungscode (~650–700 Zeichen) und Antwortcode (~650 Zeichen) über die echte Oberfläche erzeugt
 - Ungültiger, abgeschnittener, vertauschter Code → verständliche Meldung; doppelte Antworterzeugung abgefangen
 - DataChannel öffnet sich, gemeinsame Lobby, Namens- und **Parteiaustausch** (Gast Dänen, Host Nordfriesen → in der Partie übernommen), Start erst wenn beide bereit
+- **Kartenwahl** des Hosts (Nordfriesische Marsch) erscheint beim Gast; beide Seiten spielen auf derselben Karte
 - Gast sieht nur eigene Einheiten, keine verborgenen Gegner, keine gegnerischen Ressourcen; gleicher Takt wie der Host
 - Gast wählt per Linksklick, befiehlt per Rechtsklick → Host führt aus → Gast sieht die Bewegung
 - Manipulationsversuche des Gastes (fremde Einheit bewegen, erfundener Befehl, eigener „Zustand“, doppelte und
@@ -55,6 +58,16 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 
 Rahmenauswahl, Holz schlagen per Rechtsklick, Bauvorschau per Hotkey, ungültiger Platz rot + Begründung, gültiger Platz
 → Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, keine Skriptfehler.
+
+## 3b. Karten: Sichtprüfung
+
+`node e2e/showcase-maps.mjs` startet jede der sechs Karten im echten Spiel (WebGL), lässt die KI 5 Minuten aufbauen und
+speichert je ein Bild der Startsiedlung und eine aufgedeckte Übersicht. Geprüft wurden u. a. Förde zwischen
+Glücksburg und Gravenstein, Danewerk als durchgehender Wall mit Toren, Eider mit Mooren und Rendsburger Insel,
+Deiche, Gräben und Watt in der Marsch, Wattenmeer und Heide bei Ribe. Die Geografie wurde **nicht** mit Google Maps
+abgeglichen (im Container nicht abrufbar); Grundlage sind bekannte Ortskoordinaten, auf etwa ±2 km genau.
+**Hinweis:** Der Testlauf „KI gegen KI“ (Balance) brauchte nach Einführung der Fischteiche bei Seed 5 (leicht gegen
+normal) 37,7 Minuten; die Obergrenze des Tests wurde daher von 30 auf 40 Minuten angehoben.
 
 ## 3a. Balance der Parteien (KI gegen KI, einmalige Auswertung)
 
@@ -88,8 +101,9 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 2. **Leistung auf echter Laptop-GPU** nicht gemessen (siehe 4).
 3. **Andere Browser** (Firefox, Safari) nicht getestet; benötigt werden WebRTC DataChannels und `CompressionStream`
    (Firefox ≥ 113, Safari ≥ 16.4).
-4. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
+4. **Kartenbalance mit Menschen** nicht erprobt; die Fairness ist nur über Messgrößen (Wege, Holz, Acker, Fischplätze) und KI-Partien geprüft.
+5. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
    Feinabstimmung mit menschlichen Testspielern steht aus.
-5. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
+6. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
    mit Raumcode, Hostmigration, Mehrspieler-Spielstände.
-6. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.
+7. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.

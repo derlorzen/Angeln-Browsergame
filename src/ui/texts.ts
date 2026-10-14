@@ -1,5 +1,6 @@
 // Texte für Anleitung, Hintergrund und Netzwerk-Erklärung.
 import { RULES } from '../data/defs';
+import { MAP_IDS, MAP_INFO } from '../sim/map';
 
 export const BACKGROUND_HTML = `
 <h2>Hintergrund</h2>
@@ -9,7 +10,18 @@ export const BACKGROUND_HTML = `
 Schlei lebt vom Fischfang; sein Heringszaun, eine stationäre Fangvorrichtung aus trichterförmigen Flechtzäunen, ist bis
 heute erhalten. Im Binnenland liegt Süderbrarup mit dem Brarup-Markt, nahebei das Thorsberger Moor, ein bedeutender
 archäologischer Fundplatz. Die Schlei selbst ist kein Fluss, sondern ein schmaler Meeresarm der Ostsee.</p>
-<p>Im Spiel ringen zwei Siedlungen an der Schlei um Fischgründe, Handel und die Wege zum Markt in Süderbrarup.</p>
+<p>Im Spiel ringen zwei Siedlungen um Fischgründe, Handel und die Wege zu einem neutralen Markt – auf sechs Karten
+zwischen Rendsburg an der Eider und Esbjerg in Südwestjütland.</p>
+<h3>Die Karten</h3>
+<ul>
+${MAP_IDS.map((m) => `<li><b>${MAP_INFO[m].name}</b> (${MAP_INFO[m].region}): ${MAP_INFO[m].desc}<br><span class="note"><i>Freiheiten:</i> ${MAP_INFO[m].liberties}</span></li>`).join('\n')}
+</ul>
+<p class="note">Die Lage der Orte, Flüsse und Küsten beruht auf bekannten Koordinaten (Länge/Breite, auf etwa ±2 km genau)
+aus allgemeinem geografischem Wissen; ein direkter Abgleich mit Google Maps oder OpenStreetMap war bei der Erstellung
+nicht möglich. Jede Karte wird maßstabstreu (Norden oben) in die Spielfläche eingepasst. Anschließend gleicht das Spiel
+Wege, Holz, Acker, Lehm und Fischgründe der beiden Startplätze aus: Markt und Fundstelle werden so verschoben, dass
+beide Seiten etwa gleich weit laufen, Waldstücke und Ackerland werden angeglichen, und Startplätze ohne Ufer erhalten
+einen Fischteich. Dadurch weichen einzelne Orte von ihrer echten Lage ab.</p>
 <h3>Die Parteien – mit einem Augenzwinkern</h3>
 <p>Die vier Parteien sind bewusst klischeehaft überzeichnet und sollen niemanden ernsthaft beschreiben:</p>
 <ul>
@@ -38,7 +50,7 @@ Herrenhäuser in dieser Form sind meist jünger. Musketen mit Gabel passen dageg
 beim Landesherrn – ohne erfundene Legenden oder übernatürliche Kräfte.</li>
 <li><b>Mühle:</b> Kappelns Mühle Amanda wurde erst 1888 gebaut. Das Spiel zeigt stattdessen eine hölzerne Bockwindmühle,
 wie sie um 1600 verbreitet war.</li>
-<li><b>Karte:</b> Lage und Abstände von Kappeln, Arnis, Süderbrarup, Moor und Schlei sind stark vereinfacht und nicht
+<li><b>Karte „Die Schlei“:</b> Lage und Abstände von Kappeln, Arnis, Süderbrarup, Moor und Schlei sind stark vereinfacht und nicht
 maßstabsgetreu. Das Ostufer (Schwansen) ist nur Kulisse. Die Kirche am Brarup-Markt ist ein freies Motiv.</li>
 <li><b>Wirtschaft:</b> Taler, Prestige, Preise und Produktionsraten sind für die Spielbarkeit erfunden.</li>
 </ul>
@@ -65,17 +77,22 @@ erhöhen die Grenze.</p>
 <li><b>Holz:</b> Arbeiter per Rechtsklick auf Bäume schicken; sie liefern am Dorfzentrum oder Holzfällerlager ab.</li>
 <li><b>Getreide:</b> Bauernhof bauen; er legt Felder an. Arbeiter per Rechtsklick zuweisen (max. 3).</li>
 <li><b>Lehm:</b> Lehmgrube auf braunem Lehmboden, Arbeiter zuweisen.</li>
-<li><b>Fisch:</b> Heringszaun am Ufer der Schlei – fängt selbstständig.</li>
+<li><b>Fisch:</b> Heringszaun am Ufer (Meer, Fluss, See, Watt oder Fischteich) – fängt selbstständig.</li>
 <li><b>Waren:</b> Bockmühle (4 Getreide → 3 Waren) und Räucherei (3 Fisch + 1 Holz → 2 Waren).</li>
-<li><b>Taler &amp; Prestige:</b> Waren am eigenen Markt verkaufen. Wer den <b>Brarup-Markt</b> in Süderbrarup allein mit
-Einheiten besetzt, erhält mehr Taler, doppeltes Prestige je Verkauf und laufend Prestige.</li>
-<li><b>Thorsberger Moor:</b> Die erste Einheit an der Fundstelle („?“) bringt einmalig ${RULES.moorReward.prestige} Prestige und ${RULES.moorReward.taler} Taler.</li>
+<li><b>Taler &amp; Prestige:</b> Waren am eigenen Markt verkaufen. Wer den <b>neutralen Markt</b> (⚑; je nach Karte z. B.
+Brarup-Markt, Flensburger Markt oder Ochsenmarkt Ribe) allein mit Einheiten besetzt, erhält mehr Taler, doppeltes
+Prestige je Verkauf und laufend Prestige.</li>
+<li><b>Fundstelle:</b> (je nach Karte z. B. Thorsberger Moor, Haithabu oder Grabhügel auf der Heide) Die erste Einheit
+an der Fundstelle („?“) bringt einmalig ${RULES.moorReward.prestige} Prestige und ${RULES.moorReward.taler} Taler.</li>
 </ul>
 <p><b>Bauen:</b> Gebäude werden von Arbeitern errichtet und arbeiten erst nach Fertigstellung. Gebaut werden darf nur
 nahe eigener fertiger Gebäude. Kosten, Bauzeit und Voraussetzungen zeigt der Tooltip jedes Bauknopfs.</p>
 <p><b>Kampf:</b> Kaserne bildet Späher (schnell, weite Sicht), Landsknechte (Nahkampf, stark gegen Gebäude) und
 Armbrustschützen (Fernkampf) aus. Untätige Soldaten verteidigen sich und ihre Umgebung automatisch, das Dorfzentrum
 schießt auf nahe Feinde. Knicks versperren Weg und Sicht; Tore und Wege führen hindurch.</p>
+<p><b>Gelände:</b> Gräben in der Marsch versperren den Weg, aber nicht die Sicht. Deiche und das Danewerk versperren Weg
+und Sicht – nur Stöpen bzw. Tore führen hindurch. Watt ist begehbar, aber sehr langsam; Moor verlangsamt, Wege
+beschleunigen. Die Grabenspringer der Nordfriesen setzen über Knicks und Gräben.</p>
 <p>Ausführliche Steuerung: im Spiel mit <b>F1</b>. Der <b>Lehrmeister</b> (F2) führt Schritt für Schritt durch die erste Partie.</p>
 </div>`;
 

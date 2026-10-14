@@ -12,7 +12,8 @@
     "test": "vitest run",
     "e2e": "node e2e/run-e2e.mjs",
     "e2e:sp": "node e2e/run-sp.mjs",
-    "shots": "node e2e/showcase.mjs"
+    "shots": "node e2e/showcase.mjs",
+    "shots:maps": "node e2e/showcase-maps.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.55.1",

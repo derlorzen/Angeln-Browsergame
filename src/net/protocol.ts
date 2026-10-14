@@ -1,11 +1,11 @@
 // Nachrichtenformat zwischen Host und Gast (JSON über DataChannel) und strikte Prüfung eingehender Daten.
 import { isBuildingType, isUnitType } from '../data/defs';
 import { isFaction, type FactionId } from '../data/factions';
-import { MAP_H, MAP_W } from '../sim/map';
+import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2; // 2: Kartenwahl
 
 export interface LobbyPlayer {
   name: string;
@@ -18,6 +18,7 @@ export interface LobbyState {
   players: LobbyPlayer[]; // [0] = Host, [1] = Gast
   goal: number;
   rich: boolean;
+  map: MapId;
 }
 
 export type GuestMsg =
@@ -33,7 +34,7 @@ export type HostMsg =
   | { t: 'welcome'; v: number }
   | { t: 'reject'; reason: string }
   | { t: 'lobby'; st: LobbyState }
-  | { t: 'start'; seed: number; goal: number; rich: boolean; me: number; players: LobbyPlayer[] }
+  | { t: 'start'; seed: number; goal: number; rich: boolean; me: number; players: LobbyPlayer[]; map: MapId }
   | { t: 'snap'; s: Snapshot }
   | { t: 'ping'; n: number }
   | { t: 'pong'; n: number }
@@ -137,13 +138,13 @@ export function parseHostMsg(raw: unknown): HostMsg | null {
       return { t: m.t, reason: typeof m.reason === 'string' ? m.reason.slice(0, 300) : 'Verbindung beendet.' } as HostMsg;
     case 'lobby': {
       const st = m.st as LobbyState;
-      if (!st || !Array.isArray(st.players) || st.players.length > 4) return null;
+      if (!st || !Array.isArray(st.players) || st.players.length > 4 || !isMapId(st.map)) return null;
       for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction)) return null;
-      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: Number(st.goal) || 250, rich: !!st.rich } };
+      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: Number(st.goal) || 250, rich: !!st.rich, map: st.map } };
     }
     case 'start':
-      if (!isInt(m.seed, 0, 2 ** 31) || !isInt(m.me, 0, 3) || !Array.isArray(m.players)) return null;
-      return { t: 'start', seed: m.seed, goal: Number(m.goal) || 250, rich: !!m.rich, me: m.me, players: m.players as LobbyPlayer[] };
+      if (!isInt(m.seed, 0, 2 ** 31) || !isInt(m.me, 0, 3) || !Array.isArray(m.players) || !isMapId(m.map)) return null;
+      return { t: 'start', seed: m.seed, goal: Number(m.goal) || 250, rich: !!m.rich, me: m.me, players: m.players as LobbyPlayer[], map: m.map };
     case 'snap': {
       const s = m.s as Snapshot;
       if (!s || !Array.isArray(s.ents) || !Array.isArray(s.hid) || !Array.isArray(s.gone) || !Array.isArray(s.trees) || !Array.isArray(s.ev)) return null;

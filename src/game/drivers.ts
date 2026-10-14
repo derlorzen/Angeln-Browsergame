@@ -6,6 +6,7 @@ import { AI, type AIState } from '../ai/ai';
 import { RULES } from '../data/defs';
 import { PROTOCOL_VERSION, RateLimiter, parseGuestMsg, parseHostMsg, type HostMsg } from '../net/protocol';
 import type { PeerLink } from '../net/peer';
+import type { MapId } from '../sim/map';
 import { Snapshotter } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 import { World } from '../sim/world';
@@ -111,7 +112,7 @@ abstract class SimDriver {
 export class LocalDriver extends SimDriver implements Driver {
   kind = 'local' as const;
   constructor(world: World, me: number, aiStates?: AIState[]) {
-    super(world, me, new ClientState(world.opts.seed, me));
+    super(world, me, new ClientState(world.opts.seed, me, world.opts.mapId ?? 'schlei'));
     if (aiStates) this.ais = aiStates.map((s) => new AI(s.p, s.level, s));
     // geladene Bäume übernehmen (Spielstand)
     this.client.trees.set(world.map.trees);
@@ -131,7 +132,7 @@ export class HostDriver extends SimDriver implements Driver {
   readonly guestId = 1;
 
   constructor(world: World, readonly link: PeerLink) {
-    super(world, 0, new ClientState(world.opts.seed, 0));
+    super(world, 0, new ClientState(world.opts.seed, 0, world.opts.mapId ?? 'schlei'));
     this.guestSnap = new Snapshotter(this.guestId);
     link.onMessage = (raw) => this.onMessage(raw);
     link.onClose = (reason) => this.guestLeft(reason);
@@ -227,8 +228,8 @@ export class GuestDriver implements Driver {
   private pingSent = new Map<number, number>();
   private ended = false;
 
-  constructor(seed: number, me: number, readonly link: PeerLink) {
-    this.client = new ClientState(seed, me);
+  constructor(seed: number, me: number, readonly link: PeerLink, mapId: MapId = 'schlei') {
+    this.client = new ClientState(seed, me, mapId);
     link.onMessage = (raw) => this.onMessage(raw);
     link.onClose = (reason) => this.end(`Verbindung zum Host verloren: ${reason}`);
   }

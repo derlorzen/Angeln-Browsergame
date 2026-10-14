@@ -11,11 +11,13 @@ import { createRenderer } from '../render/factory';
 import type { BaseRenderer } from '../render/view';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES, portrait } from '../render/sprites';
 import { FACTIONS, FACTION_DEFS, type FactionId } from '../data/factions';
+import { MAP_IDS, MAP_INFO, type MapId } from '../sim/map';
 import { World } from '../sim/world';
 import { loadSettings, readSave, saveSettings, writeSave, type Settings } from '../storage/save';
 import { BACKGROUND_HTML, GUIDE_HTML, NETWORK_HTML } from './texts';
 
-const SLOT_NAMES = ['Kappeln (Norden)', 'Arnis (Süden)'];
+const slotNames = (m: MapId) => [`${MAP_INFO[m].slotNames[0]} (Norden)`, `${MAP_INFO[m].slotNames[1]} (Süden)`];
+const randomMap = (): MapId => MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)];
 // erfundene Namen der KI-Anführer
 const AI_NAMES: Record<FactionId, string> = {
   angeln: 'Bauernvogt Hinrich Petersen',
@@ -42,7 +44,7 @@ export class Menu {
     const cv = document.createElement('canvas');
     cv.id = 'menu-bg';
     this.root.prepend(cv);
-    const c = new ClientState(4711, 0);
+    const c = new ClientState(4711, 0, randomMap());
     c.vis.fill(2);
     c.visVersion++;
     const sl = c.map.slots[0];
@@ -148,6 +150,19 @@ export class Menu {
       <ul>${d.bonuses.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></div></div>`;
   }
 
+  private mapOptions(sel: MapId | 'zufall', allowRandom: boolean): string {
+    const opts = MAP_IDS.map((m) => `<option value="${m}" ${m === sel ? 'selected' : ''}>${MAP_INFO[m].name} (${MAP_INFO[m].region})</option>`).join('');
+    return (allowRandom ? `<option value="zufall" ${sel === 'zufall' ? 'selected' : ''}>zufällige Karte</option>` : '') + opts;
+  }
+
+  /** Kurzbeschreibung einer Karte samt gekennzeichneter Freiheiten. */
+  mapInfo(m: MapId | 'zufall'): string {
+    if (m === 'zufall') return '<div class="map-card note">Eine der sechs Karten zwischen Rendsburg und Esbjerg wird zufällig gewählt.</div>';
+    const d = MAP_INFO[m];
+    return `<div class="map-card"><b>${d.name}</b> – ${esc(d.region)}<br><span class="note">${esc(d.desc)}</span>
+      <br><span class="note"><i>Freiheiten:</i> ${esc(d.liberties)}</span></div>`;
+  }
+
   private colorOptions(sel: number): string {
     return PLAYER_COLORS.map((c, i) => `<option value="${i}" ${i === sel ? 'selected' : ''} style="background:${c}">${PLAYER_COLOR_NAMES[i]}</option>`).join('');
   }
@@ -160,7 +175,9 @@ export class Menu {
       <div class="row"><label>Eure Partei</label><select data-f="fac">${this.factionOptions(s.faction)}</select></div>
       <div data-info></div>
       <div class="row"><label>Farbe</label><select data-f="color">${this.colorOptions(0)}</select></div>
-      <div class="row"><label>Startort</label><select data-f="slot"><option value="0">${SLOT_NAMES[0]}</option><option value="1">${SLOT_NAMES[1]}</option></select></div>
+      <div class="row"><label>Karte</label><select data-f="map">${this.mapOptions(s.map, true)}</select></div>
+      <div data-mapinfo></div>
+      <div class="row"><label>Startort</label><select data-f="slot"></select></div>
       <div class="row"><label>KI-Gegner</label><select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select>
         <select data-f="aifac"><option value="zufall">zufällige Partei</option>${this.factionOptions(null)}</select></div>
       <div class="row"><label>Prestigeziel</label><select data-f="goal"><option value="150">150 (kurz)</option><option value="250" selected>250</option><option value="400">400 (lang)</option></select></div>
@@ -172,6 +189,16 @@ export class Menu {
     box.querySelector('[data-f=fac]')!.addEventListener('change', info);
     box.querySelector('[data-f=color]')!.addEventListener('change', info);
     info();
+    const mapInfo = () => {
+      const m = f('map') as MapId | 'zufall';
+      box.querySelector('[data-mapinfo]')!.innerHTML = this.mapInfo(m);
+      const sel = box.querySelector<HTMLSelectElement>('[data-f=slot]')!;
+      const cur = sel.value || '0';
+      const names = m === 'zufall' ? ['Norden', 'Süden'] : slotNames(m);
+      sel.innerHTML = names.map((n, k) => `<option value="${k}" ${String(k) === cur ? 'selected' : ''}>${n}</option>`).join('');
+    };
+    box.querySelector('[data-f=map]')!.addEventListener('change', mapInfo);
+    mapInfo();
     this.bind(box, {
       back: () => this.main(),
       go: () => {
@@ -184,11 +211,15 @@ export class Menu {
         const aiColor = color === 1 ? 0 : 1;
         const faction = f('fac') as FactionId;
         this.settings.faction = faction;
+        const mapSel = f('map') as MapId | 'zufall';
+        this.settings.map = mapSel;
         saveSettings(this.settings);
+        const mapId = mapSel === 'zufall' ? randomMap() : mapSel;
         const others = FACTIONS.filter((x) => x !== faction);
         const aiFac: FactionId = f('aifac') === 'zufall' ? others[Math.floor(Math.random() * others.length)] : (f('aifac') as FactionId);
         const world = new World({
           seed: (Math.random() * 2 ** 31) | 0,
+          mapId,
           players: [
             { name, color, slot, isAI: false, faction },
             { name: AI_NAMES[aiFac], color: aiColor, slot: 1 - slot, isAI: true, aiLevel: f('ai') as 'leicht' | 'normal', faction: aiFac },
@@ -463,6 +494,7 @@ export class Menu {
 
   // ---------------------------------------------------------------- Lobby
   private lobbyHtml(st: LobbyState, me: number, isHost: boolean): string {
+    const SLOT_NAMES = slotNames(st.map);
     const rows = st.players
       .map((p, i) => {
         const mine = i === me;
@@ -481,6 +513,8 @@ export class Menu {
     return `<h2>Lobby</h2><p class="note ok">Direkte Verbindung steht.</p>
       <table class="lobby-table"><tr><th></th><th>Name</th><th>Partei</th><th>Farbe</th><th>Startort</th><th></th></tr>${rows}</table>
       ${st.players[me] ? this.factionInfo(st.players[me].faction, st.players[me].color) : ''}
+      <div class="row"><label>Karte</label>${isHost ? `<select data-f="map">${this.mapOptions(st.map, false)}</select>` : `<b>${MAP_INFO[st.map].name}</b>`}</div>
+      ${this.mapInfo(st.map)}
       <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${[150, 250, 400].map((g) => `<option value="${g}" ${g === st.goal ? 'selected' : ''}>${g}</option>`).join('')}</select>` : st.goal}
         <label style="min-width:0;margin-left:16px">Startrohstoffe</label>${isHost ? `<select data-f="rich"><option value="0" ${st.rich ? '' : 'selected'}>normal</option><option value="1" ${st.rich ? 'selected' : ''}>reichlich</option></select>` : st.rich ? 'reichlich' : 'normal'}</div>
       <div class="row err">${conflicts.join(' ')}</div>
@@ -490,7 +524,8 @@ export class Menu {
   }
 
   private hostLobby(link: PeerLink, name: string): void {
-    const st: LobbyState = { players: [{ name, color: 0, slot: 0, ready: false, faction: this.settings.faction }], goal: RULES.prestigeGoalDefault, rich: false };
+    const map0 = this.settings.map === 'zufall' ? randomMap() : this.settings.map;
+    const st: LobbyState = { players: [{ name, color: 0, slot: 0, ready: false, faction: this.settings.faction }], goal: RULES.prestigeGoalDefault, rich: false, map: map0 };
     let started = false;
     const broadcast = () => link.send({ t: 'lobby', st } satisfies HostMsg);
     const render = () => {
@@ -508,10 +543,18 @@ export class Menu {
         saveSettings(this.settings);
         st.goal = Number(f('goal')!.value);
         st.rich = f('rich')!.value === '1';
+        const nm = f('map')!.value as MapId;
+        if (nm !== st.map) {
+          st.map = nm;
+          this.settings.map = nm;
+          saveSettings(this.settings);
+          // Kartenwechsel: Bereitschaft zurücksetzen, damit beide die neue Karte bestätigen
+          for (const p of st.players) p.ready = false;
+        }
         broadcast();
         render();
       };
-      ['fac', 'color', 'slot', 'ready', 'goal', 'rich'].forEach((k) => f(k)?.addEventListener('change', update));
+      ['fac', 'color', 'slot', 'ready', 'goal', 'rich', 'map'].forEach((k) => f(k)?.addEventListener('change', update));
       f('name')?.addEventListener('change', update);
       this.bind(box, {
         leave: () => this.main(),
@@ -523,9 +566,10 @@ export class Menu {
             return void (m.textContent = 'Farbe und Startort müssen sich unterscheiden.');
           started = true;
           const seed = (Math.random() * 2 ** 31) | 0;
-          link.send({ t: 'start', seed, goal: st.goal, rich: st.rich, me: 1, players: st.players } satisfies HostMsg);
+          link.send({ t: 'start', seed, goal: st.goal, rich: st.rich, me: 1, players: st.players, map: st.map } satisfies HostMsg);
           const world = new World({
             seed,
+            mapId: st.map,
             players: st.players.map((p) => ({ name: p.name, color: p.color, slot: p.slot, isAI: false, faction: p.faction })),
             prestigeGoal: st.goal,
             richStart: st.rich,
@@ -612,7 +656,7 @@ export class Menu {
       } else if (m.t === 'ping') link.send({ t: 'pong', n: m.n });
       else if (m.t === 'start') {
         started = true;
-        const driver = new GuestDriver(m.seed, m.me, link);
+        const driver = new GuestDriver(m.seed, m.me, link, m.map);
         this.link = null;
         this.enterGame(() => Game.create(driver, { tutorial: false, onExit: () => this.exitGame() }, this.settings.renderer));
       } else if (m.t === 'bye') {

@@ -1,7 +1,8 @@
 // Canvas-2D-Darstellung. Liest nur den ClientState und Oberflächenzustand; verändert keine Simulation.
 import { BUILDINGS, RULES, UNITS } from '../data/defs';
 import type { CBuilding, CUnit, ClientState } from '../game/client';
-import { T } from '../sim/map';
+import { T, isBarrier } from '../sim/map';
+import { barrierMask, barrierStyle, ditchMask, gateAlongX } from './terrainmask';
 import { BaseRenderer, OK, UNIT_SCALE, playerColor, type Placement, type UIOverlay } from './view';
 import { S, TH, TW } from './draw';
 import {
@@ -18,6 +19,8 @@ export class CanvasRenderer extends BaseRenderer {
   private terrain: TerrainSprites;
   private trees: Sprite[];
   private knicks: Sprite[];
+  private deiche: Sprite[];
+  private walls: Sprite[];
   private gates: Sprite[];
   private objs: Float64Array = new Float64Array(0);
   private objCount = 0;
@@ -28,6 +31,8 @@ export class CanvasRenderer extends BaseRenderer {
     this.terrain = makeTerrain();
     this.trees = makeTrees();
     this.knicks = makeKnicks();
+    this.deiche = makeKnicks('deich');
+    this.walls = makeKnicks('wall');
     this.gates = [makeGate('x'), makeGate('y')];
   }
 
@@ -84,11 +89,14 @@ export class CanvasRenderer extends BaseRenderer {
           case T.UFER: img = ter.ufer[v % 3]; break;
           case T.MOOR: img = ter.moor[v % 3]; break;
           case T.LEHM: img = ter.lehm[v & 1]; break;
+          case T.HEIDE: img = ter.heide[v % 3]; break;
+          case T.WATT: img = ter.watt[v % 3]; break;
           default: img = ter.gras[v & 3];
         }
         if (c.fieldOcc[i]) img = ter.feld[v % 3];
         g.drawImage(img, sx - tw / 2 - 0.5, sy - 0.5, tw + 1, th + 1);
         drawn++;
+        if (t === T.GRABEN) g.drawImage(ter.ditch[ditchMask(c.map, x, y)], sx - tw / 2, sy, tw, th);
         if (t === T.WASSER || t === T.FLACH) {
           g.globalAlpha = t === T.FLACH ? 0.5 : 0.7;
           g.drawImage(ter.wave[(waveFrame + v) & 3], sx - tw / 2, sy, tw, th);
@@ -107,12 +115,12 @@ export class CanvasRenderer extends BaseRenderer {
           g.drawImage(ter.road[m], sx - tw / 2, sy, tw, th);
         }
         if (c.trees[i]) this.pushObj(x + y + 1, OK.Tree, i);
-        else if (t === T.KNICK) this.pushObj(x + y + 1, OK.Knick, i);
+        else if (isBarrier(t)) this.pushObj(x + y + 1, OK.Knick, i);
         else if (t === T.TOR) this.pushObj(x + y + 1, OK.Gate, i);
       }
     }
     // Moor-Fundstelle
-    const mo = c.map.moor;
+    const mo = c.map.site;
     if (vis[mo.y * W + mo.x]) this.pushObj(mo.x + mo.y + 1, OK.MoorSite, 0);
     for (const b of c.buildings.values()) {
       const d = BUILDINGS[b.t];
@@ -244,34 +252,24 @@ export class CanvasRenderer extends BaseRenderer {
   }
 
   private drawKnick(i: number): void {
-    const { w: W, h: H, terrain, variant } = this.c.map;
-    const x = i % W, y = Math.floor(i / W);
-    const kn = (xx: number, yy: number) => {
-      if (xx < 0 || yy < 0 || xx >= W || yy >= H) return false;
-      const q = terrain[yy * W + xx];
-      return q === T.KNICK || q === T.TOR;
-    };
-    let m = 0;
-    if (kn(x + 1, y)) m |= 1;
-    if (kn(x - 1, y)) m |= 2;
-    if (kn(x, y + 1)) m |= 4;
-    if (kn(x, y - 1)) m |= 8;
-    if (variant[i] % 5 === 0) m |= 16;
+    const m = this.c.map;
+    const x = i % m.w, y = Math.floor(i / m.w);
+    const st = barrierStyle(m.terrain[i]);
+    const set = st === 'deich' ? this.deiche : st === 'wall' ? this.walls : this.knicks;
     const [sx, sy] = this.toScreen(x, y);
-    this.drawSprite(this.knicks[m], sx, sy);
+    this.drawSprite(set[barrierMask(m, x, y)], sx, sy);
   }
 
   private drawGate(i: number): void {
-    const { w: W, terrain } = this.c.map;
-    const x = i % W, y = Math.floor(i / W);
-    const alongX = terrain[y * W + x + 1] === T.KNICK || terrain[y * W + x - 1] === T.KNICK;
+    const m = this.c.map;
+    const x = i % m.w, y = Math.floor(i / m.w);
     const [sx, sy] = this.toScreen(x, y);
-    this.drawSprite(this.gates[alongX ? 1 : 0], sx, sy);
+    this.drawSprite(this.gates[gateAlongX(m, x, y) ? 1 : 0], sx, sy);
   }
 
   private drawMoorSite(now: number): void {
     const g = this.g, z = this.cam.z;
-    const mo = this.c.map.moor;
+    const mo = this.c.map.site;
     const [sx, sy] = this.toScreen(mo.x + 0.5, mo.y + 0.5);
     // Torfstich mit Pflöcken und Markierung
     g.fillStyle = '#2a2116';
@@ -585,6 +583,7 @@ export class Minimap {
     const col: Record<number, [number, number, number]> = {
       [T.GRAS]: [104, 132, 62], [T.WASSER]: [58, 92, 118], [T.FLACH]: [78, 120, 138], [T.UFER]: [166, 152, 104],
       [T.MOOR]: [78, 74, 46], [T.WEG]: [156, 132, 88], [T.KNICK]: [62, 88, 40], [T.LEHM]: [138, 106, 66], [T.TOR]: [156, 132, 88],
+      [T.HEIDE]: [122, 100, 90], [T.WATT]: [138, 130, 112], [T.GRABEN]: [70, 110, 122], [T.DEICH]: [104, 148, 72], [T.WALL]: [112, 96, 58],
     };
     for (let i = 0; i < w * h; i++) {
       const cc = c.trees[i] ? [52, 88, 40] : col[terrain[i]];

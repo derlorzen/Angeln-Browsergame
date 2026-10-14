@@ -3,8 +3,10 @@
 Echtzeit-Strategiespiel im Browser. Zwei Siedlungen an der Schlei – **Kappeln** und **Arnis** – ringen um Fischgründe,
 Handel und die Wege zum **Brarup-Markt** in Süderbrarup. Siedlungsbau und Produktionsketten wie bei Anno 1602,
 direkte Einheitensteuerung wie bei Command & Conquer, Erkundung und Gefechte wie bei Age of Empires – mit eigenen
-Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Landschaft Angeln um 1600.
+Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Landschaft Angeln um 1600 – und fünf weitere Karten zwischen Rendsburg und Esbjerg.
 
+- Sechs Karten zwischen Rendsburg und Esbjerg (Schlei, Flensburger Förde, Danewerk, Eider, Nordfriesische Marsch,
+  Ribe/Kongeå) mit fair ausgeglichenen Startplätzen (siehe unten)
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
 - Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
 - Online-Modus für zwei Menschen über **direktes WebRTC**, ohne eigenen Server (manueller Code-Austausch)
@@ -62,6 +64,24 @@ HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sic
 
 Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedlich (z. B. greifen die Dänen früher an).
 
+## Karten
+
+| Karte | Startorte | Neutraler Markt | Fundstelle | Besonderheiten |
+|---|---|---|---|---|
+| **Die Schlei** (Angeln) | Kappeln / Arnis | Brarup-Markt | Thorsberger Moor | Meeresarm, Knicklandschaft |
+| **Flensburger Förde** | Glücksburg / Gravenstein | Flensburger Markt | Findling am Fördeufer | über das Wasser nah, zu Lande nur um die Fördespitze |
+| **Danewerk** | Schuby / Kropp | Viehmarkt am Ochsenweg | Haithabu | durchgehender Wall mit wenigen Toren, Heide im Westen, Haddebyer Noor |
+| **Eider und Rendsburg** | Owschlag / Jevenstedt | Rendsburger Markt (Eiderinsel) | Grenzstein an der Eider | Fluss als Grenze mit Brücken und Furt, Moore, Gräben in der Niederung |
+| **Nordfriesische Marsch** | Husum / Tönning | Viehmarkt Oldenswort | Rungholt-Spuren | Watt (begehbar, langsam), Priele, Deiche mit Stöpen, Gräben statt Knicks |
+| **Ribe und Kongeå** | Varde / Tønder | Ochsenmarkt Ribe | Grabhügel auf der Heide | Wattenmeer mit Fanø und Rømø, Heide, Kongeå mit Furten |
+
+Die Orte wurden nach bekannten Koordinaten (etwa ±2 km genau) maßstabstreu und mit Norden oben eingepasst; ein Abgleich
+mit Google Maps war bei der Erstellung nicht möglich. Damit keine Seite bevorzugt wird, gleicht der Generator danach aus:
+Markt und Fundstelle liegen für beide gleich weit entfernt (gemessen als Laufweg), Holz und Acker in Reichweite werden
+angeglichen, jeder Startplatz hat Lehmboden, und Startplätze ohne Ufer bekommen einen Fischteich. Die Abweichungen von
+der echten Geografie sind im Spiel unter *Hintergrund & Quellen* je Karte gekennzeichnet. Im Mehrspieler wählt der Host
+die Karte.
+
 ## Kurze Spielanleitung
 
 **Ziel:** Gegnerisches Dorfzentrum zerstören *oder* als Erster das Prestigeziel erreichen (Standard 250).
@@ -70,16 +90,17 @@ Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedl
 |---|---|---|
 | Holz | Arbeiter schlagen Bäume (Rechtsklick auf Baum), Abgabe am Dorfzentrum/Holzfällerlager | fast alle Gebäude, Räucherei, Armbrustschützen |
 | Getreide | Bauernhof mit Feldern, bis zu 3 zugewiesene Arbeiter | Arbeiter, Soldaten, Mühle |
-| Fisch | Heringszaun am Ufer der Schlei (arbeitet selbstständig) | Späher, Landsknechte, Räucherei |
+| Fisch | Heringszaun am Ufer – Meer, Fluss, See, Watt oder Fischteich (arbeitet selbstständig) | Späher, Landsknechte, Räucherei |
 | Lehm | Lehmgrube auf Lehmboden, bis zu 3 Arbeiter | Gebäude |
 | Waren | Bockmühle (4 Getreide → 3 Waren), Räucherei (3 Fisch + 1 Holz → 2 Waren) | Verkauf am Markt |
 | Taler | Warenverkauf am Markt | Soldaten, Holz/Lehm zukaufen |
 
 - **Bevölkerung** begrenzt Arbeiter und Soldaten; Wohnhäuser +5 (max. 80).
-- **Brarup-Markt** (neutral, Süderbrarup im Westen): Wer ihn allein mit Einheiten besetzt, verkauft teurer, erhält
-  doppeltes Prestige je Verkauf und laufend Prestige → umkämpfter Verkehrsknoten.
-- **Thorsberger Moor:** Die erste Einheit an der Fundstelle („?“) bringt einmalig Prestige und Taler.
-- **Knicks** (Wallhecken) versperren Weg und Sicht; Wege und Tore führen hindurch.
+- **Neutraler Markt** (⚑, je Karte ein anderer Ort, z. B. Brarup-Markt): Wer ihn allein mit Einheiten besetzt,
+  verkauft teurer, erhält doppeltes Prestige je Verkauf und laufend Prestige → umkämpfter Verkehrsknoten.
+- **Fundstelle** („?“, z. B. Thorsberger Moor): Die erste Einheit dort bringt einmalig Prestige und Taler.
+- **Knicks** (Wallhecken) versperren Weg und Sicht; Wege und Tore führen hindurch. **Deiche** und das **Danewerk**
+  ebenso (nur Stöpen/Tore), **Gräben** versperren nur den Weg. Watt ist begehbar, aber langsam.
 
 **Steuerung:** Linksklick wählt, Rahmen ziehen wählt mehrere, Rechtsklick bewegt/arbeitet/greift an,
 Befehlskarte unten rechts (Tasten Q W E R / A S D F / Y X C V), Pfeiltasten/Bildrand/mittlere Maustaste bewegen die
@@ -91,7 +112,7 @@ Kamera, Mausrad zoomt, Minikarte anklicken. Im Spiel: **F1** Hilfe, **F2** Lehrm
 1. Spieler A: *Mehrspieler: Spiel erstellen* → *Einladung erzeugen* → langen Einladungscode kopieren und z. B. per Messenger schicken.
 2. Spieler B: *Spiel beitreten* → Code einfügen → *Antwortcode erzeugen* → Antwortcode zurückschicken.
 3. Spieler A fügt den Antwortcode ein → *Verbinden*. Sobald der DataChannel offen ist, erscheint die Lobby.
-4. Beide wählen Farbe/Startort, setzen „bereit“, A startet.
+4. A wählt die Karte, beide wählen Partei/Farbe/Startort, setzen „bereit“, A startet.
 
 Es gibt **keinen** Vermittlungsserver. Ein optionaler öffentlicher STUN-Server hilft beim Finden der Verbindungswege
 (abschaltbar), TURN ist nicht voreingestellt (optional eigener Server). Direktes WebRTC funktioniert nicht durch jedes

@@ -7,7 +7,10 @@ werden beim Start im Browser prozedural erzeugt.
 src/
   data/defs.ts         Spieldaten: Ressourcen, Gebäude, Einheiten, Kosten, Bauzeiten, Raten, Regeln
   sim/                 Simulation (DOM-frei, auch in Node testbar)
-    map.ts             Kartengenerator (Schlei, Ufer, Moor, Lehm, Wälder, Wege, Knicks mit Toren)
+    map.ts             Kartenkatalog (6 Karten) und Generator: geografische Maler je Karte (Länge/Breite →
+                       Kachel, maßstabstreu in die Raute eingepasst), dann gemeinsame Pipeline: Ufer, Lehm, Wald,
+                       Wege (A*), Knicks/Gräben, Deiche/Wall mit Toren, Fischteiche, Fairnessausgleich (BFS-Wege
+                       zu Markt/Fundstelle, Holz, Acker, Lehm)
     world.ts           maßgebliche Welt: Befehlsprüfung, Wirtschaft/Produktionsketten, Einheiten, Kampf, Sieg, Speichern
     path.ts, heap.ts   A* auf dem Raster (8 Richtungen, kein Eckenschneiden, Geländekosten, Glättung)
     rules.ts           gemeinsame Regeln: Bauplatzprüfung (auch für die Vorschau), Sichtberechnung mit Knick-Sichtsperre
@@ -27,6 +30,7 @@ src/
     pixi.ts            PixiRenderer (WebGL): Atlas, Chunks, Tiefensortierung, Nebel-Sprite, Stimmungseffekte
     renderer.ts        CanvasRenderer (Canvas 2D, Rückfallebene) und Minikarte
     factory.ts         Auswahl WebGL/Canvas
+    terrainmask.ts     Nachbarschaftsmasken für Knicks, Deiche, Wall, Gräben und Tore
     draw.ts, sprites.ts, props.ts, units.ts   prozedurale Sprites (Gelände, Gebäude, Requisiten, Figuren, Symbole)
   ui/                  HUD (Ressourcenleiste, Auswahlfenster, Befehlskarte, Tooltips), Menüs/Lobby, Lehrmeister, Texte
   audio/sound.ts       synthetische Klänge (WebAudio)

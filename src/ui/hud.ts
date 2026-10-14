@@ -47,7 +47,7 @@ export class Hud {
     const tips: Record<string, string> = {
       holz: 'Holz: von Arbeitern im Wald geschlagen. Für fast alle Gebäude nötig.',
       getreide: 'Getreide: vom Bauernhof (Arbeiter zuweisen). Für Arbeiter, Soldaten und die Mühle.',
-      fisch: 'Fisch: vom Heringszaun an der Schlei. Für Soldaten, Späher und die Räucherei.',
+      fisch: 'Fisch: vom Heringszaun am Ufer (Meer, Fluss, See, Watt oder Fischteich). Für Soldaten, Späher und die Räucherei.',
       lehm: 'Lehm: aus der Lehmgrube (nur auf Lehmboden). Für Gebäude.',
       waren: 'Waren: Mehl aus der Mühle und Bückling aus der Räucherei. Am Markt verkaufen.',
       taler: 'Taler: Erlös aus dem Warenverkauf. Für Soldaten und Zukäufe am Markt.',
@@ -56,7 +56,7 @@ export class Hud {
     for (const r of RES) parts.push(`<div class="res" data-r="${r}" data-tip="${esc(tips[r])}"><img src="${resIcon(r)}" alt=""><b>0</b></div>`);
     parts.push(`<div class="res" data-r="pop" data-tip="Bevölkerung / Obergrenze. Wohnhäuser erhöhen die Grenze um 5 (max. ${RULES.maxPop})."><img src="${resIcon('pop')}" alt=""><b>0</b></div>`);
     parts.push(`<div class="res goal" data-r="prestige" data-tip=""><img src="${resIcon('prestige')}" alt=""><b>0</b><span class="bar"><i></i></span><span class="bar enemy"><i></i></span></div>`);
-    parts.push(`<div class="res" data-r="brarup" data-tip="Brarup-Markt in Süderbrarup: Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
+    parts.push(`<div class="res" data-r="brarup" data-tip="${esc(this.game.client.map.marketName)} (neutral, ⚑): Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
     parts.push('<div class="spacer"></div><span id="netinfo" class="note"></span><span id="clock">00:00</span>');
     parts.push('<button class="btn" data-act="help" title="Hilfe (F1)">Hilfe</button><button class="btn" data-act="tut" title="Lehrmeister (F2)">Lehrmeister</button><button class="btn" data-act="mute" title="Ton an/aus (M)">Ton</button><button class="btn" data-act="menu" title="Menü (Esc)">Menü</button>');
     this.top.innerHTML = parts.join('');
@@ -73,7 +73,7 @@ export class Hud {
   private prestigeTip(): string {
     const c = this.game.client;
     const rows = c.players.map((p) => `${esc(p.name)}: ${p.prestige} Prestige${p.defeated ? ' (besiegt)' : ''}`).join('<br>');
-    return `<h4>Prestige</h4>Wirtschaftlicher Sieg bei <b>${c.goal}</b> Prestige.<br>Prestige gibt es für Warenverkäufe am Markt (${RULES.marketSell.prestige}, mit Brarup-Markt ${RULES.marketSellControlled.prestige} je ${RULES.marketSell.waren} Waren), für die Besetzung des Brarup-Markts und einmalig für die Erkundung der Fundstelle im Thorsberger Moor (${RULES.moorReward.prestige}).<br><br>${rows}`;
+    return `<h4>Prestige</h4>Wirtschaftlicher Sieg bei <b>${c.goal}</b> Prestige.<br>Prestige gibt es für Warenverkäufe am Markt (${RULES.marketSell.prestige}, mit besetztem ${esc(c.map.marketName)} ${RULES.marketSellControlled.prestige} je ${RULES.marketSell.waren} Waren), für die Besetzung des ${esc(c.map.marketName)} und einmalig für die Erkundung der Fundstelle „${esc(c.map.site.name)}“ (${RULES.moorReward.prestige}).<br><br>${rows}`;
   }
 
   updateTop(): void {
@@ -169,7 +169,7 @@ export class Hud {
     if (d.produce)
       rows.push(`<div class="row2"><b>Ertrag:</b> ${d.produce.amount} ${RES_NAME[d.produce.res]} alle ${fmt(d.produce.time)} s${d.produce.perWorker ? ' je zugewiesenem Arbeiter (max. ' + d.staffSlots + ')' : ' (selbstständig)'}</div>`);
     if (d.process) rows.push(`<div class="row2"><b>Verarbeitung:</b> ${costText(d.process.input)} → ${costText(d.process.output)} alle ${fmt(d.process.time)} s</div>`);
-    if (d.placement === 'ufer') rows.push('<div class="row2"><b>Bauplatz:</b> direkt am Ufer der Schlei</div>');
+    if (d.placement === 'ufer') rows.push('<div class="row2"><b>Bauplatz:</b> direkt am Ufer (Wasser oder Watt)</div>');
     if (d.placement === 'lehm') rows.push('<div class="row2"><b>Bauplatz:</b> mindestens 2 Felder Lehmboden</div>');
     rows.push(`<div class="row2 note">Nur innerhalb von ${RULES.buildRadius} Kacheln um eigene fertige Gebäude. Linksklick setzt, Umschalt hält den Baumodus, Rechtsklick bricht ab.</div>`);
     return rows.join('');
@@ -279,7 +279,7 @@ export class Hud {
         if (b.t === 'markt') {
           const ctrl = c.brarup.c === c.me;
           const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
-          lines.push(`Verkauf: ${s.waren} Waren → ${Math.round(s.taler * (FACTION_DEFS[c.faction(c.me)].marketTalerMul ?? 1))} Taler + ${s.prestige} Prestige${ctrl ? ' (Brarup-Bonus)' : ''}`);
+          lines.push(`Verkauf: ${s.waren} Waren → ${Math.round(s.taler * (FACTION_DEFS[c.faction(c.me)].marketTalerMul ?? 1))} Taler + ${s.prestige} Prestige${ctrl ? ' (Marktbonus)' : ''}`);
           lines.push(`Automatischer Verkauf: ${b.as ? 'an' : 'aus'}`);
         }
         if (d.popCap) lines.push(`Bietet Wohnraum für ${d.popCap}`);
@@ -381,7 +381,7 @@ export class Hud {
         const buyPrice = Math.round(RULES.marketBuy.taler * (fd.marketBuyMul ?? 1));
         out.push({
           key: 'Q', icon: resIcon('waren'), label: 'Verkaufen',
-          tip: () => `<h4>Waren verkaufen (Q)</h4>${sell().waren} Waren → ${sell().taler} Taler und ${sell().prestige} Prestige.<br>Wer den Brarup-Markt besetzt, erhält ${RULES.marketSellControlled.taler} Taler und ${RULES.marketSellControlled.prestige} Prestige.`,
+          tip: () => `<h4>Waren verkaufen (Q)</h4>${sell().waren} Waren → ${sell().taler} Taler und ${sell().prestige} Prestige.<br>Wer den ${esc(c.map.marketName)} besetzt, erhält ${RULES.marketSellControlled.taler} Taler und ${RULES.marketSellControlled.prestige} Prestige.`,
           state: () => ((c.mePlayer?.res?.waren ?? 0) >= RULES.marketSell.waren ? 'ok' : 'poor'),
           act: () => g.issue({ c: 'sell', b: b.i }),
         });

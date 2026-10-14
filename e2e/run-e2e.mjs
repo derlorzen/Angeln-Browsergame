@@ -80,8 +80,8 @@ try {
   await A.page.waitForSelector('h2:has-text("Lobby")', { timeout: 20000 });
   await B.page.waitForSelector('h2:has-text("Lobby")', { timeout: 20000 });
   check('DataChannel offen, gemeinsame Lobby auf beiden Seiten', true);
-  await B.page.waitForSelector('text=Anna', { timeout: 5000 });
-  await A.page.waitForSelector('text=Bert', { timeout: 5000 });
+  await B.page.waitForSelector('text=Anna', { timeout: 10000 }).catch(async (e) => { console.log('GAST:', (await B.page.textContent('body')).slice(0, 400)); console.log('HOST:', (await A.page.textContent('body')).slice(0, 400)); throw e; });
+  await A.page.waitForSelector('text=Bert', { timeout: 10000 });
   check('Namen werden in der Lobby ausgetauscht', true);
   // Start ohne Bereitschaft verweigert
   await A.page.click('[data-a=start]');
@@ -93,6 +93,10 @@ try {
   await A.page.selectOption('[data-f=fac]', 'friesen');
   await B.page.waitForFunction(() => /Nordfriesen/.test(document.querySelector('.lobby-table').textContent), null, { timeout: 5000 });
   check('Parteiwahl wird in der Lobby ausgetauscht', true);
+  // Kartenwahl durch den Host
+  await A.page.selectOption('[data-f=map]', 'marsch');
+  await B.page.waitForFunction(() => /Nordfriesische Marsch/.test(document.body.textContent), null, { timeout: 5000 });
+  check('Kartenwahl des Hosts erscheint beim Gast', true);
   await B.page.check('[data-f=ready]');
   await A.page.waitForSelector('.lobby-table .ok', { timeout: 5000 });
   await A.page.check('[data-f=ready]');
@@ -102,6 +106,8 @@ try {
   await A.page.waitForFunction(() => window.__game?.client?.units?.size > 0, null, { timeout: 10000 });
   await B.page.waitForFunction(() => window.__game?.client?.units?.size > 0, null, { timeout: 10000 });
   check('Partie startet auf beiden Seiten', true);
+  const maps = [await A.page.evaluate(() => window.__game.client.map.id), await B.page.evaluate(() => window.__game.client.map.id)];
+  check('Beide spielen auf der gewählten Karte', maps[0] === 'marsch' && maps[1] === 'marsch', maps.join('/'));
   await A.page.waitForTimeout(1500);
 
   // ---------- Synchronisation

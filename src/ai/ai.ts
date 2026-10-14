@@ -153,7 +153,7 @@ export class AI {
     const scout = units.find((u) => u.type === 'spaeher');
     if (scout && scout.order.k === 'none') {
       if (this.s.scoutStep === 0 && w.moorFoundBy < 0) {
-        this.cmd(w, { c: 'move', ids: [scout.id], x: w.map.moor.x + 0.5, y: w.map.moor.y + 0.5 });
+        this.cmd(w, { c: 'move', ids: [scout.id], x: w.map.site.x + 0.5, y: w.map.site.y + 0.5 });
         this.s.scoutStep = 1;
       } else if (this.s.scoutStep <= 1) {
         const m = w.map.market;

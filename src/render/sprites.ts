@@ -59,6 +59,9 @@ export interface TerrainSprites {
   feld: HTMLCanvasElement[];
   wave: HTMLCanvasElement[];
   road: HTMLCanvasElement[]; // 16 Nachbarschaftsmasken
+  heide: HTMLCanvasElement[];
+  watt: HTMLCanvasElement[];
+  ditch: HTMLCanvasElement[]; // Gräben, 16 Masken
 }
 
 export function makeTerrain(): TerrainSprites {
@@ -193,7 +196,67 @@ export function makeTerrain(): TerrainSprites {
     g.restore();
     road.push(c);
   }
-  return { gras, lehm, ufer, moor, wasser, flach, feld, wave, road };
+  const heide = [0, 1, 2].map((v) =>
+    tileCanvas(['#7a6a52', '#806e56', '#74664e'][v], 111 + v, (g, w, h, r) => {
+      speckle(g, w, h, r, ['#6a5a44', '#8a7a5c', '#5f6a3a'], 160, 2);
+      // blühendes Heidekraut
+      for (let k = 0; k < 60; k++) {
+        g.fillStyle = r() < 0.6 ? '#8a5a78' : '#a07090';
+        g.fillRect(r() * w, r() * h, 2, 2);
+      }
+      speckle(g, w, h, r, ['#5a6a34', '#6a7a3a'], 30, 3);
+    }),
+  );
+  const watt = [0, 1, 2].map((v) =>
+    tileCanvas(['#8a8270', '#857d6a', '#908874'][v], 121 + v, (g, w, h, r) => {
+      speckle(g, w, h, r, ['#7a7260', '#9a927e', '#6f6858'], 160, 2);
+      // Rippelmarken und Pfützen
+      g.strokeStyle = 'rgba(70,64,52,0.35)';
+      g.lineWidth = 1;
+      for (let k = 0; k < 9; k++) {
+        const y = r() * h, x = r() * w;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.quadraticCurveTo(x + 6, y - 2, x + 12, y);
+        g.stroke();
+      }
+      for (let k = 0; k < 3; k++) {
+        g.fillStyle = 'rgba(90,120,135,0.45)';
+        g.beginPath();
+        g.ellipse(r() * w, r() * h, 4 + r() * 8, 2 + r() * 3, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }),
+  );
+  const ditch: HTMLCanvasElement[] = [];
+  for (let m = 0; m < 16; m++) {
+    const w = TW * S, h = TH * S;
+    const [c, g] = canvas(w, h);
+    const cx = w / 2, cy = h / 2;
+    g.save();
+    diamondClip(g, w, h);
+    g.clip();
+    const ends: Pt[] = [];
+    if (m & 1) ends.push([cx + w / 4, cy + h / 4]);
+    if (m & 2) ends.push([cx - w / 4, cy - h / 4]);
+    if (m & 4) ends.push([cx - w / 4, cy + h / 4]);
+    if (m & 8) ends.push([cx + w / 4, cy - h / 4]);
+    if (!ends.length) ends.push([cx + w / 4, cy + h / 4], [cx - w / 4, cy - h / 4]);
+    g.lineCap = 'round';
+    for (const [col, lw] of [['#5d7a3a', 18], ['#3f6274', 11], ['#5a8696', 4]] as [string, number][]) {
+      g.strokeStyle = col;
+      g.lineWidth = lw;
+      for (const e of ends) {
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(e[0] + (e[0] - cx) * 0.2, e[1] + (e[1] - cy) * 0.2);
+        g.stroke();
+      }
+    }
+    g.restore();
+    ditch.push(c);
+  }
+  return { gras, lehm, ufer, moor, wasser, flach, feld, wave, road, heide, watt, ditch };
 }
 
 // ------------------------------------------------------------------ Bäume, Knicks
@@ -224,8 +287,9 @@ export function makeTrees(): Sprite[] {
   return out;
 }
 
-/** Knick-Wall mit Bewuchs; Maske wie bei Straßen. */
-export function makeKnicks(): Sprite[] {
+/** Linienhindernisse: Knick (Wall mit Bewuchs), Deich (breiter Grasdeich), Danewerk (hoher Erdwall); Maske wie bei Straßen. */
+export function makeKnicks(style: 'knick' | 'deich' | 'wall' = 'knick'): Sprite[] {
+  if (style !== 'knick') return makeEmbankments(style);
   const out: Sprite[] = [];
   for (let m = 0; m < 32; m++) {
     const mask = m & 15;
@@ -264,6 +328,76 @@ export function makeKnicks(): Sprite[] {
       bush(g, x, y - 36, 14, '#3f6a2e', r);
     }
     out.push({ c, ax: w / 2 / S, ay: 30 });
+  }
+  return out;
+}
+
+function makeEmbankments(style: 'deich' | 'wall'): Sprite[] {
+  const out: Sprite[] = [];
+  const width = style === 'deich' ? 0.46 : 0.44;
+  const H = style === 'deich' ? 11 : 15;
+  const side = style === 'deich' ? '#5a7f38' : '#6a5a36';
+  const top = style === 'deich' ? '#76a04a' : '#5f7a36';
+  for (let m = 0; m < 32; m++) {
+    const mask = m & 15;
+    const w = TW * S, h = (TH + 34) * S;
+    const [c, g] = canvas(w, h);
+    const r = prng(500 + m + (style === 'wall' ? 50 : 0));
+    const iso = new Iso(w / 2, 34 * S);
+    const ends: [number, number][] = [];
+    if (mask & 1) ends.push([1, 0.5]);
+    if (mask & 2) ends.push([0, 0.5]);
+    if (mask & 4) ends.push([0.5, 1]);
+    if (mask & 8) ends.push([0.5, 0]);
+    if (!ends.length) ends.push([0.5, 0.5]);
+    for (const [ex, ey] of ends) {
+      const dx = ex - 0.5, dy = ey - 0.5;
+      const px = -dy * width, py = dx * width;
+      poly(g, [iso.p(0.5 + px, 0.5 + py), iso.p(ex + px, ey + py), iso.p(ex + px * 0.35, ey + py * 0.35, H), iso.p(0.5 + px * 0.35, 0.5 + py * 0.35, H)], shade(side, 0.08));
+      poly(g, [iso.p(0.5 - px, 0.5 - py), iso.p(ex - px, ey - py), iso.p(ex - px * 0.35, ey - py * 0.35, H), iso.p(0.5 - px * 0.35, 0.5 - py * 0.35, H)], shade(side, -0.15));
+      poly(g, [iso.p(0.5 + px * 0.35, 0.5 + py * 0.35, H), iso.p(ex + px * 0.35, ey + py * 0.35, H), iso.p(ex - px * 0.35, ey - py * 0.35, H), iso.p(0.5 - px * 0.35, 0.5 - py * 0.35, H)], top);
+    }
+    poly(g, [iso.p(0.5 - width * 0.35, 0.5, H), iso.p(0.5, 0.5 - width * 0.35, H), iso.p(0.5 + width * 0.35, 0.5, H), iso.p(0.5, 0.5 + width * 0.35, H)], top);
+    // Grasbüschel
+    for (let k = 0; k < 14; k++) {
+      const [x, y] = iso.p(0.25 + r() * 0.5, 0.25 + r() * 0.5, H * (0.4 + r() * 0.6));
+      g.strokeStyle = r() < 0.5 ? shade(top, 0.15) : shade(top, -0.2);
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + (r() - 0.5) * 3, y - 4);
+      g.stroke();
+    }
+    if (style === 'deich' && m >= 16) {
+      // Deichschaf
+      const [x, y] = iso.p(0.45, 0.55, H);
+      g.fillStyle = '#ece8dc';
+      for (const [ddx, ddy] of [[-3, 0], [0, -1], [3, 0]]) {
+        g.beginPath();
+        g.arc(x + ddx, y - 4 + ddy, 3.4, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.fillStyle = '#2a2420';
+      g.beginPath();
+      g.ellipse(x + 6.5, y - 5, 2.2, 1.6, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    if (style === 'wall') {
+      // überwachsener Wall mit Sträuchern; gelegentlich Feldstein- bzw. Backsteinreste (Waldemarsmauer)
+      for (let k = 0; k < 2; k++) {
+        const [x, y] = iso.p(0.3 + r() * 0.4, 0.3 + r() * 0.4, H + 2);
+        bush(g, x, y - 4, 7 + r() * 4, r() < 0.6 ? '#4d6e2c' : '#6a7d34', r);
+      }
+      if (m >= 16) {
+        const [x, y] = iso.p(0.55, 0.65, 2);
+        for (let row = 0; row < 3; row++)
+          for (let k = 0; k < 4; k++) {
+            g.fillStyle = (row + k) % 2 ? '#9a4630' : '#8a3a26';
+            g.fillRect(x - 12 + k * 6 + (row % 2) * 3, y - 6 - row * 4, 5.4, 3.4);
+          }
+      }
+    }
+    out.push({ c, ax: w / 2 / S, ay: 34 });
   }
   return out;
 }

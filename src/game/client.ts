@@ -2,7 +2,7 @@
 // lokal (vom eigenen World-Objekt) wie im Netzwerk (vom Host). Die Darstellung liest nur hiervon.
 import { BUILDINGS, type BuildingType, type UnitType } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type ArchStyle, type FactionId } from '../data/factions';
-import { generateMap, type GameMap } from '../sim/map';
+import { generateMap, type GameMap, type MapId } from '../sim/map';
 import { computeVisibility, type PlacementView, type VisionSource } from '../sim/rules';
 import type { BSnap, PlayerSnap, Snapshot, USnap } from '../sim/snapshot';
 import type { SimEvent } from '../sim/types';
@@ -40,8 +40,8 @@ export class ClientState {
   /** Wenn gesetzt (lokaler Host), wird die Sichtbarkeit direkt übernommen statt neu berechnet. */
   externalVis: Uint8Array | null = null;
 
-  constructor(seed: number, public me: number) {
-    this.map = generateMap(seed);
+  constructor(seed: number, public me: number, mapId: MapId = 'schlei') {
+    this.map = generateMap(seed, mapId);
     this.trees = this.map.trees; // eigene Kopie, da generateMap bei jedem Aufruf neu erzeugt
     const N = this.map.w * this.map.h;
     this.vis = new Uint8Array(N);
@@ -59,7 +59,20 @@ export class ClientState {
     return fudef(owner < 0 ? null : this.faction(owner), t);
   }
   bd(owner: number, t: BuildingType) {
+    if (t === 'brarupmarkt') return (this.marketDef ??= { ...fbdef(null, t), name: this.map.marketName });
     return fbdef(owner < 0 ? null : this.faction(owner), t);
+  }
+  private marketDef: ReturnType<typeof fbdef> | undefined;
+
+  /** Himmelsrichtung von der eigenen Siedlung zu einem Ort (Norden ist auf allen Karten oben). */
+  dirTo(x: number, y: number): string {
+    const dz = [...this.buildings.values()].find((b) => b.o === this.me && b.t === 'dorfzentrum');
+    const hx = dz ? dz.x + 1.5 : this.map.w / 2, hy = dz ? dz.y + 1.5 : this.map.h / 2;
+    const dx = x - hx, dy = y - hy;
+    const sx = dx - dy, sy = (dx + dy) / 2; // Bildschirmrichtung
+    if (Math.hypot(sx, sy) < 6) return 'ganz in der Nähe';
+    const a = Math.round((Math.atan2(sx, -sy) / (Math.PI / 4)) + 8) % 8;
+    return ['im Norden', 'im Nordosten', 'im Osten', 'im Südosten', 'im Süden', 'im Südwesten', 'im Westen', 'im Nordwesten'][a];
   }
 
   get mePlayer(): PlayerSnap | undefined {

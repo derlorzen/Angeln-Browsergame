@@ -170,7 +170,7 @@ try {
       }
     }, 500);
     // Gefecht an der Fundstelle
-    const mo = w.map.moor;
+    const mo = w.map.site;
     for (let k = 0; k < 30; k++) {
       const a = w.spawnUnit(k % 2 ? 'schuetze' : 'landsknecht', 0, dz0);
       const b = w.spawnUnit(k % 2 ? 'schuetze' : 'landsknecht', 1, dz1);
@@ -194,7 +194,7 @@ try {
   await page.evaluate(() => { const G = window.__game; const w = G.driver.world; const m = w.map.market; G.renderer.centerOn(m.x + 8, m.y - 14); G.renderer.cam.z = 1; });
   perf.push(await measure('Zoom 1, Patrouille im Bild'));
   await page.screenshot({ path: OUT + 'sp-perf-patrol.png' });
-  await page.evaluate(() => { const G = window.__game; const mo = G.driver.world.map.moor; G.renderer.centerOn(mo.x, mo.y); G.renderer.cam.z = 1; });
+  await page.evaluate(() => { const G = window.__game; const mo = G.driver.world.map.site; G.renderer.centerOn(mo.x, mo.y); G.renderer.cam.z = 1; });
   perf.push(await measure('Zoom 1, Gefecht im Bild'));
   await page.screenshot({ path: OUT + 'sp-battle.png' });
   await page.evaluate(() => { const G = window.__game; const m = G.driver.world.map.market; G.renderer.centerOn(m.x + 15, m.y - 15); G.renderer.cam.z = 0.5; });

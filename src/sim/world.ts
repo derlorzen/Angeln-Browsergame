@@ -5,7 +5,7 @@ import {
   type BuildingType, type Cost, type Res, type UnitType,
 } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
-import { generateMap, T, isWater, terrainWalkable, type GameMap } from './map';
+import { generateMap, T, isWater, terrainCost, terrainWalkable, type GameMap, type MapId } from './map';
 import { findPath, nearestPassable, type PathGrid } from './path';
 import { Rng } from './rng';
 import { checkPlacement, computeVisibility, type PlacementView, type VisionSource } from './rules';
@@ -25,6 +25,7 @@ export interface PlayerSetup {
 
 export interface WorldOptions {
   seed: number;
+  mapId?: MapId;
   players: PlayerSetup[];
   prestigeGoal?: number;
   richStart?: boolean;
@@ -76,7 +77,7 @@ export class World {
 
   constructor(opts: WorldOptions, skipSetup = false) {
     this.opts = opts;
-    this.map = generateMap(opts.seed);
+    this.map = generateMap(opts.seed, opts.mapId ?? 'schlei');
     const N = this.map.w * this.map.h;
     this.grid = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
     this.gridJump = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
@@ -88,8 +89,8 @@ export class World {
     for (let i = 0; i < this.cellsW * this.cellsW; i++) this.cells.push([]);
     for (let i = 0; i < N; i++) {
       const t = this.map.terrain[i];
-      this.grid.cost[i] = t === T.WEG || t === T.TOR ? 0.75 : t === T.MOOR ? 1.8 : 1;
-      this.gridJump.cost[i] = t === T.KNICK ? 1.6 : this.grid.cost[i];
+      this.grid.cost[i] = terrainCost(t);
+      this.gridJump.cost[i] = t === T.KNICK || t === T.GRABEN ? 1.6 : this.grid.cost[i];
       this.refreshPass(i);
     }
     if (skipSetup) return;
@@ -227,7 +228,7 @@ export class World {
     const t = this.map.terrain[i];
     const free = !this.map.trees[i] && !this.bocc[i];
     this.grid.pass[i] = terrainWalkable(t) && free ? 1 : 0;
-    this.gridJump.pass[i] = (terrainWalkable(t) || t === T.KNICK) && free ? 1 : 0;
+    this.gridJump.pass[i] = (terrainWalkable(t) || t === T.KNICK || t === T.GRABEN) && free ? 1 : 0;
   }
 
   spawnUnit(type: UnitType, owner: number, from: Building): Unit | null {
@@ -1275,7 +1276,7 @@ export class World {
 
   private checkMoor(): void {
     if (this.moorFoundBy >= 0) return;
-    const { x, y } = this.map.moor;
+    const { x, y } = this.map.site;
     for (const e of this.ents.values()) {
       if (e.kind !== 'u') continue;
       if (Math.hypot(e.x - (x + 0.5), e.y - (y + 0.5)) <= 1.8) {

@@ -1,6 +1,6 @@
 // Gemeinsame Regeln, die Simulation UND Bauvorschau im Client verwenden.
 import { BUILDINGS, RULES, type BuildingType } from '../data/defs';
-import { T, isWater, type GameMap } from './map';
+import { T, blocksSight, isWater, type GameMap } from './map';
 
 export interface PlacementView {
   map: GameMap;
@@ -11,7 +11,7 @@ export interface PlacementView {
   ownBuildings: { x: number; y: number; w: number; h: number; type: BuildingType; built: boolean }[];
 }
 
-const BUILDABLE = new Set<number>([T.GRAS, T.LEHM, T.UFER]);
+const BUILDABLE = new Set<number>([T.GRAS, T.LEHM, T.UFER, T.HEIDE]);
 
 /** Liefert null bei gültigem Bauplatz, sonst eine verständliche Begründung. */
 export function checkPlacement(v: PlacementView, type: BuildingType, x: number, y: number): string | null {
@@ -30,6 +30,10 @@ export function checkPlacement(v: PlacementView, type: BuildingType, x: number, 
       if (t === T.WEG || t === T.TOR) return 'Nicht auf Wegen bauen.';
       if (t === T.MOOR) return 'Im Moor kann nicht gebaut werden.';
       if (t === T.KNICK) return 'Ein Knick versperrt den Platz.';
+      if (t === T.DEICH) return 'Auf dem Deich wird nicht gebaut.';
+      if (t === T.WALL) return 'Das Danewerk versperrt den Platz.';
+      if (t === T.GRABEN) return 'Ein Graben verläuft hier.';
+      if (t === T.WATT) return type === 'heringszaun' ? 'Der Fischzaun steht am Ufer, nicht mitten im Watt.' : 'Im Watt kann nicht gebaut werden.';
       if (isWater(t)) return type === 'heringszaun' ? 'Der Heringszaun steht am Ufer, nicht im tiefen Wasser.' : 'Nicht im Wasser bauen.';
       if (!BUILDABLE.has(t)) return 'Ungeeigneter Boden.';
       if (v.trees[i]) return 'Bäume im Weg – erst Holz schlagen.';
@@ -43,9 +47,10 @@ export function checkPlacement(v: PlacementView, type: BuildingType, x: number, 
       for (let dx = -1; dx <= def.w; dx++) {
         const px = x + dx, py = y + dy;
         if (px < 0 || py < 0 || px >= map.w || py >= map.h) continue;
-        if (isWater(map.terrain[py * map.w + px])) water++;
+        const tt = map.terrain[py * map.w + px];
+        if (isWater(tt) || tt === T.WATT) water++;
       }
-    if (water < 3) return 'Nur direkt am Ufer der Schlei baubar.';
+    if (water < 3) return 'Nur direkt am Ufer baubar (Wasser oder Watt angrenzend).';
   }
   const cx = x + def.w / 2, cy = y + def.h / 2;
   const near = v.ownBuildings.some((b) => {
@@ -96,7 +101,7 @@ function losClear(terrain: Uint8Array, w: number, x0: number, y0: number, x1: nu
   let x = x0, y = y0;
   for (;;) {
     if (x === x1 && y === y1) return true;
-    if ((x !== x0 || y !== y0) && terrain[y * w + x] === T.KNICK) return false;
+    if ((x !== x0 || y !== y0) && blocksSight(terrain[y * w + x])) return false;
     const e2 = 2 * err;
     if (e2 >= dy) {
       err += dy;

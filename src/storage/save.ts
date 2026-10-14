@@ -2,6 +2,7 @@
 import type { AIState } from '../ai/ai';
 import { isFaction, type FactionId } from '../data/factions';
 import { DEFAULT_ICE, type IceSettings } from '../net/peer';
+import { isMapId, type MapId } from '../sim/map';
 
 const SETTINGS_KEY = 'angeln-settings-v1';
 const SAVE_KEY = 'angeln-save-v1';
@@ -12,10 +13,11 @@ export interface Settings {
   tutorialDone: boolean;
   renderer: 'auto' | 'canvas';
   faction: FactionId;
+  map: MapId | 'zufall';
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln' };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln', map: 'schlei' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -26,6 +28,7 @@ export function loadSettings(): Settings {
       tutorialDone: !!s.tutorialDone,
       renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
       faction: isFaction(s.faction) ? s.faction : 'angeln',
+      map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
     };
   } catch {
     return def;
