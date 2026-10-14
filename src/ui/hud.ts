@@ -33,6 +33,11 @@ const ERA_ORDER: [BuildingType, string][] = [
   ['schildturm', 'Y'],
 ];
 const KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Y', 'X', 'C', 'V'];
+// Kurze, lesbare Beschriftungen für die schmale Touch-Befehlskarte. Vollständige
+// Namen bleiben in der Kostenanzeige und als zugänglicher Button-Name erhalten.
+const SHORT_LABELS: Record<string, string> = {
+  Sammelpunkt: 'Treffpunkt', Schießscharten: 'Scharten', Feuerspritzer: 'Feuerspr.',
+};
 /** Gebäude, das nur eine Partei bauen kann */
 const FACTION_BUILDING: Record<string, BuildingType> = { angeln: 'meierei', schwansen: 'gestuet', friesen: 'salzsiederei', daenen: 'zollhaus' };
 
@@ -51,6 +56,7 @@ export class Hud {
   buildPage = false;
   private resTips: Record<string, string> = {};
   private cardKey = '';
+  private cardLayout = '';
   private selKey = '';
   private tipSrc: (() => string) | null = null;
   private resEls = new Map<string, HTMLElement>();
@@ -76,9 +82,12 @@ export class Hud {
     parts.push(`<div class="res" data-r="brarup" data-tip="${esc(this.game.client.map.marketName)} (neutral, ⚑) – Klick zeigt ihn. Besetzen: Einheiten wählen und Rechtsklick auf den Markt. Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
     parts.push(`<div class="res age" data-r="age" data-tip=""><span>⌛</span><b style="min-width:52px">17. Jh.</b></div>`);
     parts.push(`<div class="res idle" data-r="idle" data-tip="Untätige Arbeiter. Klick (oder Taste .) wählt den nächsten und zeigt ihn; untätige Arbeiter tragen außerdem ein kleines „z“."><span>💤</span><b style="min-width:16px">0</b></div>`);
-    parts.push('<div class="spacer"></div><span id="netinfo" class="note"></span><span id="clock">00:00</span>');
+    const resources = parts.join('');
+    parts.length = 0;
+    parts.push('<span id="netinfo" class="note"></span><span id="clock">00:00</span>');
     parts.push('<button class="btn" data-act="help" title="Hilfe (F1)">Hilfe</button><button class="btn" data-act="tut" title="Lehrmeister (F2)">Lehrmeister</button><button class="btn" data-act="mute" title="Ton an/aus (M)">Ton</button><button class="btn" data-act="menu" title="Menü (Esc)">Menü</button>');
-    this.top.innerHTML = parts.join('');
+    parts.push('<button class="btn hud-toggle" data-act="hud" aria-label="Untere Spielleiste aus- oder einblenden">Ansicht</button>');
+    this.top.innerHTML = `<div class="resources">${resources}</div><div class="top-actions">${parts.join('')}</div>`;
     this.top.querySelectorAll<HTMLElement>('.res').forEach((el) => this.resEls.set(el.dataset.r!, el));
     this.top.querySelectorAll<HTMLElement>('[data-act]').forEach((el) =>
       el.addEventListener('click', () => this.game.uiAction(el.dataset.act!)),
@@ -90,8 +99,12 @@ export class Hud {
       this.message(`${this.game.client.map.marketName}: Soldaten auswählen und Rechtsklick auf den Markt – sie stellen sich im gestrichelten Kreis auf. Der Markt gehört euch, solange nur eure Einheiten darin stehen.`);
     });
     this.top.querySelectorAll<HTMLElement>('.res').forEach((el) => {
-      el.addEventListener('mouseenter', () => this.showTip(el, () => el.dataset.tip || (el.dataset.r === 'age' ? this.ageTip() : this.prestigeTip())));
-      el.addEventListener('mouseleave', () => this.hideTip());
+      const tip = () => el.dataset.tip || (el.dataset.r === 'age' ? this.ageTip() : this.prestigeTip());
+      el.addEventListener('mouseenter', () => { if (!this.game.touchUI) this.showTip(el, tip); });
+      el.addEventListener('mouseleave', () => { if (!this.game.touchUI) this.hideTip(); });
+      if (!['idle', 'brarup'].includes(el.dataset.r!)) el.addEventListener('click', () => {
+        if (this.game.touchUI) this.showTip(el, tip);
+      });
     });
   }
 
@@ -320,13 +333,13 @@ export class Hud {
       const d = c.bdl(b);
       const mine = b.o === c.me;
       const lines: string[] = [];
-      if (!b.b) lines.push(`Im Bau: ${b.p} % – Arbeiter per Rechtsklick zum Bauen schicken`);
+      if (!b.b) lines.push(`Im Bau: ${b.p} % – ${this.game.touchUI ? 'Arbeiter wählen → „Befehl“ → Baustelle antippen' : 'Arbeiter per Rechtsklick zum Bauen schicken'}`);
       else if (mine && b.u !== undefined) lines.push(this.projectText(b));
       else if (b.t === 'brarupmarkt') {
         const ctrl = c.brarup.c;
         lines.push(ctrl < 0 ? (c.brarup.x ? 'Umkämpft – niemand hat die Kontrolle' : 'Unbesetzt') : `Kontrolliert von ${esc(c.players[ctrl]?.name ?? '?')}`);
         lines.push(`Einheiten im gestrichelten Kreis (${RULES.brarupRadius} Kacheln) besetzen den Markt – nur eure, dann gehört er euch.`);
-        lines.push('So geht’s: Einheiten wählen, Rechtsklick auf den Markt.');
+        lines.push(this.game.touchUI ? 'Einheiten wählen → „Befehl“ → Markt antippen.' : 'So geht’s: Einheiten wählen, Rechtsklick auf den Markt.');
       } else if (mine) {
         if (b.s) lines.push(esc(b.s));
         if (d.staffSlots) lines.push(`Arbeiter: ${b.st?.length ?? 0}/${d.staffSlots}${b.t === 'bauernhof' ? ` · Felder: ${b.f?.length ?? 0}` : ''}`);
@@ -355,8 +368,8 @@ export class Hud {
     }
     const me = c.mePlayer;
     this.sel.innerHTML = `<div class="selmain"><div class="name">${esc(me?.name ?? '')}</div>
-      <div class="stat">Nichts ausgewählt. Linksklick wählt aus, Rahmen ziehen wählt mehrere Einheiten.</div>
-      <div class="stat">Rechtsklick: bewegen, Holz schlagen, bauen, zuweisen oder angreifen.</div>
+      <div class="stat">${this.game.touchUI ? '„Wählen“: Objekt antippen. „Rahmen“: mehrere Einheiten wählen.' : 'Nichts ausgewählt. Linksklick wählt aus, Rahmen ziehen wählt mehrere Einheiten.'}</div>
+      <div class="stat">${this.game.touchUI ? '„Befehl“: Ziel antippen zum Bewegen, Arbeiten oder Angreifen.' : 'Rechtsklick: bewegen, Holz schlagen, bauen, zuweisen oder angreifen.'}</div>
       <div class="stat">Ziel: gegnerisches Dorfzentrum zerstören${c.goal ? ` oder ${c.goal} Prestige erreichen` : ''}.</div></div>`;
   }
 
@@ -614,6 +627,17 @@ export class Hud {
   }
 
   private renderCard(): void {
+    // Rohstoffe ändern sich häufig. Die Knöpfe dabei nicht ersetzen: sonst
+    // verlieren laufende Touch-Gesten ihr Ziel, insbesondere langes Drücken.
+    const layout = this.buttons.map((b) => b ? `${b.key}|${b.label}|${b.icon}|${b.glyph}` : '').join(';');
+    if (layout === this.cardLayout && this.card.childElementCount === 12) {
+      this.card.querySelectorAll<HTMLElement>('.cmd').forEach((el) => {
+        const st = this.buttons[Number(el.dataset.k)]?.state() ?? 'na';
+        el.className = `cmd ${st === 'ok' ? '' : st}`;
+      });
+      return;
+    }
+    this.cardLayout = layout;
     const html: string[] = [];
     for (let k = 0; k < 12; k++) {
       const b = this.buttons[k];
@@ -622,14 +646,34 @@ export class Hud {
         continue;
       }
       const st = b.state();
-      html.push(`<div class="cmd ${st === 'ok' ? '' : st}" data-k="${k}">${b.icon ? `<img src="${b.icon}" alt="">` : `<div class="glyph">${b.glyph ?? ''}</div>`}<span class="k">${b.key}</span><span class="lbl">${esc(b.label)}</span></div>`);
+      html.push(`<button type="button" class="cmd ${st === 'ok' ? '' : st}" aria-label="${esc(b.label)}" data-k="${k}">${b.icon ? `<img src="${b.icon}" alt="">` : `<span class="glyph">${b.glyph ?? ''}</span>`}<span class="k">${b.key}</span><span class="lbl"><span class="full">${esc(b.label)}</span><span class="compact">${esc(SHORT_LABELS[b.label] ?? b.label)}</span></span></button>`);
     }
     this.card.innerHTML = html.join('');
     this.card.querySelectorAll<HTMLElement>('.cmd').forEach((el) => {
-      const b = this.buttons[Number(el.dataset.k)];
-      el.addEventListener('click', () => this.press(b));
-      el.addEventListener('mouseenter', () => this.showTip(el, b.tip));
-      el.addEventListener('mouseleave', () => this.hideTip());
+      const current = () => this.buttons[Number(el.dataset.k)];
+      let hold: ReturnType<typeof setTimeout> | undefined;
+      let held = false;
+      const stopHold = () => { clearTimeout(hold); hold = undefined; };
+      el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        held = false;
+        hold = setTimeout(() => {
+          if (!el.isConnected) return;
+          held = true;
+          this.showTip(el, () => current()?.tip() ?? '');
+        }, 450);
+      });
+      el.addEventListener('pointerup', stopHold);
+      el.addEventListener('pointercancel', stopHold);
+      el.addEventListener('pointerleave', stopHold);
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      el.addEventListener('click', () => {
+        if (held) { held = false; return; }
+        this.hideTip();
+        this.press(current());
+      });
+      el.addEventListener('mouseenter', () => { if (!this.game.touchUI) this.showTip(el, () => current()?.tip() ?? ''); });
+      el.addEventListener('mouseleave', () => { if (!this.game.touchUI) this.hideTip(); });
     });
   }
 

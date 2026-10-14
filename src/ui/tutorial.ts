@@ -31,6 +31,13 @@ export class Tutorial {
       { get text() { return `Späher zur Fundstelle „${m.site.name}“ schicken (${dir(m.site.x, m.site.y)}, „?“): Sie bringt einmalig Prestige und Taler.`; }, done: (g) => g.client.moor >= 0 },
       { text: `Sieg: Gegnerisches Dorfzentrum (${foeNames}) zerstören – oder als Erster das Prestigeziel erreichen.`, done: (g) => g.client.winner >= 0 },
     ];
+    if (game.touchUI) {
+      this.steps[0].text = 'Karte mit einem Finger verschieben. Zwei Finger oder +/− zoomen. „Ansicht“ schafft mehr Platz für die Karte.';
+      this.steps[1].text = 'In „Wählen“ einen Arbeiter antippen. Für mehrere: „Rahmen“ antippen und einen Rahmen ziehen.';
+      this.steps[2].text = 'Arbeiter wählen → „Befehl“ → Baum antippen: Die Arbeiter schlagen Holz und bringen es zum Dorfzentrum.';
+      this.steps[3].text = 'Wohnhaus bauen: Arbeiter wählen → Wohnhaus-Knopf → Platz auf der Karte antippen → grünen Platz mit „Bauen ✓“ bestätigen.';
+      this.steps[4].text = 'Bauernhof bauen. Dann Arbeiter wählen → „Befehl“ → fertigen Hof antippen. Er liefert Getreide.';
+    }
     this.el.classList.toggle('hidden', !visible);
   }
 
@@ -57,7 +64,7 @@ export class Tutorial {
     const shown = cur < 0 ? [] : [cur, cur + 1].filter((k) => k < this.steps.length);
     const html = `<h3>Lehrmeister <span class="note">${this.doneSteps.size}/${this.steps.length}</span> <button class="btn" data-x>×</button></h3><ol start="${cur + 1}">${shown
       .map((k) => `<li class="${this.doneSteps.has(k) ? 'done' : k === cur ? 'cur' : ''}">${this.steps[k].text}</li>`)
-      .join('')}</ol>${cur < 0 ? '<p>Alle Schritte erledigt – viel Erfolg!</p>' : ''}<div class="note">F1: Steuerung · F2: Lehrmeister ein/aus</div>`;
+      .join('')}</ol>${cur < 0 ? '<p>Alle Schritte erledigt – viel Erfolg!</p>' : ''}<div class="note">${this.game.touchUI ? '„Hilfe“: Steuerung · ×: Lehrmeister schließen' : 'F1: Steuerung · F2: Lehrmeister ein/aus'}</div>`;
     if (html !== this.lastHtml) {
       this.lastHtml = html;
       this.el.innerHTML = html;

@@ -20,11 +20,43 @@ Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Lands
 - Drei oder vier Spieler bekommen eine größere Karte (160 × 160 Kacheln) mit vier verteilten Startplätzen
 - Militärischer Sieg (gegnerisches Dorfzentrum zerstören) oder wirtschaftlicher Sieg (Prestige aus Handel)
 - Darstellung mit **PixiJS 8 (WebGL)**, automatischer Rückfall auf Canvas 2D
+- **Smartphone und Tablet in Hoch- und Querformat:** Touch-Auswahl, Wischen, Pinch-Zoom, Rahmenauswahl und bestätigte Bauplatzierung
 - Alle Grafiken und Klänge werden beim Start im Browser erzeugt; keine externen Assets, keine KI-Aufrufe zur Laufzeit
 
 Weitere Dokumente: [docs/NETZWERK.md](docs/NETZWERK.md) (Code-Austausch, Netzwerkgrenzen, Synchronisation),
 [docs/TESTBERICHT.md](docs/TESTBERICHT.md) (ausgeführte Tests, Messwerte, offene Punkte),
 [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) (Aufbau des Codes).
+
+## Auf Smartphone und Tablet spielen
+
+Die Oberfläche passt sich an Hoch- und Querformat sowie an Aussparungen und den unteren Systembereich an.
+Eine laufende Partie kann gedreht werden. Die Retro-Grafik bleibt erhalten.
+
+- **Wählen:** Einheit oder Gebäude antippen. Wischen bewegt die Karte; zwei Finger verschieben und zoomen.
+- **Befehl:** erst Einheiten wählen, dann „Befehl“ und das Ziel antippen: bewegen, Holz schlagen, arbeiten,
+  reparieren oder angreifen. Bei einem ausgewählten Ausbildungsgebäude wird der Sammelpunkt gesetzt.
+- **Rahmen:** Knopf antippen und einen Rahmen um mehrere eigene Einheiten ziehen. Zwei Finger bewegen weiterhin die Karte.
+- **Bauen:** Arbeiter wählen, Gebäudeknopf antippen, Bauplatz auf der Karte antippen und mit **Bauen ✓** bestätigen.
+  Ungültige Plätze lassen sich nicht bestätigen. **Abbruch** beendet die Vorschau oder einen Angriffsauftrag.
+- **Dorf / + / −:** zum Dorfzentrum springen beziehungsweise zoomen. Die Minikarte reagiert auf Tippen und Ziehen.
+- **Ansicht:** untere Spielleiste aus- oder einblenden, um mehr Kartenfläche zu sehen.
+- **Kosten und Voraussetzungen:** einen Befehlsknopf kurz gedrückt halten. Tippen auf die Kostenanzeige schließt sie.
+  Die Rohstoffleiste lässt sich seitlich wischen; einzelne Rohstoffe zeigen beim Antippen ihre Erklärung.
+- **Menü:** speichern, Ton und Lehrmeister umschalten oder die Steuerung nachlesen.
+
+Im Hochformat liegen Auswahl und Minikarte über der Befehlskarte; im Querformat stehen sie nebeneinander.
+Menüs, Lobby und Details können innerhalb ihres Bereichs gescrollt werden. Maus und Tastatur bleiben nutzbar.
+
+Automatisierte Touch-Prüfungen (mit laufendem Entwicklungsserver):
+
+```bash
+npm run e2e:mobile       # fünf Gerätegrößen, Rotation, Gesten, Bau und Desktop-Bedienung
+npm run e2e:mobile:net   # mobile Lobby und Touch-Befehl zwischen zwei echten WebRTC-Peers
+```
+
+Bei Bedarf `BASE_URL` und `CHROME` auf die Serveradresse und den Browserpfad setzen. Unter Windows wird standardmäßig
+Chrome in `C:/Program Files/Google/Chrome/Application/chrome.exe` verwendet. Die Prüfungen emulieren mobile Chromium-
+Browser; Tests auf echten Android- und iOS-Geräten stehen noch aus.
 
 ## Lokal starten
 

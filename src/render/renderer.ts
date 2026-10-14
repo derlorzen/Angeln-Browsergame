@@ -174,7 +174,7 @@ export class CanvasRenderer extends BaseRenderer {
     g.save();
     g.setTransform(
       (TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr, -(TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr,
-      (-this.cam.x * z + this.vw / 2) * this.dpr, (-this.cam.y * z + this.vh / 2) * this.dpr,
+      (-this.cam.x * z + this.vw / 2) * this.dpr, (-this.cam.y * z + this.centerY) * this.dpr,
     );
     g.imageSmoothingEnabled = true;
     g.drawImage(this.fog, 0, 0);
@@ -719,7 +719,8 @@ export class Minimap {
     g.drawImage(this.fog, 0, 0);
     // Sichtfenster
     g.setTransform(1, 0, 0, 1, 0, 0);
-    const pts = [r.toTile(0, 0), r.toTile(r.vw, 0), r.toTile(r.vw, r.vh), r.toTile(0, r.vh)].map((p) => this.toMini(p[0], p[1]));
+    const bottom = r.playBottom ?? r.vh;
+    const pts = [r.toTile(0, r.playTop), r.toTile(r.vw, r.playTop), r.toTile(r.vw, bottom), r.toTile(0, bottom)].map((p) => this.toMini(p[0], p[1]));
     g.strokeStyle = '#f1e6c4';
     g.lineWidth = 1;
     g.beginPath();

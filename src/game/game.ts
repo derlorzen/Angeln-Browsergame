@@ -14,6 +14,7 @@ import type { ClientState } from './client';
 import type { Driver } from './drivers';
 import { terrainHint } from '../ui/terrainhint';
 import { AGES, TECHS } from '../data/ages';
+import { TouchInput, type TouchMode } from './touch';
 
 export interface GameOptions {
   tutorial: boolean;
@@ -57,10 +58,19 @@ export class Game {
   private canvas: HTMLCanvasElement;
   private dialogEl = document.getElementById('dialog')!;
   private idleIdx = 0;
+  private touch!: TouchInput;
+  private touchActive = false;
+  private touchBar = document.getElementById('touch-controls')!;
+  private touchStatus = '';
+  private miniPointer: number | null = null;
+
+  get touchUI(): boolean {
+    return this.touchActive || window.matchMedia('(pointer: coarse), (max-width: 820px)').matches;
+  }
 
   /** Baut Darstellung (WebGL/PixiJS oder Canvas 2D) asynchron auf und startet dann die Partie. */
   static async create(driver: Driver, opts: GameOptions, pref: RendererPref = 'auto'): Promise<Game> {
-    document.getElementById('screen-game')!.classList.remove('hidden');
+    document.getElementById('screen-game')!.classList.remove('hidden', 'hud-collapsed');
     const canvas = freshCanvas(document.getElementById('view') as HTMLCanvasElement);
     const renderer = await createRenderer(canvas, driver.client, pref);
     return new Game(driver, opts, renderer);
@@ -251,13 +261,19 @@ export class Game {
       return;
     }
     this.attackMove = false;
+    this.touch.mode = 'select';
     this.placement = { type: t, x: 0, y: 0, valid: false };
+    if (this.touchUI) {
+      this.mouse.x = this.renderer.vw / 2;
+      this.mouse.y = this.renderer.centerY;
+    }
     this.updatePlacement();
     sound.play('click');
   }
 
   armAttackMove(): void {
     this.placement = null;
+    this.touch.mode = 'select';
     this.attackMove = true;
     this.canvas.style.cursor = 'crosshair';
     sound.play('click');
@@ -277,6 +293,10 @@ export class Game {
     sound.unlock();
     if (a === 'help') this.showHelp();
     else if (a === 'tut') this.tutorial.toggle();
+    else if (a === 'hud') {
+      document.getElementById('screen-game')!.classList.toggle('hud-collapsed');
+      this.resize();
+    }
     else if (a === 'mute') {
       sound.setMuted(!sound.muted);
       this.hud.message(sound.muted ? 'Ton aus.' : 'Ton an.');
@@ -304,6 +324,7 @@ export class Game {
     }
     this.hud.updateTop();
     this.hud.update();
+    this.updateTouchControls();
     this.tutorial.update();
     this.frameTimes.push(performance.now() - t0);
     if (this.frameTimes.length > 120) this.frameTimes.shift();
@@ -337,7 +358,7 @@ export class Game {
     if (this.keys.has('ArrowRight')) dx += 1;
     if (this.keys.has('ArrowUp')) dy -= 1;
     if (this.keys.has('ArrowDown')) dy += 1;
-    if (this.mouse.inside && this.mouse.x >= 0 && !this.drag && !this.pan && document.hasFocus()) {
+    if (!this.touchActive && this.mouse.inside && this.mouse.x >= 0 && !this.drag && !this.pan && document.hasFocus()) {
       const m = 6;
       if (this.mouse.x <= m) dx -= 1;
       if (this.mouse.x >= r.vw - m) dx += 1;
@@ -451,7 +472,18 @@ export class Game {
 
   // ---------------------------------------------------------------- Eingabe
   private resize(): void {
-    this.renderer.resize(window.innerWidth, window.innerHeight);
+    const screen = document.getElementById('screen-game')!;
+    this.touch?.reset();
+    const mini = this.minimap.canvas;
+    if (this.miniPointer !== null && mini.hasPointerCapture(this.miniPointer)) mini.releasePointerCapture(this.miniPointer);
+    this.miniPointer = null;
+    this.hud.hideTip();
+    this.renderer.resize(screen.clientWidth, screen.clientHeight);
+    const top = document.getElementById('topbar')!.getBoundingClientRect().bottom;
+    const bottom = document.getElementById('bottom')!;
+    const controls = this.touchBar;
+    const edge = controls.offsetHeight ? controls.getBoundingClientRect().top : bottom.getBoundingClientRect().top;
+    this.renderer.setPlayArea(top, edge);
   }
 
   private on<K extends keyof WindowEventMap>(t: EventTarget, type: K | string, fn: (e: never) => void, opts?: AddEventListenerOptions): void {
@@ -462,11 +494,15 @@ export class Game {
   private bindInput(): void {
     const cv = this.canvas;
     this.on(window, 'resize', () => this.resize());
+    if (window.visualViewport) this.on(window.visualViewport, 'resize', () => this.resize());
+    this.bindTouch();
     // Beim Schließen der Seite die Gegenseite sauber informieren
     this.on(window, 'pagehide', () => this.driver.stop());
     this.on(cv, 'contextmenu', (e: MouseEvent) => e.preventDefault());
     this.on(document, 'mouseleave', () => (this.mouse.inside = false));
     this.on(window, 'mousemove', (e: MouseEvent) => {
+      if (this.syntheticTouchMouse(e)) return;
+      this.touchActive = false;
       if (Math.abs(e.clientX - this.mouse.x) + Math.abs(e.clientY - this.mouse.y) > 2) this.hideHint();
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
@@ -487,6 +523,8 @@ export class Game {
       if (this.miniDrag) this.miniMove(e);
     });
     this.on(cv, 'mousedown', (e: MouseEvent) => {
+      if (this.syntheticTouchMouse(e)) return;
+      this.touchActive = false;
       sound.unlock();
       if (e.button === 1) {
         e.preventDefault();
@@ -507,6 +545,7 @@ export class Game {
       if (e.button === 2) this.rightClick(e.clientX, e.clientY);
     });
     this.on(window, 'mouseup', (e: MouseEvent) => {
+      if (this.syntheticTouchMouse(e)) return;
       if (e.button === 1) this.pan = null;
       if (e.button === 0) {
         this.miniDrag = false;
@@ -524,6 +563,7 @@ export class Game {
     const mini = this.minimap.canvas;
     this.on(mini, 'contextmenu', (e: MouseEvent) => e.preventDefault());
     this.on(mini, 'mousedown', (e: MouseEvent) => {
+      if (this.syntheticTouchMouse(e)) return;
       sound.unlock();
       if (e.button === 0) {
         this.miniDrag = true;
@@ -541,6 +581,137 @@ export class Game {
     this.on(window, 'keydown', (e: KeyboardEvent) => this.keyDown(e));
     this.on(window, 'keyup', (e: KeyboardEvent) => this.keys.delete(e.key));
     this.on(window, 'blur', () => this.keys.clear());
+  }
+
+  private syntheticTouchMouse(e: MouseEvent): boolean {
+    return !!(e as MouseEvent & { sourceCapabilities?: { firesTouchEvents: boolean } }).sourceCapabilities?.firesTouchEvents;
+  }
+
+  private bindTouch(): void {
+    const screen = document.getElementById('screen-game')!;
+    screen.classList.remove('hud-collapsed');
+    const point = (x: number, y: number) => {
+      this.touchActive = true;
+      this.mouse = { x, y, inside: false };
+      this.hover = this.renderer.pick(x, y, performance.now(), 12);
+      this.hideHint();
+      this.hud.hideTip();
+      if (this.placement) this.updatePlacement();
+    };
+    this.touch = new TouchInput(this.canvas, {
+      enabled: () => this.dialogEl.classList.contains('hidden'),
+      point,
+      pan: (dx, dy) => {
+        this.touchActive = true;
+        this.renderer.cam.x -= dx / this.renderer.cam.z;
+        this.renderer.cam.y -= dy / this.renderer.cam.z;
+        this.renderer.clampCam();
+        this.tutorial.flag('cam');
+      },
+      zoom: (x, y, factor) => {
+        this.touchActive = true;
+        this.renderer.zoomAt(x, y, factor);
+        this.tutorial.flag('cam');
+      },
+      tap: (x, y, mode) => {
+        sound.unlock();
+        point(x, y);
+        if (this.placement) return; // Vorschau setzen; „Bauen ✓“ bestätigt.
+        if (this.attackMove) return this.doAttackMove(x, y);
+        if (mode === 'order') return this.rightClick(x, y);
+        this.drag = { x0: x, y0: y, x1: x, y1: y };
+        this.finishDrag(false, false, 12);
+        this.drag = null;
+      },
+      box: (start, end) => {
+        this.drag = end ? { x0: start.x, y0: start.y, x1: end.x, y1: end.y } : null;
+      },
+      selectBox: (start, end) => {
+        this.drag = { x0: start.x, y0: start.y, x1: end.x, y1: end.y };
+        this.finishDrag(false, false);
+        this.touch.mode = 'select';
+      },
+    });
+    this.cleanup.push(() => this.touch.destroy());
+    this.on(document.getElementById('tooltip')!, 'click', () => this.hud.hideTip());
+    this.touch.mode = 'select';
+    this.touchBar.querySelectorAll<HTMLButtonElement>('[data-touch]').forEach((btn) => {
+      this.on(btn, 'click', () => {
+        this.touchActive = true;
+        this.hud.hideTip();
+        sound.unlock();
+        const a = btn.dataset.touch!;
+        if (a === 'place') {
+          if (this.placement) this.place(false);
+        } else if (a === 'cancel') {
+          this.placement = null;
+          this.attackMove = false;
+          this.touch.mode = 'select';
+          this.canvas.style.cursor = 'default';
+        } else if (a === 'home') this.keyDown(new KeyboardEvent('keydown', { key: 'h' }));
+        else if (a === 'in' || a === 'out') {
+          this.renderer.zoomAt(this.renderer.vw / 2, this.renderer.centerY, a === 'in' ? 1.2 : 1 / 1.2);
+          this.tutorial.flag('cam');
+        } else {
+          this.placement = null;
+          this.attackMove = false;
+          this.canvas.style.cursor = 'default';
+          this.touch.mode = a as TouchMode;
+        }
+        this.updateTouchControls();
+      });
+    });
+    // Minikarte: Tippen und Ziehen bewegen die Kamera, ohne Maus-Rechtsklick.
+    const mini = this.minimap.canvas;
+    this.on(mini, 'pointerdown', (e: PointerEvent) => {
+      if (e.pointerType === 'mouse' || this.miniPointer !== null) return;
+      e.preventDefault();
+      sound.unlock();
+      this.touchActive = true;
+      this.miniPointer = e.pointerId;
+      mini.setPointerCapture(e.pointerId);
+      this.miniMove(e);
+    }, { passive: false });
+    this.on(mini, 'pointermove', (e: PointerEvent) => {
+      if (this.miniPointer !== e.pointerId) return;
+      e.preventDefault();
+      this.miniMove(e);
+    }, { passive: false });
+    const endMini = (e: PointerEvent) => {
+      if (this.miniPointer !== e.pointerId) return;
+      this.miniPointer = null;
+      if (mini.hasPointerCapture(e.pointerId)) mini.releasePointerCapture(e.pointerId);
+    };
+    this.on(mini, 'pointerup', endMini);
+    this.on(mini, 'pointercancel', endMini);
+    this.on(mini, 'lostpointercapture', endMini);
+    this.on(window, 'blur', () => this.touch.reset());
+  }
+
+  private updateTouchControls(): void {
+    const placing = !!this.placement;
+    const armed = placing || this.attackMove;
+    for (const el of this.touchBar.querySelectorAll<HTMLButtonElement>('[data-touch]')) {
+      const a = el.dataset.touch!;
+      if (a === 'select' || a === 'order' || a === 'box') {
+        el.classList.toggle('hidden', armed);
+        el.setAttribute('aria-pressed', String(this.touch.mode === a));
+      }
+      if (a === 'place') {
+        el.classList.toggle('hidden', !placing);
+        el.disabled = !this.placement?.valid;
+      }
+      if (a === 'cancel') el.classList.toggle('hidden', !armed);
+    }
+    const hint = placing ? 'Platz antippen → Bauen ✓. Wischen verschiebt die Karte.'
+      : this.attackMove ? 'Angriffsziel antippen · Abbruch beendet den Auftrag.'
+      : this.touch.mode === 'box' ? 'Rahmen ziehen · zwei Finger bewegen und zoomen.'
+      : this.touch.mode === 'order' ? 'Ziel antippen: gehen, arbeiten oder angreifen.'
+      : 'Tippen wählt · Wischen bewegt · zwei Finger zoomen.';
+    if (hint !== this.touchStatus) {
+      document.getElementById('touch-hint')!.textContent = hint;
+      this.touchStatus = hint;
+    }
   }
 
   private miniTile(e: MouseEvent): [number, number] {
@@ -584,7 +755,7 @@ export class Game {
     this.attackMove = false;
     this.canvas.style.cursor = 'default';
     if (!ids.length) return;
-    const target = this.renderer.pick(sx, sy, performance.now());
+    const target = this.renderer.pick(sx, sy, performance.now(), this.touchActive ? 12 : 0);
     const t = target ? this.client.units.get(target) ?? this.client.buildings.get(target) : undefined;
     const [tx, ty] = this.renderer.toTile(sx, sy);
     if (t && t.o !== this.client.me && t.o >= 0) this.issue({ c: 'attack', ids, t: t.i });
@@ -609,7 +780,7 @@ export class Game {
     const ids = this.ownSelectedUnits();
     const now = performance.now();
     if (ids.length) {
-      const target = this.renderer.pick(sx, sy, now);
+      const target = this.renderer.pick(sx, sy, now, this.touchActive ? 12 : 0);
       const t = target ? c.units.get(target) ?? c.buildings.get(target) : undefined;
       const tile = Math.floor(ty) * c.map.w + Math.floor(tx);
       if (!c.vis[tile]) {
@@ -630,14 +801,14 @@ export class Game {
     }
   }
 
-  private finishDrag(shift: boolean, ctrl: boolean): void {
+  private finishDrag(shift: boolean, ctrl: boolean, tolerance = 0): void {
     const d = this.drag!;
     const c = this.client;
     const now = performance.now();
     const small = Math.abs(d.x1 - d.x0) < 5 && Math.abs(d.y1 - d.y0) < 5;
     if (!shift) this.selected.clear();
     if (small) {
-      const id = this.renderer.pick(d.x0, d.y0, now);
+      const id = this.renderer.pick(d.x0, d.y0, now, tolerance);
       if (!id) {
         this.hud.update(true);
         return;
@@ -768,6 +939,8 @@ export class Game {
   // ---------------------------------------------------------------- Dialoge
   private dialogClosable = true;
   private openDialog(html: string, closable = true): HTMLElement {
+    this.touch.reset();
+    this.hud.hideTip();
     this.dialogClosable = closable;
     this.dialogEl.innerHTML = `<div class="panel">${html}</div>`;
     this.dialogEl.classList.remove('hidden');
@@ -780,7 +953,15 @@ export class Game {
   }
 
   showHelp(): void {
-    const el = this.openDialog(`<h2>Steuerung</h2><table>
+    const el = this.openDialog(`<h2>Steuerung</h2>
+      <h3>Smartphone & Tablet – Hoch- und Querformat</h3>
+      <p>In „Wählen“: Einheit oder Gebäude antippen. Wischen verschiebt die Karte, zwei Finger verschieben und zoomen.
+      „Befehl“: ausgewählte Einheiten durch Tippen auf ein Ziel bewegen, arbeiten lassen oder angreifen; bei Ausbildungsgebäuden den Sammelpunkt setzen.
+      „Rahmen“: mehrere Einheiten mit einem gezogenen Rahmen wählen. Zwei Finger bewegen weiterhin die Karte.</p>
+      <p>Gebäude wählen → Platz auf der Karte antippen → „Bauen ✓“ bestätigen. „Abbruch“ beendet Bau- oder Angriffsaufträge.
+      „Dorf“ zeigt das Dorfzentrum; +/− zoomt. Die Minikarte reagiert auf Tippen und Ziehen. „Ansicht“ blendet die untere Spielleiste aus oder ein.
+      Die Rohstoffleiste lässt sich seitlich wischen. Für Kosten und Voraussetzungen einen Befehlsknopf kurz gedrückt halten.</p>
+      <h3>Maus & Tastatur</h3><table>
       <tr><td>Linksklick</td><td>Auswählen (Umschalt: hinzufügen/entfernen, Doppelklick/Strg: alle gleichen auf dem Bildschirm)</td></tr>
       <tr><td>Rahmen ziehen</td><td>Mehrere eigene Einheiten auswählen</td></tr>
       <tr><td>Rechtsklick</td><td>Bewegen · Baum: Holz schlagen · Baustelle: bauen · Hof/Lehmgrube: zuweisen · Gegner: angreifen · bei Gebäuden: Sammelpunkt</td></tr>
@@ -809,6 +990,8 @@ export class Game {
         <button class="btn" data-a="resume">Weiterspielen</button>
         ${this.opts.onSave ? '<button class="btn" data-a="save">Spiel speichern</button>' : ''}
         <button class="btn" data-a="help">Steuerung</button>
+        <button class="btn" data-a="tut">Lehrmeister ein/aus</button>
+        <button class="btn" data-a="mute">${sound.muted ? 'Ton einschalten' : 'Ton ausschalten'}</button>
         <button class="btn" data-a="resign">Aufgeben</button>
         <button class="btn" data-a="exit">Zum Hauptmenü</button>
       </div><div class="note" data-msg></div>`);
@@ -817,7 +1000,13 @@ export class Game {
         const a = b.dataset.a;
         if (a === 'resume') this.closeDialog();
         else if (a === 'help') this.showHelp();
-        else if (a === 'save') {
+        else if (a === 'tut') {
+          this.tutorial.toggle();
+          this.closeDialog();
+        } else if (a === 'mute') {
+          this.uiAction('mute');
+          b.textContent = sound.muted ? 'Ton einschalten' : 'Ton ausschalten';
+        } else if (a === 'save') {
           const err = this.opts.onSave?.();
           el.querySelector('[data-msg]')!.textContent = err ?? 'Spielstand gespeichert (in diesem Browser).';
         } else if (a === 'resign') {
