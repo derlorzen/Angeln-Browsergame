@@ -76,7 +76,8 @@ Produktionsserver (`node server/server.mjs`) bzw. die Vite-Vorschau, ICE-Modus �
   sieht nur eigene Einheiten; ein Befehl von Mitspieler 2 wird beim Host ausgeführt
 - Mitspieler 1 schließt die Seite → KI übernimmt, Mitspieler 2 spielt weiter; keine Skriptfehler
 
-Ergebnis: siehe Abschnitt 5, Punkt 13 (Stabilität über viele Wiederholungen).
+Ergebnis: 16/16 Prüfungen; Stabilität über viele Wiederholungen siehe Abschnitt 5, Punkt 13. Außerdem
+`node e2e/run-sp4.mjs` (Einzelspiel gegen drei KIs über die Oberfläche): 5/5.
 
 ## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 20/20 bestanden
 
@@ -169,4 +170,19 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 12. **Einmaliger Ausreißer im Mehrspielertest:** Nach der Kartenvergrößerung schlug die Prüfung „Doppelte/veraltete
     Befehle werden nur einmal ausgeführt“ in einem von vier Läufen fehl (80 statt 40 Getreide abgebucht, also zwei
     statt einer Ausbildung). Drei Wiederholungen bestanden mit 32/32. Die Ursache ist nicht geklärt; möglich ist ein
-    zeitversetzt eingetroffener Befehl aus einem früheren Testschritt. Beobachten.
+    zeitversetzt eingetroffener Befehl aus einem früheren Testschritt. Beobachten. (In den folgenden 8 Läufen trat er
+    nicht wieder auf.)
+13. **Spielcode-Test über viele Wiederholungen:** Drei Chromium-Prozesse mit Software-WebGL auf einem Rechner sind eine
+    starke Last. Gefundene und behobene Ursachen für Abbrüche: (a) der Gast setzte seinen „Verbindung offen“-Handler
+    erst nach dem Absenden der Antwort (verpasstes Ereignis), (b) eine automatische Wiederholung räumte eine fast
+    fertige Verbindung ab (wieder entfernt), (c) der animierte Menühintergrund mit 60 Bildern/s ließ WebRTC-Prüfungen
+    ausfallen (jetzt 12 Bilder/s), (d) der Host erklärte einen Mitspieler, der noch Karte und Grafik aufbaute, nach 15 s
+    ohne Antwort für gegangen (jetzt 60 s bis zur ersten Antwort, danach 30 s), (e) eine verlorene Begrüßung ließ die
+    Lobby hängen (wird jetzt wiederholt), (f) verpasste Server-Nachrichten bei abgerissenem Ereignisstrom (jetzt
+    Last-Event-ID). Nach allen Korrekturen: 6 von 6 Läufen bestanden (je drei über den Produktionsserver und die
+    Vite-Vorschau); davor im Lauf der Fehlersuche 14 von 21.
+14. **Vier Spieler:** Die Wege zum Markt sind nicht überall gleich lang (bis zu rund 45 % auf Marsch, Eider, Schlei);
+    Bündnisse/Teams gibt es nicht, jeder spielt gegen jeden. Partien mit vier Menschen über das Internet sind nicht
+    erprobt, nur drei Browser auf einem Rechner.
+15. **Docker-Image** mit dem neuen Node-Server konnte in der Testumgebung nicht gebaut werden (kein Docker); geprüft
+    wurde der Server direkt mit `node server/server.mjs` (Auslieferung, gzip, Vermittlung, Ende-zu-Ende-Tests).

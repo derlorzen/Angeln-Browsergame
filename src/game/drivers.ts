@@ -133,6 +133,8 @@ interface GuestConn {
   gone: boolean;
   needFull: boolean;
   latency: number;
+  /** schon eine Antwort erhalten? Davor (Laden der Karte und Grafik beim Gast) gilt eine längere Frist. */
+  answered: boolean;
 }
 
 export class HostDriver extends SimDriver implements Driver {
@@ -150,7 +152,7 @@ export class HostDriver extends SimDriver implements Driver {
     for (const [id, link] of map) {
       const g: GuestConn = {
         id, link, snap: new Snapshotter(id), lastSeq: 0, limiter: new RateLimiter(30, 60), pingN: 0,
-        lastPong: performance.now(), pingSent: new Map(), gone: false, needFull: false, latency: 0,
+        lastPong: performance.now(), pingSent: new Map(), gone: false, needFull: false, latency: 0, answered: false,
       };
       link.onMessage = (raw) => this.onMessage(g, raw);
       link.onClose = (reason) => this.guestLeft(g, reason);
@@ -165,6 +167,7 @@ export class HostDriver extends SimDriver implements Driver {
 
   start(): void {
     super.start();
+    for (const g of this.guests) g.lastPong = performance.now();
     for (const g of this.guests) g.link.send({ t: 'snap', s: g.snap.make(this.world, true) } satisfies HostMsg);
   }
 
@@ -185,6 +188,7 @@ export class HostDriver extends SimDriver implements Driver {
         break;
       case 'pong': {
         g.lastPong = now;
+        g.answered = true;
         const sent = g.pingSent.get(m.n);
         if (sent) g.latency = now - sent;
         g.pingSent.delete(m.n);
@@ -229,7 +233,7 @@ export class HostDriver extends SimDriver implements Driver {
         g.pingSent.set(g.pingN, performance.now());
         if (g.pingSent.size > 20) g.pingSent.delete(g.pingSent.keys().next().value!);
         g.link.send({ t: 'ping', n: g.pingN } satisfies HostMsg);
-        if (performance.now() - g.lastPong > 15000) this.guestLeft(g, 'antwortet nicht mehr (Zeitüberschreitung).');
+        if (performance.now() - g.lastPong > (g.answered ? 30000 : 60000)) this.guestLeft(g, 'antwortet nicht mehr (Zeitüberschreitung).');
       }
     }
   }
@@ -305,7 +309,7 @@ export class GuestDriver implements Driver {
       this.pingSent.set(this.pingN, performance.now());
       if (this.pingSent.size > 20) this.pingSent.delete(this.pingSent.keys().next().value!);
       this.link.send({ t: 'ping', n: this.pingN });
-      if (performance.now() - this.lastMsg > 12000) this.end('Der Host antwortet nicht mehr.');
+      if (performance.now() - this.lastMsg > 30000) this.end('Der Host antwortet nicht mehr.');
     }, 1000);
   }
   stop(): void {
