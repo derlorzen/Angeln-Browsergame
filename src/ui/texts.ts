@@ -67,7 +67,7 @@ export const GUIDE_HTML = `
 <h2>Spielanleitung</h2>
 <div class="text">
 <p><b>Ziel:</b> Zerstört das gegnerische Dorfzentrum (militärischer Sieg) <i>oder</i> erreicht als Erster
-${RULES.prestigeGoalDefault} Prestige durch Handel (wirtschaftlicher Sieg; Ziel im Spielaufbau einstellbar).</p>
+${RULES.prestigeGoalDefault} Prestige durch Handel (wirtschaftlicher Sieg; Ziel im Spielaufbau einstellbar, auch „aus“).</p>
 <p><b>Parteien:</b> <b>Angeliter</b> (Landwirtschaft, Knickwächter), <b>Schwansener</b> (Handel, Gutsreiter),
 <b>Nordfriesen</b> (Fischerei, Grabenspringer – überspringen Knicks), <b>Dänen</b> (Militär, Musketiere).
 Jede Partei baut in eigenem Stil und hat eigene Boni; Details zeigt die Parteiwahl.</p>
@@ -87,6 +87,11 @@ an der Fundstelle („?“) bringt einmalig ${RULES.moorReward.prestige} Prestig
 </ul>
 <p><b>Bauen:</b> Gebäude werden von Arbeitern errichtet und arbeiten erst nach Fertigstellung. Gebaut werden darf nur
 nahe eigener fertiger Gebäude. Kosten, Bauzeit und Voraussetzungen zeigt der Tooltip jedes Bauknopfs.</p>
+<p><b>Ausbau:</b> Fertige Gebäude lassen sich zweimal ausbauen (Knopf „Stufe II/III“, Taste C): mehr Ertrag, schnellere
+Verarbeitung oder Ausbildung, mehr Wohnraum oder Lebenspunkte. Stufe II/III setzt ein Dorfzentrum derselben Stufe voraus,
+Stufe III des Dorfzentrums einen Markt. Das Gebäude arbeitet während des Ausbaus weiter.</p>
+<p><b>Sichern:</b> Die Partie wird regelmäßig automatisch gesichert. Nach versehentlichem Schließen bietet das Hauptmenü
+„Letzte Partie fortsetzen“ an.</p>
 <p><b>Kampf:</b> Kaserne bildet Späher (schnell, weite Sicht), Landsknechte (Nahkampf, stark gegen Gebäude) und
 Armbrustschützen (Fernkampf) aus. Untätige Soldaten verteidigen sich und ihre Umgebung automatisch, das Dorfzentrum
 schießt auf nahe Feinde. Knicks versperren Weg und Sicht; Tore und Wege führen hindurch.</p>

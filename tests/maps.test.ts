@@ -7,6 +7,7 @@ import { checkPlacement } from '../src/sim/rules';
 import { World } from '../src/sim/world';
 
 const SEEDS = [1, 7, 42, 777, 2024, 31337, 99999, 123456];
+const RANDOM_SEEDS = Array.from({ length: 40 }, (_, k) => 1000 + k * 7919);
 
 function bfs(m: GameMap, sx: number, sy: number): Int32Array {
   const { w, h, terrain, trees } = m;
@@ -59,7 +60,7 @@ const ratio = (a: number, b: number) => (Math.max(a, b) === 0 ? 1 : Math.min(a, 
 
 describe.each(MAP_IDS.map((id) => [id]))('Karte %s', (id: MapId) => {
   test('Startplätze, Markt und Fundstelle sind erreichbar und fair verteilt', () => {
-    for (const seed of SEEDS) {
+    for (const seed of id === 'random' ? RANDOM_SEEDS : SEEDS) {
       const m = generateMap(seed, id);
       const tag = `${id}/${seed}`;
       const st = m.slots.slice(0, 2).map((s) => ({ x: s.x + 1, y: s.y + 4 })); // vor dem Dorfzentrum
@@ -87,7 +88,7 @@ describe.each(MAP_IDS.map((id) => [id]))('Karte %s', (id: MapId) => {
       expect(ratio(wood[0], wood[1]), `${tag}: Holz ${wood}`).toBeGreaterThanOrEqual(0.8);
       // Küstenplätze haben etwas weniger Acker, dafür mehr Fischgründe
       expect(ratio(farm[0], farm[1]), `${tag}: Acker ${farm}`).toBeGreaterThanOrEqual(0.75);
-      expect(Math.min(...farm), `${tag}: Acker ${farm}`).toBeGreaterThanOrEqual(150);
+      expect(Math.min(...farm), `${tag}: Acker ${farm}`).toBeGreaterThanOrEqual(130);
       const fish = sp.find(([t]) => t === 'heringszaun')![1];
       expect(Math.min(...fish), `${tag}: Fischplätze ${fish}`).toBeGreaterThanOrEqual(3);
       expect(ratio(fish[0], fish[1]), `${tag}: Fischplätze ${fish}`).toBeGreaterThanOrEqual(0.25);

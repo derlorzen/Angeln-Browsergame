@@ -188,19 +188,106 @@ export const UNITS: Record<UnitType, UnitDef> = {
   },
 };
 
+// ------------------------------------------------------------------ Ausbaustufen
+/** Wirkung einer Ausbaustufe (absolut gegenüber Stufe I, nicht kumulativ). */
+export interface LevelFx {
+  produce?: number; // Ertragsfaktor (Rohstoffgewinnung)
+  process?: number; // Zeitfaktor Verarbeitung (< 1 = schneller)
+  train?: number; // Zeitfaktor Ausbildung
+  hp?: number; // Lebenspunktfaktor
+  dmg?: number; // Schadensfaktor Verteidigung
+  range?: number; // zusätzliche Reichweite Verteidigung
+  pop?: number; // zusätzlicher Wohnraum
+  staff?: number; // zusätzliche Arbeitsplätze
+  fields?: number; // zusätzliche Felder (Bauernhof)
+  taler?: number; // Talerfaktor beim Verkauf
+  vision?: number; // zusätzliche Sicht
+}
+export interface UpgradeDef {
+  name: string; // Name der erreichten Stufe
+  desc: string;
+  cost: Cost;
+  time: number; // Sekunden
+  fx: LevelFx;
+}
+export const MAX_LEVEL = 3;
+/** UPGRADES[t][0] führt zu Stufe II, [1] zu Stufe III. Andere Gebäude als das Dorfzentrum brauchen ein
+ * Dorfzentrum mindestens derselben Stufe; Stufe III des Dorfzentrums verlangt einen fertigen Markt. */
+export const UPGRADES: Partial<Record<BuildingType, UpgradeDef[]>> = {
+  dorfzentrum: [
+    { name: 'Kirchspielort', desc: 'Steinsockel und Glockenturm: +50 % Lebenspunkte, +40 % Schaden, +5 Wohnraum, weitere Sicht. Schaltet Stufe II aller Gebäude frei.', cost: { holz: 200, lehm: 150, taler: 60 }, time: 45, fx: { hp: 1.5, dmg: 1.4, pop: 5, vision: 1 } },
+    { name: 'Marktflecken', desc: 'Backsteinbau mit Wehrgang: doppelte Lebenspunkte, +80 % Schaden, +1 Reichweite, +10 Wohnraum. Benötigt einen fertigen Markt; schaltet Stufe III frei.', cost: { holz: 300, lehm: 250, taler: 180 }, time: 70, fx: { hp: 2, dmg: 1.8, range: 1, pop: 10, vision: 2 } },
+  ],
+  wohnhaus: [
+    { name: 'Doppelkate', desc: 'Anbau unter dem Reetdach: +3 Wohnraum.', cost: { holz: 50, lehm: 30 }, time: 15, fx: { pop: 3, hp: 1.3 } },
+    { name: 'Bürgerhaus', desc: 'Zweigeschossig: +6 Wohnraum.', cost: { holz: 80, lehm: 60, taler: 20 }, time: 22, fx: { pop: 6, hp: 1.6 } },
+  ],
+  bauernhof: [
+    { name: 'Großer Hof', desc: 'Neue Scheune: +30 % Getreide, 2 zusätzliche Felder.', cost: { holz: 90, lehm: 40 }, time: 25, fx: { produce: 1.3, fields: 2, hp: 1.3 } },
+    { name: 'Gutshof', desc: 'Mergeln und Fruchtwechsel: +60 % Getreide, 4 zusätzliche Felder, 1 weiterer Arbeitsplatz.', cost: { holz: 140, lehm: 80, taler: 40 }, time: 35, fx: { produce: 1.6, fields: 4, staff: 1, hp: 1.6 } },
+  ],
+  lehmgrube: [
+    { name: 'Ziegelei', desc: 'Formtische und Trockenschuppen: +30 % Lehm.', cost: { holz: 80 }, time: 20, fx: { produce: 1.3 } },
+    { name: 'Ringofen-Ziegelei', desc: '+60 % Lehm, 1 weiterer Arbeitsplatz.', cost: { holz: 120, taler: 40 }, time: 30, fx: { produce: 1.6, staff: 1 } },
+  ],
+  heringszaun: [
+    { name: 'Doppelzaun', desc: 'Zweiter Fangtrichter: +30 % Fisch.', cost: { holz: 70 }, time: 18, fx: { produce: 1.3 } },
+    { name: 'Fischerhütte mit Zaun', desc: 'Netze und Boot: +60 % Fisch.', cost: { holz: 110, taler: 30 }, time: 26, fx: { produce: 1.6, hp: 1.3 } },
+  ],
+  muehle: [
+    { name: 'Kornmühle mit Galerie', desc: 'Größere Flügel: mahlt 25 % schneller.', cost: { holz: 100, lehm: 40 }, time: 25, fx: { process: 0.75, hp: 1.3 } },
+    { name: 'Holländermühle', desc: 'Drehbare Kappe: mahlt 40 % schneller.', cost: { holz: 150, lehm: 80, taler: 50 }, time: 35, fx: { process: 0.6, hp: 1.6 } },
+  ],
+  raeucherei: [
+    { name: 'Große Räucherkate', desc: 'Zweiter Ofen: räuchert 25 % schneller.', cost: { holz: 90, lehm: 40 }, time: 22, fx: { process: 0.75 } },
+    { name: 'Räucherhaus', desc: 'Räuchert 40 % schneller.', cost: { holz: 130, lehm: 70, taler: 40 }, time: 32, fx: { process: 0.6, hp: 1.4 } },
+  ],
+  kaserne: [
+    { name: 'Exerzierplatz', desc: 'Drillmeister: Ausbildung 20 % schneller, +30 % Lebenspunkte des Gebäudes.', cost: { holz: 120, lehm: 80, taler: 40 }, time: 30, fx: { train: 0.8, hp: 1.3 } },
+    { name: 'Zeughaus', desc: 'Waffenkammer: Ausbildung 35 % schneller.', cost: { holz: 180, lehm: 120, taler: 90 }, time: 45, fx: { train: 0.65, hp: 1.6 } },
+  ],
+  markt: [
+    { name: 'Kontor', desc: 'Kaufmannsstube: +15 % Taler je Verkauf.', cost: { holz: 100, lehm: 60, taler: 40 }, time: 28, fx: { taler: 1.15, hp: 1.3 } },
+    { name: 'Handelshaus', desc: 'Lagerhaus und Waage: +30 % Taler je Verkauf.', cost: { holz: 160, lehm: 100, taler: 100 }, time: 40, fx: { taler: 1.3, hp: 1.6 } },
+  ],
+};
+export const LEVEL_ROMAN = ['', 'I', 'II', 'III'];
+const levelCache = new WeakMap<BuildingDef, BuildingDef[]>();
+/** Gebäudewerte einer Ausbaustufe (aus den bereits parteiabhängigen Werten). */
+export function levelDef(def: BuildingDef, t: BuildingType, lvl: number): BuildingDef {
+  if (lvl <= 1) return def;
+  let arr = levelCache.get(def);
+  if (!arr) levelCache.set(def, (arr = []));
+  if (arr[lvl]) return arr[lvl];
+  const fx = levelFx(t, lvl);
+  const d: BuildingDef = { ...def, hp: Math.round(def.hp * (fx.hp ?? 1)), vision: def.vision + (fx.vision ?? 0) };
+  if (def.popCap) d.popCap = def.popCap + (fx.pop ?? 0);
+  if (def.staffSlots) d.staffSlots = def.staffSlots + (fx.staff ?? 0);
+  if (def.produce) d.produce = { ...def.produce, time: def.produce.time / (fx.produce ?? 1) };
+  if (def.process) d.process = { ...def.process, time: def.process.time * (fx.process ?? 1) };
+  if (def.attack) d.attack = { ...def.attack, dmg: Math.round(def.attack.dmg * (fx.dmg ?? 1)), range: def.attack.range + (fx.range ?? 0) };
+  return (arr[lvl] = d);
+}
+/** Wirkung der Stufe lvl (1 = Grundstufe). */
+export function levelFx(t: BuildingType, lvl: number): LevelFx {
+  return lvl > 1 ? (UPGRADES[t]?.[lvl - 2]?.fx ?? {}) : {};
+}
+
 export const RULES = {
   tickRate: 10, // Simulationstakte pro Sekunde
   maxPop: 80,
   buildRadius: 11, // Kacheln um eigene fertige Gebäude
   carryCap: 10,
   chopTime: 0.9, // s pro Holz
-  marketSell: { waren: 10, taler: 30, prestige: 2 },
-  marketSellControlled: { waren: 10, taler: 40, prestige: 4 },
+  marketSell: { waren: 10, taler: 30, prestige: 1 },
+  marketSellControlled: { waren: 10, taler: 40, prestige: 2 },
   marketBuy: { amount: 40, taler: 45 },
-  brarupTrickle: { prestige: 1, every: 12 },
+  brarupTrickle: { prestige: 1, every: 20 },
   brarupRadius: 6,
   moorReward: { prestige: 15, taler: 120 },
-  prestigeGoalDefault: 250,
+  prestigeGoalDefault: 400,
+  /** Wählbare Prestigeziele; 0 = kein wirtschaftlicher Sieg */
+  prestigeGoals: [250, 400, 600, 0],
   startRes: { holz: 200, getreide: 150, fisch: 60, lehm: 100, waren: 0, taler: 60 } as Record<Res, number>,
   startResHigh: { holz: 500, getreide: 400, fisch: 200, lehm: 300, waren: 0, taler: 200 } as Record<Res, number>,
 };

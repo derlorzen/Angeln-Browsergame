@@ -1,6 +1,6 @@
 // Klassisches Strategie-HUD (DOM): Ressourcenleiste, Auswahlfenster, Befehlskarte, Tooltips, Meldungen.
 import {
-  RES, RES_NAME, RULES, costText, type BuildingType, type Cost, type Res, type UnitType,
+  LEVEL_ROMAN, RES, RES_NAME, RULES, UPGRADES, costText, type BuildingType, type Cost, type Res, type UnitType,
 } from '../data/defs';
 import { FACTION_DEFS } from '../data/factions';
 import type { CBuilding, CUnit } from '../game/client';
@@ -73,7 +73,7 @@ export class Hud {
   private prestigeTip(): string {
     const c = this.game.client;
     const rows = c.players.map((p) => `${esc(p.name)}: ${p.prestige} Prestige${p.defeated ? ' (besiegt)' : ''}`).join('<br>');
-    return `<h4>Prestige</h4>Wirtschaftlicher Sieg bei <b>${c.goal}</b> Prestige.<br>Prestige gibt es für Warenverkäufe am Markt (${RULES.marketSell.prestige}, mit besetztem ${esc(c.map.marketName)} ${RULES.marketSellControlled.prestige} je ${RULES.marketSell.waren} Waren), für die Besetzung des ${esc(c.map.marketName)} und einmalig für die Erkundung der Fundstelle „${esc(c.map.site.name)}“ (${RULES.moorReward.prestige}).<br><br>${rows}`;
+    return `<h4>Prestige</h4>${c.goal ? `Wirtschaftlicher Sieg bei <b>${c.goal}</b> Prestige.` : 'Kein wirtschaftlicher Sieg in dieser Partie – nur militärisch.'}<br>Prestige gibt es für Warenverkäufe am Markt (${RULES.marketSell.prestige}, mit besetztem ${esc(c.map.marketName)} ${RULES.marketSellControlled.prestige} je ${RULES.marketSell.waren} Waren), für die Besetzung des ${esc(c.map.marketName)} und einmalig für die Erkundung der Fundstelle „${esc(c.map.site.name)}“ (${RULES.moorReward.prestige}).<br><br>${rows}`;
   }
 
   updateTop(): void {
@@ -89,11 +89,12 @@ export class Hud {
     pop.querySelector('b')!.textContent = `${me.pop ?? 0}/${me.popCap ?? 0}`;
     pop.classList.toggle('low', (me.pop ?? 0) >= (me.popCap ?? 0));
     const pr = this.resEls.get('prestige')!;
-    pr.querySelector('b')!.textContent = `${me.prestige}/${c.goal}`;
+    pr.querySelector('b')!.textContent = c.goal ? `${me.prestige}/${c.goal}` : `${me.prestige}`;
     const bars = pr.querySelectorAll<HTMLElement>('.bar i');
-    bars[0].style.width = `${Math.min(100, (me.prestige / Math.max(1, c.goal)) * 100)}%`;
+    const gl = c.goal || 600;
+    bars[0].style.width = `${Math.min(100, (me.prestige / gl) * 100)}%`;
     const enemy = c.players.filter((p) => p.id !== c.me).reduce((m, p) => Math.max(m, p.prestige), 0);
-    bars[1].style.width = `${Math.min(100, (enemy / Math.max(1, c.goal)) * 100)}%`;
+    bars[1].style.width = `${Math.min(100, (enemy / gl) * 100)}%`;
     const br = this.resEls.get('brarup')!;
     const ctrl = c.brarup.c;
     const b = br.querySelector('b')!;
@@ -264,10 +265,11 @@ export class Hud {
     }
     if (blds.length) {
       const b = blds[0];
-      const d = c.bd(b.o, b.t);
+      const d = c.bdl(b);
       const mine = b.o === c.me;
       const lines: string[] = [];
       if (!b.b) lines.push(`Im Bau: ${b.p} % – Arbeiter per Rechtsklick zum Bauen schicken`);
+      else if (mine && b.u !== undefined) lines.push(`Ausbau zu „${UPGRADES[b.t]?.[(b.l ?? 1) - 1]?.name ?? ''}“: ${b.u} %`);
       else if (b.t === 'brarupmarkt') {
         const ctrl = c.brarup.c;
         lines.push(ctrl < 0 ? (c.brarup.x ? 'Umkämpft – niemand hat die Kontrolle' : 'Unbesetzt') : `Kontrolliert von ${esc(c.players[ctrl]?.name ?? '?')}`);
@@ -279,7 +281,7 @@ export class Hud {
         if (b.t === 'markt') {
           const ctrl = c.brarup.c === c.me;
           const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
-          lines.push(`Verkauf: ${s.waren} Waren → ${Math.round(s.taler * (FACTION_DEFS[c.faction(c.me)].marketTalerMul ?? 1))} Taler + ${s.prestige} Prestige${ctrl ? ' (Marktbonus)' : ''}`);
+          lines.push(`Verkauf: ${s.waren} Waren → ${Math.round(s.taler * (FACTION_DEFS[c.faction(c.me)].marketTalerMul ?? 1) * this.marketMul())} Taler + ${s.prestige} Prestige${ctrl ? ' (Marktbonus)' : ''}`);
           lines.push(`Automatischer Verkauf: ${b.as ? 'an' : 'aus'}`);
         }
         if (d.popCap) lines.push(`Bietet Wohnraum für ${d.popCap}`);
@@ -289,7 +291,7 @@ export class Hud {
         ? `<div class="queue">${b.q.map((t, k) => `<div class="q" data-k="${k}" title="${c.ud(c.me, t).name} – Klick: abbrechen"><img src="${portrait('u', t, playerColor(c, c.me), c.faction(c.me))}" alt="">${k === 0 ? `<div class="p" style="width:${b.qp ?? 0}%"></div>` : ''}</div>`).join('')}</div>`
         : '';
       this.sel.innerHTML = `<img class="portrait" src="${portrait('b', b.t, playerColor(c, b.o), b.o < 0 ? 'angeln' : c.faction(b.o))}" alt="">
-        <div class="selmain"><div class="name">${d.name}</div>
+        <div class="selmain"><div class="name">${esc(c.bname(b))}</div>
         ${b.o >= 0 ? this.hpBar(b.h, b.m) + `<div class="stat">${b.h} / ${b.m} Lebenspunkte</div>` : ''}
         ${lines.map((l) => `<div class="stat">${l}</div>`).join('')}${queue}</div>`;
       this.sel.querySelectorAll<HTMLElement>('.q').forEach((el) => el.addEventListener('click', () => this.game.issue({ c: 'cancel', b: b.i })));
@@ -299,7 +301,7 @@ export class Hud {
     this.sel.innerHTML = `<div class="selmain"><div class="name">${esc(me?.name ?? '')}</div>
       <div class="stat">Nichts ausgewählt. Linksklick wählt aus, Rahmen ziehen wählt mehrere Einheiten.</div>
       <div class="stat">Rechtsklick: bewegen, Holz schlagen, bauen, zuweisen oder angreifen.</div>
-      <div class="stat">Ziel: gegnerisches Dorfzentrum zerstören oder ${c.goal} Prestige erreichen.</div></div>`;
+      <div class="stat">Ziel: gegnerisches Dorfzentrum zerstören${c.goal ? ` oder ${c.goal} Prestige erreichen` : ''}.</div></div>`;
   }
 
   private makeButtons(units: CUnit[], blds: CBuilding[]): CmdButton[] {
@@ -341,7 +343,7 @@ export class Hud {
     }
     if (blds.length === 1 && blds[0].o === c.me) {
       const b = blds[0];
-      const d = c.bd(c.me, b.t);
+      const d = c.bdl(b);
       if (!b.b) {
         while (out.length < 11) out.push(null as unknown as CmdButton);
         out.push({
@@ -377,7 +379,7 @@ export class Hud {
         const ctrl = () => c.brarup.c === c.me;
         const fd = FACTION_DEFS[c.faction(c.me)];
         const base = () => (ctrl() ? RULES.marketSellControlled : RULES.marketSell);
-        const sell = () => ({ ...base(), taler: Math.round(base().taler * (fd.marketTalerMul ?? 1)), prestige: base().prestige + (fd.marketPrestigeBonus ?? 0) });
+        const sell = () => ({ ...base(), taler: Math.round(base().taler * (fd.marketTalerMul ?? 1) * this.marketMul()), prestige: base().prestige * (fd.marketPrestigeMul ?? 1) });
         const buyPrice = Math.round(RULES.marketBuy.taler * (fd.marketBuyMul ?? 1));
         out.push({
           key: 'Q', icon: resIcon('waren'), label: 'Verkaufen',
@@ -403,8 +405,39 @@ export class Hud {
           act: () => g.issue({ c: 'buy', b: b.i, r: 'lehm' }),
         });
       }
+      const ups = UPGRADES[b.t];
+      if (ups) {
+        while (out.length < 10) out.push(null as unknown as CmdButton);
+        const l = b.l ?? 1;
+        if (b.u !== undefined)
+          out[10] = {
+            key: 'C', glyph: '⨯', label: 'Ausbau stopp',
+            tip: () => `<h4>Ausbau abbrechen (C)</h4>Der Ausbau läuft (${b.u} %). Abbrechen erstattet die vollen Kosten.`,
+            state: () => 'ok', act: () => g.issue({ c: 'upcancel', b: b.i }),
+          };
+        else if (l < ups.length + 1) {
+          const up = ups[l - 1];
+          out[10] = {
+            key: 'C', glyph: '▲', label: `Stufe ${LEVEL_ROMAN[l + 1]}`,
+            tip: () => {
+              const why = c.upgradeBlock(b);
+              return `<h4>Ausbau: ${esc(up.name)} (Stufe ${LEVEL_ROMAN[l + 1]}, C)</h4><div>${esc(up.desc)}</div>
+                <div class="row2"><b>Kosten:</b> ${this.costHtml(up.cost)}</div><div class="row2"><b>Dauer:</b> ${up.time} s (das Gebäude arbeitet weiter)</div>
+                ${why ? `<div class="row2 c-bad">${esc(why)}</div>` : ''}`;
+            },
+            state: () => (c.upgradeBlock(b) ? 'na' : !this.canAfford(up.cost) ? 'poor' : 'ok'),
+            act: () => g.issue({ c: 'upgrade', b: b.i }),
+          };
+        }
+      }
     }
     return out;
+  }
+
+  /** Talerfaktor des besten eigenen Markts (Ausbaustufe). */
+  private marketMul(): number {
+    const l = this.game.client.bestLevel('markt');
+    return l > 1 ? (UPGRADES.markt?.[l - 2]?.fx.taler ?? 1) : 1;
   }
 
   private renderCard(): void {

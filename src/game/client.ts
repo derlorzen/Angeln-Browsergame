@@ -1,6 +1,6 @@
 // Client-seitiges Abbild der Partie aus Sicht eines Spielers. Wird ausschließlich aus Snapshots gespeist –
 // lokal (vom eigenen World-Objekt) wie im Netzwerk (vom Host). Die Darstellung liest nur hiervon.
-import { BUILDINGS, type BuildingType, type UnitType } from '../data/defs';
+import { BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, UPGRADES, levelDef, type BuildingType, type UnitType } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type ArchStyle, type FactionId } from '../data/factions';
 import { generateMap, type GameMap, type MapId } from '../sim/map';
 import { computeVisibility, type PlacementView, type VisionSource } from '../sim/rules';
@@ -193,6 +193,31 @@ export class ClientState {
       explored: (i) => this.vis[i] > 0,
       ownBuildings: own,
     };
+  }
+
+  /** Werte eines sichtbaren Gebäudes inkl. Ausbaustufe. */
+  bdl(b: CBuilding) {
+    return levelDef(this.bd(b.o, b.t), b.t, b.l ?? 1);
+  }
+  /** Anzeigename inkl. Stufe, z. B. „Kirchspielort (Stufe II)“. */
+  bname(b: CBuilding): string {
+    const l = b.l ?? 1;
+    return l > 1 ? `${UPGRADES[b.t]?.[l - 2]?.name ?? this.bd(b.o, b.t).name} (Stufe ${LEVEL_ROMAN[l]})` : this.bd(b.o, b.t).name;
+  }
+  bestLevel(t: BuildingType): number {
+    let l = 0;
+    for (const b of this.buildings.values()) if (b.o === this.me && b.t === t && b.b) l = Math.max(l, b.l ?? 1);
+    return l;
+  }
+  /** Spiegel der Ausbauprüfung der Simulation (für Knopfzustand und Tooltip). */
+  upgradeBlock(b: CBuilding): string | null {
+    if (!UPGRADES[b.t] || b.o !== this.me) return 'Nicht ausbaubar.';
+    if (!b.b) return 'Das Gebäude ist noch nicht fertig.';
+    const l = b.l ?? 1;
+    if (l >= MAX_LEVEL) return 'Höchste Stufe erreicht.';
+    if (b.u !== undefined) return 'Wird bereits ausgebaut.';
+    if (b.t === 'dorfzentrum') return l + 1 === 3 && !this.bestLevel('markt') ? 'Stufe III benötigt einen fertigen Markt.' : null;
+    return this.bestLevel('dorfzentrum') < l + 1 ? `Benötigt zuerst ein Dorfzentrum der Stufe ${LEVEL_ROMAN[l + 1]}.` : null;
   }
 
   hasBuilt(t: BuildingType): boolean {

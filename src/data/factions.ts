@@ -34,7 +34,8 @@ export interface FactionDef {
   dzAttackMul?: number;
   marketTalerMul?: number;
   marketBuyMul?: number;
-  marketPrestigeBonus?: number;
+  /** Prestigefaktor je Verkauf (Standard 1) */
+  marketPrestigeMul?: number;
   aiPlan: BuildingType[]; // bevorzugte Zusatzgebäude der KI
   aiFirst?: BuildingType[]; // baut die KI vor allem anderen
   startBonus?: Cost; // zusätzliche Startrohstoffe
@@ -62,12 +63,12 @@ export const FACTION_DEFS: Record<FactionId, FactionDef> = {
     id: 'schwansen', name: 'Schwansener', adj: 'schwansener', motto: '„Wer reitet, der regiert.“',
     focus: 'Handel und Reiterei',
     desc: 'Die Gutsherren vom anderen Schleiufer: weiß getünchte Herrenhäuser, Alleen, edle Pferde – und ein feines Gespür für gute Preise.',
-    bonuses: ['Markt: +25 % Taler und +1 Prestige je Verkauf', 'Zukauf am Markt 20 % billiger', 'Späher +30 % Lebenspunkte', 'Wohnhäuser 10 % teurer', 'Spezialeinheit: Gutsreiter'],
+    bonuses: ['Markt: +25 % Taler und +50 % Prestige je Verkauf', 'Zukauf am Markt 20 % billiger', 'Späher +30 % Lebenspunkte', 'Wohnhäuser 10 % teurer', 'Spezialeinheit: Gutsreiter'],
     unique: 'gutsreiter', arch: 'schwansen',
     buildingNames: { dorfzentrum: 'Herrenhaus', wohnhaus: 'Gutskate', bauernhof: 'Meierhof', markt: 'Gutsmarkt', kaserne: 'Reitstall und Wache' },
     unitNames: { arbeiter: 'Gutsarbeiter', spaeher: 'Jagdreiter' },
     bCostMul: { wohnhaus: 1.1 },
-    marketPrestigeBonus: 1,
+    marketPrestigeMul: 1.5,
     uStat: { spaeher: { hp: 91 } },
     marketTalerMul: 1.25,
     marketBuyMul: 0.8,

@@ -319,6 +319,32 @@ export class CanvasRenderer extends BaseRenderer {
       drawScaffold(g, sx, sy, d.w, z, prog);
     } else {
       this.drawSprite(spr, sx, sy);
+      if (b.u !== undefined) drawScaffold(g, sx, sy, d.w, z, 1 - b.u / 200);
+      if ((b.l ?? 1) > 1) {
+        const [lx, ly] = this.toScreen(b.x + d.w, b.y);
+        const x = lx - 4 * z, y = ly - 20 * z;
+        g.fillStyle = color;
+        g.strokeStyle = '#e8c86a';
+        g.lineWidth = 1.2 * z;
+        g.beginPath();
+        g.moveTo(x - 5 * z, y - 6 * z);
+        g.lineTo(x + 5 * z, y - 6 * z);
+        g.lineTo(x + 5 * z, y + z);
+        g.lineTo(x, y + 6 * z);
+        g.lineTo(x - 5 * z, y + z);
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.strokeStyle = '#f5e7a0';
+        g.lineWidth = 1.3 * z;
+        for (let k = 0; k < b.l!; k++) {
+          const bx = x + (k - (b.l! - 1) / 2) * 2.6 * z;
+          g.beginPath();
+          g.moveTo(bx, y - 3.5 * z);
+          g.lineTo(bx, y + 1.5 * z);
+          g.stroke();
+        }
+      }
       // animierte Teile
       if (spr.hub) this.drawSails(sx + spr.hub[0] * z, sy + spr.hub[1] * z, b.ac ? now / 900 : 0.4);
       if (spr.smoke && (b.t !== 'raeucherei' || b.ac)) for (const p of spr.smoke) this.drawSmoke(sx + p[0] * z, sy + p[1] * z, now, b.i);

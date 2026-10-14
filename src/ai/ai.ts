@@ -1,7 +1,7 @@
 // Einfache, regelbasierte KI. Sie liest den Weltzustand und gibt ausschließlich normale Spielerbefehle
 // über world.queueCommand() ab – dieselben Regeln, Kosten und Prüfungen wie für Menschen.
 // Vereinfachung: Die KI kennt die Startplätze der Gegner (die Karte ist allen bekannt).
-import { BUILDINGS, RULES, UNITS, type BuildingType, type UnitType } from '../data/defs';
+import { BUILDINGS, RULES, UNITS, UPGRADES, type BuildingType, type UnitType } from '../data/defs';
 import { FACTION_DEFS } from '../data/factions';
 import { T } from '../sim/map';
 import { checkPlacement } from '../sim/rules';
@@ -107,6 +107,37 @@ export class AI {
       }
     }
 
+    // Ausbau: eine Baustelle zur Zeit, erst wenn der Grundplan steht und Vorräte übrig sind
+    if (!blds.some((b) => b.up >= 0) && count('markt') + count('kaserne') >= (easy ? 1 : 2)) {
+      const order: BuildingType[] = ['dorfzentrum', 'bauernhof', 'heringszaun', 'muehle', 'raeucherei', 'markt', 'kaserne', 'lehmgrube', 'wohnhaus'];
+      const maxL = easy ? 2 : 3;
+      outer: for (let lv = 1; lv < maxL; lv++)
+        for (const t of order)
+          for (const b of blds) {
+            if (b.type !== t || b.lvl !== lv || w.upgradeBlock(b)) continue;
+            const cost = UPGRADES[t]![lv - 1].cost;
+            // Rücklage: Ausbau nur aus Überschuss
+            const spare = Object.entries(cost).every(([r, v]) => me.res[r as keyof typeof me.res] >= (v ?? 0) + (r === 'taler' ? 40 : 80));
+            if (spare) this.cmd(w, { c: 'upgrade', b: b.id });
+            break outer;
+          }
+    }
+
+    // Holzmangel bei vollen Speichern: Arbeiter von Hof/Lehmgrube abziehen
+    if (me.res.holz < 60) {
+      const surplus = workers.filter((u) => {
+        if (u.order.k !== 'staff') return false;
+        const b = w.building(u.order.t);
+        return !!b && ((b.type === 'bauernhof' && me.res.getreide > 300) || (b.type === 'lehmgrube' && me.res.lehm > 250));
+      });
+      for (const u of surplus.slice(0, 3)) {
+        const tree = nearestTree(w, u.x, u.y, 45);
+        if (tree < 0) break;
+        this.cmd(w, { c: 'gather', ids: [u.id], x: (tree % w.map.w) + 0.5, y: Math.floor(tree / w.map.w) + 0.5 });
+        this.reserved.set(u.id, { k: 'gather', t: tree });
+      }
+    }
+
     // Arbeiter verteilen (Vormerkungen nur innerhalb dieses Denkschritts, der Weltzustand bleibt unberührt)
     const busy = (x: Unit, k: 'build' | 'staff', id: number) => {
       const r = this.reserved.get(x.id);
@@ -123,8 +154,8 @@ export class AI {
       }
       const job = blds.find((b) => {
         if (!b.built) return false;
-        const slots = BUILDINGS[b.type].staffSlots ?? 0;
-        const want = b.type === 'lehmgrube' ? (me.res.lehm > 300 ? 1 : 2) : slots;
+        const slots = w.bdl(b).staffSlots ?? 0;
+        const want = b.type === 'lehmgrube' ? (me.res.lehm > 300 ? 1 : 2) : b.type === 'bauernhof' && me.res.getreide > 600 ? 1 : slots;
         return slots > 0 && workers.filter((x) => busy(x, 'staff', b.id)).length < want;
       });
       if (job) {
@@ -133,7 +164,8 @@ export class AI {
         continue;
       }
       const drop = blds.find((b) => b.type === 'holzfaeller' && b.built) ?? dz;
-      const tree = nearestTree(w, drop.x + 1, drop.y + 1, 18);
+      let tree = nearestTree(w, drop.x + 1, drop.y + 1, 18);
+      if (tree < 0) tree = nearestTree(w, dz.x + 1, dz.y + 1, 45); // Wald in der Nähe abgeholzt: weiter laufen
       if (tree >= 0) {
         this.cmd(w, { c: 'gather', ids: [u.id], x: (tree % w.map.w) + 0.5, y: Math.floor(tree / w.map.w) + 0.5 });
         this.reserved.set(u.id, { k: 'gather', t: tree });

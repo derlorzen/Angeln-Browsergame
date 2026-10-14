@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 47/47 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 60/60 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -31,6 +31,10 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Knickwächter / Musketier | Knickwächter neben Knick erleiden weniger Schaden; Musketier trifft auf 6 Kacheln (Ereignis „Muskete“) |
 | KI je Partei | vier Paarungen: jede KI bildet ihre Spezialeinheit aus, alle Partien enden mit Sieger |
 | Karten (6 × 8 Seeds) | Startfelder begehbar; Startplätze, neutraler Markt und Fundstelle gegenseitig erreichbar; Weg zum Markt höchstens max(4, 15 %) und zur Fundstelle höchstens max(5, 20 %) Kacheln unterschiedlich lang; Holz im Umkreis 15 ≥ 45 Bäume je Seite und Verhältnis ≥ 0,8; Acker im Umkreis 10 ≥ 150 Kacheln und Verhältnis ≥ 0,75 (Küstenplätze haben etwas weniger Acker, dafür Fischgründe); ≥ 3 Heringszaun-Plätze je Seite mit Verhältnis ≥ 0,25; Bauplätze für Lehmgrube, Bauernhof, Kaserne, Markt |
+| Ausbaustufen | Kosten und Dauer, Stufe II des Dorfzentrums (+LP, +Wohnraum), Voraussetzungen (Dorfzentrum derselben Stufe, Markt für Stufe III), Abbruch mit voller Erstattung, Bauernhof mit mehr Feldern und schnellerem Ertrag, Markt mit mehr Talern (nicht mehr Prestige), Stufe im Spielstand und im Zustand für den Spieler |
+| Prestige | Ziel „aus“ verhindert den wirtschaftlichen Sieg; Schwansener +50 % Prestige je Verkauf; Protokoll akzeptiert nur die wählbaren Ziele |
+| Geländehinweise | nur für erkundete Kacheln, mit Gelände und nächstem Ortsnamen |
+| Zufallskarte | gleicher Seed ergibt dieselbe Karte (Mehrspieler); 12 Seeds ergeben ≥ 5 unterschiedliche Grundformen und ≥ 6 verschiedene Ortsnamen; Fairnessprüfung mit 40 Seeds |
 | KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
 ## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
@@ -54,10 +58,21 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 **STUN-Modus im Container:** Einladung entsteht nach ~11 s (Zeitlimit der ICE-Sammlung), nur Kandidaten vom Typ
 `host`, weil ausgehendes UDP zum STUN-Server dort nicht möglich ist; die Oberfläche weist darauf hin.
 
-## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 14/14 bestanden
+## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 18/18 bestanden
 
 Rahmenauswahl, Holz schlagen per Rechtsklick, Bauvorschau per Hotkey, ungültiger Platz rot + Begründung, gültiger Platz
-→ Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, keine Skriptfehler.
+→ Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, **Ausbau des Dorfzentrums per Taste C auf
+Stufe II**, **Geländehinweis nach kurzem Verweilen**, **Zurück-Taste öffnet nur das Menü und sichert**, **nach Neuladen
+„Letzte Partie fortsetzen“ mit identischem Takt und Ausbaustufe**, keine Skriptfehler.
+
+## 3c. Prestige-Tempo (KI gegen KI, normal, 12 Partien auf allen Karten)
+
+Vorher (Prestigeziel 250, 2 Prestige je Verkauf): Sieg nach **11–16 Minuten**, fast immer wirtschaftlich.
+Nachher (Ziel 400, 1 Prestige je Verkauf, Marktzufluss 1 alle 20 s): Partien dauern **15–37 Minuten**, meist
+militärisch entschieden; 400 Prestige wurden in 2 von 12 Partien erreicht. Der Balance-Test (4 Seeds) liegt jetzt bei
+9–43 Minuten (Testgrenze auf 60 Minuten angehoben). Gegen menschliche Spieler ist das Tempo nicht gemessen.
+Gefundener und behobener KI-Fehler: Ohne Wald in Lagernähe blieb eine KI dauerhaft ohne Holz stecken; sie sucht jetzt
+weiter entfernt und zieht bei Holzmangel Arbeiter von vollen Höfen ab.
 
 ## 3b. Karten: Sichtprüfung
 
@@ -66,8 +81,7 @@ speichert je ein Bild der Startsiedlung und eine aufgedeckte Übersicht. Geprüf
 Glücksburg und Gravenstein, Danewerk als durchgehender Wall mit Toren, Eider mit Mooren und Rendsburger Insel,
 Deiche, Gräben und Watt in der Marsch, Wattenmeer und Heide bei Ribe. Die Geografie wurde **nicht** mit Google Maps
 abgeglichen (im Container nicht abrufbar); Grundlage sind bekannte Ortskoordinaten, auf etwa ±2 km genau.
-**Hinweis:** Der Testlauf „KI gegen KI“ (Balance) brauchte nach Einführung der Fischteiche bei Seed 5 (leicht gegen
-normal) 37,7 Minuten; die Obergrenze des Tests wurde daher von 30 auf 40 Minuten angehoben.
+
 
 ## 3a. Balance der Parteien (KI gegen KI, einmalige Auswertung)
 
@@ -98,12 +112,13 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 
 1. **Internet-Verbindbarkeit nicht belegt.** Getestet wurde nur zwischen zwei Prozessen auf einem Rechner.
    Ein Test mit zwei Geräten an unterschiedlichen Anschlüssen steht aus → Anleitung in [NETZWERK.md](NETZWERK.md#testanleitung-über-zwei-internetanschlüsse-noch-offen-siehe-testbericht).
-2. **Leistung auf echter Laptop-GPU** nicht gemessen (siehe 4).
-3. **Andere Browser** (Firefox, Safari) nicht getestet; benötigt werden WebRTC DataChannels und `CompressionStream`
+2. **Ausbaustufen sind nur als Wappen mit Strichen sichtbar**, die Gebäudegrafik selbst ändert sich nicht.
+3. **Leistung auf echter Laptop-GPU** nicht gemessen (siehe Abschnitt 4).
+4. **Andere Browser** (Firefox, Safari) nicht getestet; benötigt werden WebRTC DataChannels und `CompressionStream`
    (Firefox ≥ 113, Safari ≥ 16.4).
-4. **Kartenbalance mit Menschen** nicht erprobt; die Fairness ist nur über Messgrößen (Wege, Holz, Acker, Fischplätze) und KI-Partien geprüft.
-5. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
+5. **Kartenbalance mit Menschen** nicht erprobt; die Fairness ist nur über Messgrößen (Wege, Holz, Acker, Fischplätze) und KI-Partien geprüft.
+6. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
    Feinabstimmung mit menschlichen Testspielern steht aus.
-6. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
+7. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
    mit Raumcode, Hostmigration, Mehrspieler-Spielstände.
 7. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.

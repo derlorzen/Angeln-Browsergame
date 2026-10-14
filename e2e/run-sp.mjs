@@ -148,6 +148,54 @@ try {
   const tickLoaded = await page.evaluate(() => window.__game.driver.world.tick);
   check('Spielstand laden', Math.abs(tickLoaded - tickSaved) < 30, `${tickSaved} → ${tickLoaded}`);
 
+  // Ausbau des Dorfzentrums über die Befehlskarte (Taste C)
+  await page.evaluate(() => {
+    const G = window.__game, c = G.client;
+    G.driver.world.players[0].res = { holz: 2000, getreide: 2000, fisch: 2000, lehm: 2000, waren: 0, taler: 2000 };
+    const dz = [...c.buildings.values()].find((b) => b.o === c.me && b.t === 'dorfzentrum');
+    G.selected.clear();
+    G.selected.add(dz.i);
+    G.hud.update(true);
+  });
+  await page.waitForTimeout(300);
+  const upBtn = await page.evaluate(() => [...document.querySelectorAll('#cmdcard .cmd .lbl')].some((e) => e.textContent === 'Stufe II'));
+  await page.keyboard.press('c');
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { const d = window.__game.driver; d.paused = true; for (let i = 0; i < 500; i++) d.tick(); d.paused = false; });
+  await page.waitForTimeout(500);
+  const lvl = await page.evaluate(() => { const c = window.__game.client; return [...c.buildings.values()].find((b) => b.o === c.me && b.t === 'dorfzentrum').l ?? 1; });
+  check('Ausbau per Befehlskarte: Dorfzentrum erreicht Stufe II', !!upBtn && lvl === 2, `Stufe ${lvl}`);
+  await page.screenshot({ path: OUT + 'sp-upgrade.png' });
+
+  // Dezenter Geländehinweis beim Verweilen
+  await page.evaluate(() => { const G = window.__game; G.selected.clear(); G.hud.update(true); });
+  let hint = '';
+  for (const [hx, hy] of [[300, 200], [900, 250], [500, 450], [1100, 400]]) {
+    await page.mouse.move(hx, hy);
+    await page.mouse.move(hx + 1, hy);
+    await page.waitForTimeout(1100);
+    hint = await page.evaluate(() => { const el = document.getElementById('terrainhint'); return el.classList.contains('hidden') ? '' : el.textContent; });
+    if (hint) break;
+  }
+  check('Geländehinweis erscheint nach kurzem Verweilen', !!hint, hint);
+  await page.screenshot({ path: OUT + 'sp-hint.png' });
+
+  // Zurück-Taste: Partie bleibt, Menü öffnet sich, Sicherung liegt vor
+  await page.goBack();
+  await page.waitForTimeout(500);
+  const afterBack = await page.evaluate(() => ({ inGame: !!window.__game && !document.getElementById('screen-game').classList.contains('hidden'), dialog: !document.getElementById('dialog').classList.contains('hidden'), auto: !!localStorage.getItem('angeln-autosave-v1') }));
+  check('Zurück-Taste verlässt die Partie nicht, öffnet das Menü und sichert', afterBack.inGame && afterBack.dialog && afterBack.auto, JSON.stringify(afterBack));
+
+  // Seite neu laden → „Letzte Partie fortsetzen“
+  const tickBefore = await page.evaluate(() => window.__game.driver.world.tick);
+  page.on('dialog', (d) => d.accept().catch(() => {}));
+  await page.reload();
+  await page.waitForSelector('[data-a=resume]', { timeout: 10000 });
+  await page.click('[data-a=resume]');
+  await page.waitForFunction(() => window.__game?.client?.units?.size > 0);
+  const resumed = await page.evaluate(() => ({ tick: window.__game.driver.world.tick, l: [...window.__game.client.buildings.values()].find((b) => b.o === 0 && b.t === 'dorfzentrum').l }));
+  check('Nach Neuladen: letzte Partie fortsetzen', Math.abs(resumed.tick - tickBefore) < 60 && resumed.l === 2, `${tickBefore} → ${resumed.tick}, Stufe ${resumed.l}`);
+
   // Leistungsmessung: 110 eigene Einheiten in ständiger Bewegung + Gefecht 30 gegen 30
   await page.evaluate(() => {
     const G = window.__game, w = G.driver.world;

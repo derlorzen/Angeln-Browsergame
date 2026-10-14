@@ -543,6 +543,8 @@ export class PixiRenderer extends BaseRenderer {
       if (b.t === 'heringszaun') this.drawFences(g, b);
       if (!b.b) this.drawScaffold(g, ox, oy, d.w, b.p / 100);
       else {
+        if (b.u !== undefined) this.drawScaffold(g, ox, oy, d.w, 1 - b.u / 200);
+        if ((b.l ?? 1) > 1) this.drawLevel(g, isoX(b.x + d.w, b.y) - 4, isoY(b.x + d.w, b.y) - 20, b.l!, hex(color));
         const sp = v.sprite;
         if (sp.hub) this.drawSails(g, ox + sp.hub[0], oy + sp.hub[1], b.ac ? now / 900 : 0.4);
         if (sp.smoke && (b.t !== 'raeucherei' || b.ac)) for (const p of sp.smoke) this.drawSmoke(g, ox + p[0], oy + p[1], now, b.i);
@@ -577,6 +579,15 @@ export class PixiRenderer extends BaseRenderer {
       }
       g.stroke({ width: 1.5, color: 0x6b5434 });
       g.moveTo(isoX(ax, ay), isoY(ax, ay) - 4).lineTo(isoX(bx, by), isoY(bx, by) - 4).stroke({ width: 3, color: 0x785f3c, alpha: 0.9 });
+    }
+  }
+
+  /** Dezentes Stufenwappen: Schild in Spielerfarbe mit goldenen Strichen (II, III). */
+  private drawLevel(g: Graphics, x: number, y: number, l: number, col: number): void {
+    g.poly([x - 5, y - 6, x + 5, y - 6, x + 5, y + 1, x, y + 6, x - 5, y + 1]).fill({ color: col, alpha: 0.9 }).stroke({ width: 1.2, color: 0xe8c86a });
+    for (let k = 0; k < l; k++) {
+      const bx = x + (k - (l - 1) / 2) * 2.6;
+      g.moveTo(bx, y - 3.5).lineTo(bx, y + 1.5).stroke({ width: 1.3, color: 0xf5e7a0 });
     }
   }
 

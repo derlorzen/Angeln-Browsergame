@@ -87,7 +87,9 @@ export function terrainCost(t: number): number {
 }
 
 // ------------------------------------------------------------------ Kartenkatalog
-export const MAP_IDS = ['schlei', 'foerde', 'danewerk', 'eider', 'marsch', 'ribe'] as const;
+export const MAP_IDS = ['schlei', 'foerde', 'danewerk', 'eider', 'marsch', 'ribe', 'random'] as const;
+/** Karten nach echter Geografie (ohne die erzeugte Zufallskarte) */
+export const REAL_MAP_IDS = ['schlei', 'foerde', 'danewerk', 'eider', 'marsch', 'ribe'] as const;
 export type MapId = (typeof MAP_IDS)[number];
 export function isMapId(v: unknown): v is MapId {
   return typeof v === 'string' && (MAP_IDS as readonly string[]).includes(v);
@@ -146,6 +148,14 @@ export const MAP_INFO: Record<MapId, MapInfo> = {
     marketName: 'Viehmarkt Oldenswort', siteName: 'Rungholt-Spuren',
     siteText: 'Bei Ebbe zeigen sich im Watt Brunnenringe und Scherben des untergegangenen Rungholt',
   },
+  random: {
+    id: 'random', name: 'Zufallskarte', region: 'jedes Mal neu',
+    desc: 'Eine bei jedem Start neu erzeugte Landschaft zwischen Eider und Kongeå: mal Küste mit Watt und Deich, mal Fluss mit Furten, Seen, Moore, Heide, Knicks oder Gräben – mit zufälligen Ortsnamen aus der Region. Die Startplätze werden wie auf allen Karten ausgeglichen.',
+    liberties: 'Frei erfundene Landschaft; die Ortsnamen stammen aus Angeln, Schwansen, Nordfriesland und Sønderjylland, ihre Lage zueinander ist zufällig.',
+    slotNames: ['Startplatz A', 'Startplatz B', 'C', 'D'],
+    marketName: 'Marktflecken', siteName: 'Fundstelle',
+    siteText: 'Bauern stoßen auf alte Funde',
+  },
   ribe: {
     id: 'ribe', name: 'Ribe und Kongeå', region: 'Südwestjütland',
     desc: 'Weite Heide, Marsch und Wattenmeer mit Fanø. Die Kongeå trennt den Norden (Varde) vom Süden (Tønder); dazwischen Ribe mit seinem großen Ochsenmarkt. Im Nordwesten liegt die Bucht, an der später Esbjerg entstand.',
@@ -173,6 +183,8 @@ interface PaintResult {
   forest: number; // Schwelle für Rauschwald (höher = weniger)
   clay: number; // Schwelle für Lehmflecken (höher = weniger)
   forestOn?: number[];
+  /** nur Zufallskarte: erzeugte Namen statt der Katalogwerte */
+  names?: { name: string; slotNames: string[]; marketName: string; siteName: string; siteText: string };
 }
 
 class Painter {
@@ -308,6 +320,23 @@ const inPoly = (lon: number, lat: number, poly: [number, number][]) => {
   }
   return c;
 };
+
+// Namen für die Zufallskarte (echte Orte der Region, zufällig angeordnet)
+const TOWNS = [
+  'Sörup', 'Satrup', 'Sterup', 'Gelting', 'Steinbergkirche', 'Grundhof', 'Husby', 'Hürup', 'Tolk', 'Böel', 'Mohrkirch',
+  'Rabenkirchen', 'Toestrup', 'Brodersby', 'Rieseby', 'Damp', 'Waabs', 'Karby', 'Thumby', 'Bredstedt', 'Niebüll',
+  'Viöl', 'Ockholm', 'Garding', 'Tating', 'Witzwort', 'Hattstedt', 'Mildstedt', 'Schwabstedt', 'Tinglev', 'Løgumkloster',
+  'Bredebro', 'Agerskov', 'Rødding', 'Gram', 'Toftlund', 'Hohn', 'Erfde', 'Bergenhusen', 'Treia', 'Silberstedt',
+] as const;
+const RIVERS = ['Treene', 'Sorge', 'Arlau', 'Lecker Au', 'Wiedau', 'Bondenau', 'Oxbek', 'Loiter Au', 'Füsinger Au', 'Gram Å'] as const;
+const LAKES = ['Langsee', 'Bültsee', 'Winderatter See', 'Arenholzer See', 'Wittensee', 'Holmer See', 'Sankelmarker See'] as const;
+const SITES: readonly [string, string][] = [
+  ['Hünengrab', 'Hirten zeigen ein steinzeitliches Hünengrab – der Pastor schreibt einen Bericht an den Landesherrn'],
+  ['Runenstein', 'Bauern legen einen alten Runenstein frei – Gelehrte reisen an'],
+  ['Opfermoor', 'Torfstecher stoßen auf eisenzeitliche Opfergaben im Moor'],
+  ['Alte Burgwallstelle', 'Auf einem Hügel finden sich Reste eines frühmittelalterlichen Burgwalls'],
+  ['Grabhügelfeld', 'Auf der Heide liegen bronzezeitliche Grabhügel – ein Bericht geht an die Krone'],
+];
 
 // ------------------------------------------------------------------ Kartenmaler
 // Ortslagen nach bekannten Koordinaten (Länge/Breite, ca. ±0,02°), auf die Spielraute projiziert.
@@ -554,6 +583,112 @@ const PAINTERS: Record<MapId, MapPainter> = {
       lines: [dike([[8.71, 55.06], [8.7, 54.99], [8.7, 54.9]])],
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : marsh(x, y) ? 'graben' : 'knick'),
       hedgeDensity: 0.35, forest: 0.82, clay: 0.82, forestOn: [T.GRAS],
+    };
+  },
+
+  // ---------------------------------------------------------------- Zufallskarte (bei jedem Seed neu)
+  random: (p) => {
+    const R = new Rng((p.rng.state ^ 0x51ed270b) >>> 0);
+    const pick = <X,>(a: readonly X[]): X => a[R.int(a.length)];
+    // Achse der Startplätze (gegenüberliegende Ecken oder Kantenmitten der Raute)
+    const AXES: [P2, P2][] = [
+      [{ x: 17, y: 17 }, { x: 78, y: 78 }], // Nord – Süd
+      [{ x: 78, y: 17 }, { x: 17, y: 78 }], // Ost – West
+      [{ x: 48, y: 14 }, { x: 47, y: 81 }], // Nordost – Südwest
+      [{ x: 14, y: 48 }, { x: 81, y: 47 }], // Nordwest – Südost
+    ];
+    let [a, b] = pick(AXES);
+    if (R.next() < 0.5) [a, b] = [b, a];
+    const ax = (b.x - a.x) / Math.hypot(b.x - a.x, b.y - a.y), ay = (b.y - a.y) / Math.hypot(b.x - a.x, b.y - a.y);
+    const nx = -ay, ny = ax; // quer zur Achse
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    const along = (x: number, y: number) => (x - cx) * ax + (y - cy) * ay; // −… Spieler A, + Spieler B
+    const across = (x: number, y: number) => (x - cx) * nx + (y - cy) * ny;
+    const theme = pick(['angeln', 'angeln', 'marsch', 'geest', 'fluss'] as const);
+    const coastSide = R.next() < (theme === 'marsch' ? 1 : 0.55) ? (R.next() < 0.5 ? -1 : 1) : 0;
+    const heath = theme === 'geest' ? 0.45 : theme === 'marsch' ? 0.75 : R.range(0.62, 0.8);
+    // Grundfläche, Küste parallel zur Achse (beide Seiten gleich nah am Meer)
+    const coastAt = 30 + R.range(-3, 4);
+    p.each((x, y, _u, _v, i) => {
+      let t: number = p.n1(x + 17, y + 5) > heath ? T.HEIDE : T.GRAS;
+      if (coastSide) {
+        const d = across(x, y) * coastSide - coastAt - (p.n1(x * 1.3, y * 1.3) - 0.5) * 9;
+        if (d > 0) t = theme === 'marsch' && d < 9 ? T.WATT : T.WASSER;
+      }
+      p.terrain[i] = t;
+    });
+    const labels: { name: string; x: number; y: number }[] = [];
+    const used = new Set<string>();
+    const fresh = (list: readonly string[]) => {
+      for (let k = 0; k < 40; k++) {
+        const n = pick(list);
+        if (!used.has(n)) {
+          used.add(n);
+          return n;
+        }
+      }
+      return pick(list);
+    };
+    if (coastSide) labels.push({ name: theme === 'marsch' ? 'Wattenmeer' : pick(['Ostsee', 'Förde', 'Noor', 'Nordsee']), x: Math.round(cx + nx * coastSide * 40), y: Math.round(cy + ny * coastSide * 40) });
+    // Fluss quer zwischen den Spielern mit Furten
+    const roads: [P2, P2][] = [];
+    if (theme === 'fluss' || R.next() < 0.45) {
+      const off = R.range(-4, 4);
+      const pts: P2[] = [];
+      for (let k = -60; k <= 60; k += 10) pts.push({ x: Math.round(cx + nx * k + ax * (off + Math.sin(k / 13 + R.next()) * 4)), y: Math.round(cy + ny * k + ay * (off + Math.sin(k / 13) * 4)) });
+      p.river(pts, R.range(2.2, 3.4), T.WASSER, 1.4);
+      const fords = [R.range(-26, -12), R.range(12, 26)];
+      if (R.next() < 0.6) fords.push(R.range(-4, 4));
+      for (const f of fords) {
+        const fx = Math.round(cx + nx * f + ax * off), fy = Math.round(cy + ny * f + ay * off);
+        p.ford({ x: Math.round(fx - ax * 6), y: Math.round(fy - ay * 6) }, { x: Math.round(fx + ax * 6), y: Math.round(fy + ay * 6) });
+      }
+      labels.push({ name: fresh(RIVERS), x: Math.round(cx + nx * 30 + ax * (off + 3)), y: Math.round(cy + ny * 30 + ay * (off + 3)) });
+    }
+    // Seen und Moore, gespiegelt verteilt (je Seite gleich viele)
+    const nLakes = R.int(3), nMoors = 1 + R.int(3);
+    for (let k = 0; k < nLakes + nMoors; k++) {
+      const lake = k < nLakes;
+      const s = R.range(8, 26) * (R.next() < 0.5 ? -1 : 1), q = R.range(-24, 24);
+      for (const sign of [-1, 1]) {
+        const x = Math.round(cx + ax * s * sign + nx * q * sign), y = Math.round(cy + ay * s * sign + ny * q * sign);
+        const r = lake ? R.range(2, 3.4) : R.range(2.6, 4.5);
+        if (lake) p.paintBlob(x, y, r, T.WASSER, [T.GRAS, T.HEIDE]);
+        else p.paintBlob(x, y, r, T.MOOR, [T.GRAS, T.HEIDE]);
+        if (lake && sign === 1 && R.next() < 0.6) labels.push({ name: fresh(LAKES), x, y: y + 3 });
+      }
+    }
+    // Wälder je Seite
+    for (let k = 0; k < 3 + R.int(3); k++) {
+      const s = R.range(6, 30), q = R.range(-26, 26), r = R.range(2.2, 3.6);
+      for (const sign of [-1, 1]) p.forestBlob(Math.round(cx + ax * s * sign + nx * q * sign), Math.round(cy + ay * s * sign + ny * q * sign), r);
+    }
+    // Deich an der Marschküste
+    const lines: NonNullable<PaintResult['lines']> = [];
+    if (theme === 'marsch' && coastSide) {
+      const pts: P2[] = [];
+      for (let k = -70; k <= 70; k += 10) pts.push({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) });
+      lines.push({ kind: 'deich', pts, gates: [-30, 0, 30].map((k) => ({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) })) });
+    }
+    const hedgeKind: Hedge = theme === 'marsch' ? 'graben' : theme === 'geest' && R.next() < 0.5 ? null : 'knick';
+    const towns = [fresh(TOWNS), fresh(TOWNS), fresh(TOWNS), fresh(TOWNS)];
+    const marketTown = fresh(TOWNS);
+    const site = pick(SITES);
+    const q = (R.next() < 0.5 ? -1 : 1) * R.range(14, 22);
+    // Fundstelle quer zur Achse, aber nicht in der Küste
+    const sq = coastSide ? -coastSide * Math.abs(q) : q;
+    void along;
+    return {
+      slots: [a, b, { x: Math.round(cx + nx * 34), y: Math.round(cy + ny * 34) }, { x: Math.round(cx - nx * 34), y: Math.round(cy - ny * 34) }],
+      market: { x: Math.round(cx + nx * R.range(-6, 6)), y: Math.round(cy + ny * R.range(-6, 6)) },
+      site: { x: Math.round(cx + nx * sq), y: Math.round(cy + ny * sq) },
+      labels, roads, lines,
+      hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : hedgeKind),
+      hedgeDensity: R.range(0.35, 0.65), forest: R.range(0.66, 0.76), clay: R.range(0.77, 0.81), forestOn: [T.GRAS],
+      names: {
+        name: `Zufallskarte: ${towns[0]} gegen ${towns[1]}`,
+        slotNames: towns, marketName: `Markt in ${marketTown}`, siteName: site[0], siteText: site[1],
+      },
     };
   },
 };
@@ -954,10 +1089,10 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
       }
     return n;
   };
-  {
-    const a = farmNear(slotC[0]), b = farmNear(slotC[1]);
-    const poor = a < b ? 0 : 1;
-    let deficit = Math.max(a, b) * 0.92 - Math.min(a, b);
+  for (const poor of [0, 1]) {
+    const a = farmNear(slotC[poor]), b = farmNear(slotC[1 - poor]);
+    // Ausgleich zum reicheren Platz und Mindestfläche (Heide-/Moorkarten)
+    let deficit = Math.max(b * 0.92 - a, 200 - a);
     const s = slotC[poor];
     for (let rad = 2; rad <= 10 && deficit > 0; rad++)
       for (let dy = -rad; dy <= rad && deficit > 0; dy++)
@@ -996,17 +1131,18 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   if (!terrainWalkable(terrain[idx(site.x, site.y)])) terrain[idx(site.x, site.y)] = T.GRAS;
   trees[idx(site.x, site.y)] = 0;
 
-  const slots: Slot[] = slotC.map((c, k) => ({ name: info.slotNames[k], x: c.x - 1, y: c.y - 1 }));
+  const nm = r.names ?? info;
+  const slots: Slot[] = slotC.map((c, k) => ({ name: nm.slotNames[k], x: c.x - 1, y: c.y - 1 }));
   const labels = [
     ...slots.slice(0, 2).map((s) => ({ name: s.name, x: s.x + 1, y: s.y - 3 })),
-    { name: info.marketName, x: market.x, y: market.y - 4 },
-    { name: info.siteName, x: site.x, y: site.y + 4 },
+    { name: nm.marketName, x: market.x, y: market.y - 4 },
+    { name: nm.siteName, x: site.x, y: site.y + 4 },
     ...r.labels,
   ].map((l) => ({ ...l, x: Math.max(1, Math.min(w - 2, l.x)), y: Math.max(1, Math.min(h - 2, l.y)) }));
 
   return {
-    id: mapId, name: info.name, w, h, seed, terrain, trees, variant, slots,
-    market: { x: market.x - 1, y: market.y - 1 }, marketName: info.marketName,
-    site: { x: site.x, y: site.y, name: info.siteName, text: info.siteText }, labels,
+    id: mapId, name: r.names?.name ?? info.name, w, h, seed, terrain, trees, variant, slots,
+    market: { x: market.x - 1, y: market.y - 1 }, marketName: nm.marketName,
+    site: { x: site.x, y: site.y, name: nm.siteName, text: nm.siteText }, labels,
   };
 }

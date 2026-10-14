@@ -1,6 +1,6 @@
 // Erzeugt pro Empfänger gefilterte Zustandsbilder. Der Empfänger erhält nur, was er sehen darf:
 // eigene Objekte, sichtbare fremde Objekte, sichtbare Baumänderungen und sichtbare Ereignisse.
-import type { BuildingType, Res, UnitType } from '../data/defs';
+import { UPGRADES, type BuildingType, type Res, type UnitType } from '../data/defs';
 import type { FactionId } from '../data/factions';
 import type { SimEvent } from './types';
 import type { World } from './world';
@@ -37,6 +37,8 @@ export interface BSnap {
   ac?: 1;
   as?: 1;
   r?: [number, number];
+  l?: number; // Ausbaustufe (ab II)
+  u?: number; // Ausbaufortschritt 0..100 (nur eigene)
 }
 export type EntSnap = USnap | BSnap;
 
@@ -107,16 +109,18 @@ export class Snapshotter {
           p: e.built ? 100 : Math.floor((e.prog / world.bd(e.owner, e.type).buildTime) * 100),
         };
         if (e.fields.length) snap.f = e.fields;
+        if (e.lvl > 1) snap.l = e.lvl;
         if (e.active) snap.ac = 1;
         if (e.owner === p) {
           if (e.queue.length) {
             snap.q = e.queue;
-            snap.qp = Math.floor((e.qt / world.ud(e.owner, e.queue[0]).trainTime) * 100);
+            snap.qp = Math.floor((e.qt / world.trainTime(e, e.queue[0])) * 100);
           }
           if (e.status) snap.s = e.status;
           if (e.staff.length) snap.st = e.staff;
           if (e.autoSell) snap.as = 1;
           if (e.rally) snap.r = [e.rally.x, e.rally.y];
+          if (e.up >= 0) snap.u = Math.floor((e.up / (UPGRADES[e.type]?.[e.lvl - 1]?.time ?? 1)) * 100);
         }
       }
       seen.add(e.id);
@@ -143,7 +147,7 @@ export class Snapshotter {
     }
     const ev = world.events.filter((e) => eventVisible(e, p, visible));
     const players: PlayerSnap[] = world.players.map((pl) => {
-      const ps: PlayerSnap = { id: pl.id, name: pl.name, color: pl.color, faction: pl.faction, prestige: pl.prestige, defeated: pl.defeated };
+      const ps: PlayerSnap = { id: pl.id, name: pl.name, color: pl.color, faction: pl.faction, prestige: Math.floor(pl.prestige), defeated: pl.defeated };
       if (pl.id === p) {
         ps.res = { ...pl.res };
         ps.pop = pl.pop;
@@ -173,6 +177,7 @@ function eventVisible(e: SimEvent, p: number, visible: (x: number, y: number) =>
     case 'win':
       return true;
     case 'built':
+    case 'upgraded':
     case 'trained':
       return e.o === p || visible(e.x, e.y);
     case 'die':

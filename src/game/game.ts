@@ -1,7 +1,7 @@
 // Spielbildschirm: verbindet Treiber, Darstellung, HUD und Eingabe. Darstellung via requestAnimationFrame,
 // Simulation im Treiber mit festen Takten.
 import { sound } from '../audio/sound';
-import { BUILDINGS, RULES, UNITS, type BuildingType } from '../data/defs';
+import { BUILDINGS, LEVEL_ROMAN, RULES, UNITS, UPGRADES, type BuildingType } from '../data/defs';
 import { FACTION_DEFS } from '../data/factions';
 import { createRenderer, freshCanvas, type RendererPref } from '../render/factory';
 import { Minimap, playerColor, type Placement } from '../render/renderer';
@@ -12,12 +12,19 @@ import { Hud } from '../ui/hud';
 import { Tutorial } from '../ui/tutorial';
 import type { ClientState } from './client';
 import type { Driver } from './drivers';
+import { terrainHint } from '../ui/terrainhint';
 
 export interface GameOptions {
   tutorial: boolean;
   onExit: () => void;
   onSave?: () => string | null;
   onResign?: () => void;
+  /** Automatische Sicherung (Einzelspiel und Host); wird regelmäßig und beim Verlassen der Seite aufgerufen. */
+  autosave?: () => void;
+  /** Partie entschieden – automatische Sicherung verwerfen. */
+  onFinished?: () => void;
+  /** dezente Geländehinweise beim Verweilen mit der Maus */
+  hints?: boolean;
 }
 
 
@@ -72,6 +79,72 @@ export class Game {
     this.bindInput();
     driver.start();
     this.raf = requestAnimationFrame((t) => this.loop(t));
+    this.guardPage();
+  }
+
+  // ---------------------------------------------------------------- dezente Geländehinweise
+  private hintEl = document.getElementById('terrainhint')!;
+  private hintSince = performance.now();
+  private hintShown = false;
+  private hideHint(): void {
+    this.hintSince = performance.now();
+    if (this.hintShown) {
+      this.hintEl.classList.add('hidden');
+      this.hintShown = false;
+    }
+  }
+  private updateHint(now: number): void {
+    if (this.hintShown || !this.opts.hints || now - this.hintSince < 700) return;
+    if (!this.mouse.inside || this.drag || this.pan || this.placement || this.hover || this.dialogEl.offsetParent) return;
+    const r = this.canvas.getBoundingClientRect();
+    if (this.mouse.x < r.left || this.mouse.y < r.top || this.mouse.x > r.right || this.mouse.y > r.bottom) return;
+    if (document.elementFromPoint(this.mouse.x, this.mouse.y) !== this.canvas) return;
+    const [tx, ty] = this.renderer.toTile(this.mouse.x, this.mouse.y);
+    const text = terrainHint(this.client, Math.floor(tx), Math.floor(ty));
+    if (!text) return;
+    this.hintEl.textContent = text;
+    this.hintEl.style.left = `${Math.min(window.innerWidth - 260, this.mouse.x + 14)}px`;
+    this.hintEl.style.top = `${this.mouse.y + 18}px`;
+    this.hintEl.classList.remove('hidden');
+    this.hintShown = true;
+  }
+
+  private lastAutosave = performance.now();
+  private autosaveNow(): void {
+    if (this.ended || !this.opts.autosave) return;
+    this.lastAutosave = performance.now();
+    this.opts.autosave();
+  }
+
+  /** Schutz vor versehentlichem Verlassen: Zurück-Taste öffnet das Menü, Schließen fragt nach, beides sichert. */
+  private guardPage(): void {
+    history.pushState({ angeln: 'game' }, '');
+    const onPop = () => {
+      if (this.ended) return;
+      this.autosaveNow();
+      history.pushState({ angeln: 'game' }, '');
+      this.showMenu();
+      this.hud.message('Zurück-Taste: Die Partie wurde gesichert. Über „Zum Hauptmenü“ verlasst ihr sie.', 'alert');
+    };
+    const onHide = () => this.autosaveNow();
+    const onVis = () => document.visibilityState === 'hidden' && this.autosaveNow();
+    const onBefore = (e: BeforeUnloadEvent) => {
+      this.autosaveNow();
+      if (this.ended) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onBefore);
+    document.addEventListener('visibilitychange', onVis);
+    this.cleanup.push(() => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onBefore);
+      document.removeEventListener('visibilitychange', onVis);
+      if (history.state?.angeln === 'game') history.back();
+    });
   }
 
   private centered = false;
@@ -106,6 +179,7 @@ export class Game {
     this.dialogEl.classList.add('hidden');
     document.getElementById('tooltip')!.classList.add('hidden');
     document.getElementById('msglog')!.innerHTML = '';
+    this.hintEl.classList.add('hidden');
   }
 
   // ---------------------------------------------------------------- Befehle
@@ -178,6 +252,8 @@ export class Game {
     const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
     this.lastFrame = t;
     this.centerHome();
+    if (t - this.lastAutosave > 20000 && this.opts.autosave) this.autosaveNow();
+    this.updateHint(t);
     this.scrollCamera(dt);
     this.processEvents(t);
     // Auswahl bereinigen
@@ -293,6 +369,12 @@ export class Game {
           sound.play('built', 500);
         }
         break;
+      case 'upgraded':
+        if (e.o === me) {
+          this.hud.message(`Ausbau fertig: ${UPGRADES[e.b]?.[e.l - 2]?.name ?? c.bd(me, e.b).name} (Stufe ${LEVEL_ROMAN[e.l]}).`, 'good');
+          sound.play('built', 500);
+        }
+        break;
       case 'trained':
         if (e.o === me) sound.play('trained', 300);
         break;
@@ -336,6 +418,7 @@ export class Game {
     this.on(cv, 'contextmenu', (e: MouseEvent) => e.preventDefault());
     this.on(document, 'mouseleave', () => (this.mouse.inside = false));
     this.on(window, 'mousemove', (e: MouseEvent) => {
+      if (Math.abs(e.clientX - this.mouse.x) + Math.abs(e.clientY - this.mouse.y) > 2) this.hideHint();
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
       this.mouse.inside = true;
@@ -718,6 +801,7 @@ export class Game {
 
   private showEnd(): void {
     this.ended = true;
+    this.opts.onFinished?.();
     const c = this.client;
     const won = c.winner === c.me;
     sound.play(won ? 'win' : 'lose');

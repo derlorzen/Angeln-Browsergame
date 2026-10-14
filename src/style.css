@@ -154,3 +154,6 @@ a { color: #e8c86a; }
 .faction-card ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
 .faction-card i { color: #e8c86a; }
 .map-card { margin: 4px 0 8px; padding: 6px; background: rgba(0,0,0,0.25); border: 1px solid #5a4329; }
+
+#terrainhint { position: absolute; z-index: 25; pointer-events: none; padding: 2px 6px; font-size: 11px; color: #efe3c2; background: rgba(20, 14, 8, 0.62); border: 1px solid rgba(184, 150, 74, 0.35); border-radius: 2px; white-space: nowrap; text-shadow: 0 1px 0 #000; animation: hintIn 0.25s ease-out; }
+@keyframes hintIn { from { opacity: 0; } to { opacity: 1; } }

@@ -1,8 +1,8 @@
 // Maßgebliche Simulation. Läuft mit festen Takten (RULES.tickRate) und kennt kein DOM.
 // Alle Spieleraktionen – Mensch, KI, Netzwerkgast – laufen über queueCommand() und werden hier geprüft.
 import {
-  BUILDINGS, RES, RULES, UNITS, costText, isBuildingType, isUnitType,
-  type BuildingType, type Cost, type Res, type UnitType,
+  BUILDINGS, LEVEL_ROMAN, MAX_LEVEL, RES, RULES, UNITS, UPGRADES, costText, isBuildingType, isUnitType, levelDef, levelFx,
+  type BuildingDef, type BuildingType, type Cost, type Res, type UnitType,
 } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
 import { generateMap, T, isWater, terrainCost, terrainWalkable, type GameMap, type MapId } from './map';
@@ -137,6 +137,32 @@ export class World {
   bd(owner: number, t: BuildingType) {
     return fbdef(this.players[owner]?.faction, t);
   }
+  /** Werte eines konkreten Gebäudes inkl. Partei und Ausbaustufe. */
+  bdl(b: Building): BuildingDef {
+    return levelDef(this.bd(b.owner, b.type), b.type, b.lvl ?? 1);
+  }
+  trainTime(b: Building, u: UnitType): number {
+    return this.ud(b.owner, u).trainTime * (levelFx(b.type, b.lvl ?? 1).train ?? 1);
+  }
+  /** Höchste Stufe eines fertigen Gebäudes dieses Typs (0 = keins). */
+  bestLevel(p: number, t: BuildingType): number {
+    let l = 0;
+    for (const e of this.ents.values()) if (e.kind === 'b' && e.owner === p && e.type === t && e.built) l = Math.max(l, e.lvl ?? 1);
+    return l;
+  }
+  /** null = Ausbau möglich, sonst Begründung. */
+  upgradeBlock(b: Building): string | null {
+    const ups = UPGRADES[b.type];
+    if (!ups || b.owner < 0) return 'Dieses Gebäude kann nicht ausgebaut werden.';
+    if (!b.built) return 'Das Gebäude ist noch nicht fertig.';
+    if (b.lvl >= MAX_LEVEL) return 'Höchste Stufe erreicht.';
+    if (b.up >= 0) return 'Wird bereits ausgebaut.';
+    const next = b.lvl + 1;
+    if (b.type === 'dorfzentrum') {
+      if (next === 3 && !this.bestLevel(b.owner, 'markt')) return 'Stufe III benötigt einen fertigen Markt.';
+    } else if (this.bestLevel(b.owner, 'dorfzentrum') < next) return `Benötigt zuerst ein Dorfzentrum der Stufe ${LEVEL_ROMAN[next]}.`;
+    return null;
+  }
   gridFor(u: Unit): PathGrid {
     return UNITS[u.type].knickJump ? this.gridJump : this.grid;
   }
@@ -192,7 +218,7 @@ export class World {
       id: this.nextId++, kind: 'b', type, owner, x, y, w: def.w, h: def.h,
       hp: built ? def.hp : Math.max(1, Math.round(def.hp * 0.1)), maxHp: def.hp, built, prog: built ? def.buildTime : 0,
       queue: [], qt: 0, timer: 0, active: false, status: '', fields: [], staff: [], rally: null,
-      autoSell: false, cd: 0,
+      autoSell: false, cd: 0, lvl: 1, up: -1,
     };
     this.ents.set(b.id, b);
     this.occupyBuilding(b);
@@ -273,8 +299,11 @@ export class World {
 
   private allocateFields(b: Building): void {
     const cand: { i: number; d: number }[] = [];
-    for (let dy = -2; dy < b.h + 2; dy++)
-      for (let dx = -2; dx < b.w + 2; dx++) {
+    const want = 6 + (levelFx(b.type, b.lvl ?? 1).fields ?? 0) - b.fields.length;
+    if (want <= 0) return;
+    const ring = want > 6 || b.fields.length ? 3 : 2;
+    for (let dy = -ring; dy < b.h + ring; dy++)
+      for (let dx = -ring; dx < b.w + ring; dx++) {
         if (dx >= 0 && dy >= 0 && dx < b.w && dy < b.h) continue;
         const x = b.x + dx, y = b.y + dy;
         if (!this.inMap(x, y)) continue;
@@ -284,7 +313,7 @@ export class World {
         cand.push({ i, d: Math.hypot(x + 0.5 - (b.x + b.w / 2), y + 0.5 - (b.y + b.h / 2)) });
       }
     cand.sort((a, c) => a.d - c.d || a.i - c.i);
-    for (const c of cand.slice(0, 6)) {
+    for (const c of cand.slice(0, want)) {
       this.field[c.i] = b.id;
       b.fields.push(c.i);
     }
@@ -356,7 +385,7 @@ export class World {
       }
       case 'staff': {
         const b = this.ownedBuilding(p, cmd.t);
-        if (!b || !BUILDINGS[b.type].staffSlots) return;
+        if (!b || !this.bdl(b).staffSlots) return;
         for (const u of this.ownedUnits(p, cmd.ids)) if (u.type === 'arbeiter') this.setOrder(u, { k: 'staff', t: b.id });
         break;
       }
@@ -387,6 +416,24 @@ export class World {
         if (!this.canAfford(p, ud.cost)) return this.err(p, `${ud.name}: ${this.missingText(p, ud.cost)}`);
         this.pay(p, ud.cost);
         b.queue.push(cmd.u);
+        break;
+      }
+      case 'upgrade': {
+        const b = this.ownedBuilding(p, cmd.b);
+        if (!b) return;
+        const why = this.upgradeBlock(b);
+        if (why) return this.err(p, why);
+        const up = UPGRADES[b.type]![b.lvl - 1];
+        if (!this.canAfford(p, up.cost)) return this.err(p, `${up.name}: ${this.missingText(p, up.cost)}`);
+        this.pay(p, up.cost);
+        b.up = 0;
+        break;
+      }
+      case 'upcancel': {
+        const b = this.ownedBuilding(p, cmd.b);
+        if (!b || b.up < 0) return;
+        this.refund(p, UPGRADES[b.type]![b.lvl - 1].cost, 1);
+        b.up = -1;
         break;
       }
       case 'cancel': {
@@ -450,10 +497,11 @@ export class World {
     const ctrl = this.brarup.controller === p;
     const s = ctrl ? RULES.marketSellControlled : RULES.marketSell;
     if (pl.res.waren < s.waren) return false;
-    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1));
+    const lv = levelFx('markt', Math.max(1, this.bestLevel(p, 'markt'))).taler ?? 1;
+    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1) * lv);
     pl.res.waren -= s.waren;
     pl.res.taler += taler;
-    const prestige = s.prestige + (FACTION_DEFS[pl.faction].marketPrestigeBonus ?? 0);
+    const prestige = s.prestige * (FACTION_DEFS[pl.faction].marketPrestigeMul ?? 1);
     pl.prestige += prestige;
     pl.stats.sold += s.waren;
     this.emit({ e: 'sold', p, taler, prestige });
@@ -468,7 +516,7 @@ export class World {
     }
     const movers: Unit[] = [];
     if (t && t.kind === 'b' && t.owner === p) {
-      const def = BUILDINGS[t.type];
+      const def = this.bdl(t);
       for (const u of us) {
         if (u.type === 'arbeiter' && !t.built) this.setOrder(u, { k: 'build', t: t.id });
         else if (u.type === 'arbeiter' && def.staffSlots) this.setOrder(u, { k: 'staff', t: t.id });
@@ -579,7 +627,7 @@ export class World {
       if (e.owner < 0) continue;
       const p = this.players[e.owner];
       if (e.kind === 'u') p.pop += UNITS[e.type].pop;
-      else if (e.built) p.popCap += BUILDINGS[e.type].popCap ?? 0;
+      else if (e.built) p.popCap += this.bdl(e).popCap ?? 0;
     }
     for (const p of this.players) p.popCap = Math.min(p.popCap, RULES.maxPop);
   }
@@ -590,7 +638,7 @@ export class World {
       for (const e of this.ents.values()) {
         if (e.owner !== pid) continue;
         if (e.kind === 'u') src.push({ x: e.x, y: e.y, r: this.ud(e.owner, e.type).vision });
-        else src.push({ x: e.x + e.w / 2, y: e.y + e.h / 2, r: e.built ? BUILDINGS[e.type].vision : 3 });
+        else src.push({ x: e.x + e.w / 2, y: e.y + e.h / 2, r: e.built ? this.bdl(e).vision : 3 });
       }
       if (p.defeated) {
         // Besiegte sehen alles (Zuschauer)
@@ -641,8 +689,26 @@ export class World {
 
   private updateBuilding(b: Building): void {
     if (b.owner < 0 || !b.built) return;
-    const def = this.bd(b.owner, b.type);
+    const def = this.bdl(b);
     const pl = this.players[b.owner];
+    // Ausbau
+    if (b.up >= 0) {
+      const up = UPGRADES[b.type]?.[b.lvl - 1];
+      if (!up) b.up = -1;
+      else {
+        b.up += DT;
+        if (b.up >= up.time) {
+          b.up = -1;
+          b.lvl++;
+          const nd = this.bdl(b);
+          b.hp += nd.hp - b.maxHp;
+          b.maxHp = nd.hp;
+          if (b.type === 'bauernhof') this.allocateFields(b);
+          this.emit({ e: 'upgraded', x: b.x + b.w / 2, y: b.y + b.h / 2, o: b.owner, b: b.type, l: b.lvl });
+          this.updatePop();
+        }
+      }
+    }
     // Ausbildung
     if (b.queue.length) {
       const ut = b.queue[0];
@@ -652,7 +718,7 @@ export class World {
       } else {
         b.status = '';
         b.qt += DT;
-        if (b.qt >= utd.trainTime) {
+        if (b.qt >= this.trainTime(b, ut)) {
           const u = this.spawnUnit(ut, b.owner, b);
           if (u) {
             b.queue.shift();
@@ -665,7 +731,7 @@ export class World {
               if (u.type === 'arbeiter' && this.map.trees[ri]) this.setOrder(u, { k: 'gather', tile: ri });
               else {
                 const rb = this.building(this.bocc[ri]);
-                if (u.type === 'arbeiter' && rb && rb.owner === u.owner && BUILDINGS[rb.type].staffSlots && rb.built)
+                if (u.type === 'arbeiter' && rb && rb.owner === u.owner && this.bdl(rb).staffSlots && rb.built)
                   this.setOrder(u, { k: 'staff', t: rb.id });
                 else this.setOrder(u, { k: 'move', x: b.rally.x + 0.5, y: b.rally.y + 0.5, am: false });
               }
@@ -1088,7 +1154,7 @@ export class World {
   }
 
   private afterBuild(u: Unit, b: Building): void {
-    const def = BUILDINGS[b.type];
+    const def = this.bdl(b);
     if (def.staffSlots && b.staff.length < def.staffSlots) return this.setOrder(u, { k: 'staff', t: b.id });
     if (b.type === 'holzfaeller') {
       const t = this.nearestTree(b.x + 1, b.y + 1, 10);
@@ -1103,7 +1169,7 @@ export class World {
   private doStaff(u: Unit, id: number): void {
     const b = this.building(id);
     const w = this.map.w;
-    const def = b ? BUILDINGS[b.type] : null;
+    const def = b ? this.bdl(b) : null;
     if (!b || !def || b.owner !== u.owner || !def.staffSlots) return this.setOrder(u, { k: 'none' });
     if (!b.built) return this.setOrder(u, { k: 'build', t: b.id });
     if (!u.staffOf) {
@@ -1293,7 +1359,7 @@ export class World {
   private checkVictory(): void {
     if (this.winner >= 0) return;
     for (const p of this.players)
-      if (!p.defeated && p.prestige >= this.prestigeGoal) {
+      if (this.prestigeGoal > 0 && !p.defeated && p.prestige >= this.prestigeGoal) {
         this.winner = p.id;
         this.winReason = `Wirtschaftlicher Sieg: ${this.prestigeGoal} Prestige durch Handel erreicht`;
         this.emit({ e: 'win', p: p.id, reason: this.winReason });
@@ -1352,6 +1418,8 @@ export class World {
             w.gridJump.pass[i] = 0;
           }
         for (const f of e.fields) w.field[f] = e.id;
+        e.lvl ??= 1;
+        e.up ??= -1;
       }
     }
     w.updatePop();

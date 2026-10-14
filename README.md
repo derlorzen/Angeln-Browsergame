@@ -6,7 +6,8 @@ direkte Einheitensteuerung wie bei Command & Conquer, Erkundung und Gefechte wie
 Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Landschaft Angeln um 1600 – und fünf weitere Karten zwischen Rendsburg und Esbjerg.
 
 - Sechs Karten zwischen Rendsburg und Esbjerg (Schlei, Flensburger Förde, Danewerk, Eider, Nordfriesische Marsch,
-  Ribe/Kongeå) mit fair ausgeglichenen Startplätzen (siehe unten)
+  Ribe/Kongeå) und eine bei jedem Start neu erzeugte **Zufallskarte**, alle mit fair ausgeglichenen Startplätzen
+- Gebäude-Ausbaustufen II und III, automatisches Sichern mit „Letzte Partie fortsetzen“, dezente Geländehinweise
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
 - Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
 - Online-Modus für zwei Menschen über **direktes WebRTC**, ohne eigenen Server (manueller Code-Austausch)
@@ -63,7 +64,7 @@ HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sic
 | Partei | Fokus | Boni | Spezialeinheit | Baustil |
 |---|---|---|---|---|
 | **Angeliter** „Wat mutt, dat mutt.“ | Landwirtschaft | Hof +30 % Getreide, Mühle 20 % schneller, Wohnhaus −20 % | **Knickwächter** – billige Bauernwehr mit Sense, neben Knicks besonders zäh | Reet, Fachwerk mit roter Ausfachung, Rotvieh |
-| **Schwansener** „Wer reitet, der regiert.“ | Handel, Reiterei | Markt +25 % Taler und +1 Prestige je Verkauf, Zukauf −20 %, Späher +30 % LP; Wohnhaus +10 % | **Gutsreiter** – schwer gepanzerter Lanzenreiter | weiß verputzte Herrenhäuser, Ziegel-Walmdächer, Alleen, Pferde |
+| **Schwansener** „Wer reitet, der regiert.“ | Handel, Reiterei | Markt +25 % Taler und +50 % Prestige je Verkauf, Zukauf −20 %, Späher +30 % LP; Wohnhaus +10 % | **Gutsreiter** – schwer gepanzerter Lanzenreiter | weiß verputzte Herrenhäuser, Ziegel-Walmdächer, Alleen, Pferde |
 | **Nordfriesen** „Lewwer duad üs Slaav!“ | Fischerei | Heringszaun +50 %, Räucherei 25 % schneller, Arbeiter kosten 30 Fisch statt Getreide, +120 Fisch zum Start; Hof −20 % | **Grabenspringer** – überspringt mit dem Springstock Knicks | Haubarg, Friesenhaus mit Frontispiz, Klinker, Schafe |
 | **Dänen** „For Konge og Fædreland!“ | Militär | Soldaten −15 %, Kaserne 25 % schneller, Amtshaus +30 % LP und stärkere Schützen | **Musketier** – größte Reichweite, hoher Schaden, langes Nachladen | Backstein-Renaissance mit Sandsteinbändern, Treppengiebel, Kupferhelme |
 
@@ -79,6 +80,7 @@ Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedl
 | **Eider und Rendsburg** | Owschlag / Jevenstedt | Rendsburger Markt (Eiderinsel) | Grenzstein an der Eider | Fluss als Grenze mit Brücken und Furt, Moore, Gräben in der Niederung |
 | **Nordfriesische Marsch** | Husum / Tönning | Viehmarkt Oldenswort | Rungholt-Spuren | Watt (begehbar, langsam), Priele, Deiche mit Stöpen, Gräben statt Knicks |
 | **Ribe und Kongeå** | Varde / Tønder | Ochsenmarkt Ribe | Grabhügel auf der Heide | Wattenmeer mit Fanø und Rømø, Heide, Kongeå mit Furten |
+| **Zufallskarte** | zufällige Orte der Region | Markt in einem zufälligen Ort | Hünengrab, Runenstein, Opfermoor … | bei jedem Start neu: Startachse, Küste (ggf. mit Watt und Deich), Fluss mit Furten, Seen, Moore, Heide, Knicks oder Gräben |
 
 Die Orte wurden nach bekannten Koordinaten (etwa ±2 km genau) maßstabstreu und mit Norden oben eingepasst; ein Abgleich
 mit Google Maps war bei der Erstellung nicht möglich. Damit keine Seite bevorzugt wird, gleicht der Generator danach aus:
@@ -89,7 +91,9 @@ die Karte.
 
 ## Kurze Spielanleitung
 
-**Ziel:** Gegnerisches Dorfzentrum zerstören *oder* als Erster das Prestigeziel erreichen (Standard 250).
+**Ziel:** Gegnerisches Dorfzentrum zerstören *oder* als Erster das Prestigeziel erreichen (wählbar 250 / **400** / 600
+oder „aus“ für nur militärischen Sieg). Prestige gibt es für Verkäufe (1 je 10 Waren, mit besetztem neutralem Markt 2),
+für die Besetzung des neutralen Markts (1 alle 20 s) und einmalig für die Fundstelle.
 
 | Rohstoff | Herkunft | Verwendung |
 |---|---|---|
@@ -106,6 +110,29 @@ die Karte.
 - **Fundstelle** („?“, z. B. Thorsberger Moor): Die erste Einheit dort bringt einmalig Prestige und Taler.
 - **Knicks** (Wallhecken) versperren Weg und Sicht; Wege und Tore führen hindurch. **Deiche** und das **Danewerk**
   ebenso (nur Stöpen/Tore), **Gräben** versperren nur den Weg. Watt ist begehbar, aber langsam.
+- **Geländehinweise:** Verweilt die Maus kurz über erkundetem Gelände, erscheint ein kleiner Text (abschaltbar in den
+  Einstellungen).
+- **Fortsetzen:** Einzelspiel und Host-Partien werden alle 20 s und beim Verlassen der Seite automatisch gesichert. Nach
+  versehentlichem Schließen oder Neuladen bietet das Hauptmenü „Letzte Partie fortsetzen“ an (eine Mehrspielerpartie
+  läuft dann gegen die KI weiter). Die Zurück-Taste des Browsers öffnet im Spiel nur das Menü.
+
+### Ausbaustufen
+
+Ausgewähltes fertiges Gebäude → Knopf **„Stufe II/III“ (Taste C)**. Der Ausbau kostet Rohstoffe und Zeit, das Gebäude
+arbeitet währenddessen weiter (Gerüst sichtbar); Abbrechen erstattet alles. Ausgebaute Gebäude tragen ein kleines Wappen
+mit Strichen. Stufe II/III anderer Gebäude setzt ein Dorfzentrum derselben Stufe voraus, Stufe III des Dorfzentrums
+einen fertigen Markt.
+
+| Gebäude | Stufe II | Stufe III |
+|---|---|---|
+| Dorfzentrum | Kirchspielort: +50 % LP, +40 % Schaden, +5 Wohnraum | Marktflecken: doppelte LP, +80 % Schaden, +1 Reichweite, +10 Wohnraum |
+| Wohnhaus | Doppelkate: +3 Wohnraum | Bürgerhaus: +6 Wohnraum |
+| Bauernhof | Großer Hof: +30 % Getreide, +2 Felder | Gutshof: +60 %, +4 Felder, +1 Arbeitsplatz |
+| Lehmgrube | Ziegelei: +30 % Lehm | Ringofen-Ziegelei: +60 %, +1 Arbeitsplatz |
+| Heringszaun | Doppelzaun: +30 % Fisch | Fischerhütte: +60 % |
+| Bockmühle / Räucherei | 25 % schneller | 40 % schneller |
+| Kaserne | Exerzierplatz: Ausbildung 20 % schneller | Zeughaus: 35 % schneller |
+| Markt | Kontor: +15 % Taler je Verkauf | Handelshaus: +30 % Taler |
 
 **Steuerung:** Linksklick wählt, Rahmen ziehen wählt mehrere, Rechtsklick bewegt/arbeitet/greift an,
 Befehlskarte unten rechts (Tasten Q W E R / A S D F / Y X C V), Pfeiltasten/Bildrand/mittlere Maustaste bewegen die

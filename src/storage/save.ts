@@ -6,6 +6,7 @@ import { isMapId, type MapId } from '../sim/map';
 
 const SETTINGS_KEY = 'angeln-settings-v1';
 const SAVE_KEY = 'angeln-save-v1';
+const AUTO_KEY = 'angeln-autosave-v1';
 
 export interface Settings {
   name: string;
@@ -14,10 +15,11 @@ export interface Settings {
   renderer: 'auto' | 'canvas';
   faction: FactionId;
   map: MapId | 'zufall';
+  hints: boolean;
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln', map: 'schlei' };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln', map: 'schlei', hints: true };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -29,6 +31,7 @@ export function loadSettings(): Settings {
       renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
       faction: isFaction(s.faction) ? s.faction : 'angeln',
       map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
+      hints: s.hints !== false,
     };
   } catch {
     return def;
@@ -50,6 +53,36 @@ export interface SaveGame {
   world: string;
   ais: AIState[];
   tutorial: boolean;
+  /** Automatische Sicherung: Beschreibung für das Hauptmenü; mp = aus einer Mehrspielerpartie (Host) */
+  label?: string;
+  mp?: boolean;
+}
+
+/** Automatische Sicherung der laufenden Partie (Schutz vor versehentlichem Schließen). */
+export function writeAutosave(sg: SaveGame): void {
+  try {
+    localStorage.setItem(AUTO_KEY, JSON.stringify(sg));
+  } catch {
+    /* Speicher voll oder gesperrt – dann eben ohne Sicherung */
+  }
+}
+export function readAutosave(): SaveGame | null {
+  try {
+    const raw = localStorage.getItem(AUTO_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (s?.v !== 1 || typeof s.world !== 'string') return null;
+    return s as SaveGame;
+  } catch {
+    return null;
+  }
+}
+export function clearAutosave(): void {
+  try {
+    localStorage.removeItem(AUTO_KEY);
+  } catch {
+    /* egal */
+  }
 }
 
 export function writeSave(sg: SaveGame): string | null {

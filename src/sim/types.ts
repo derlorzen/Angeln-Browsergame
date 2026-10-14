@@ -62,6 +62,8 @@ export interface Building {
   rally: { x: number; y: number } | null;
   autoSell: boolean;
   cd: number;
+  lvl: number; // Ausbaustufe 1..3
+  up: number; // Ausbaufortschritt in Sekunden, -1 = kein Ausbau
 }
 
 export type Entity = Unit | Building;
@@ -97,6 +99,7 @@ export type SimEvent =
   | { e: 'die'; x: number; y: number; u: 0 | 1; o: number }
   | { e: 'built'; x: number; y: number; o: number; b: BuildingType }
   | { e: 'trained'; x: number; y: number; o: number; u: UnitType }
+  | { e: 'upgraded'; x: number; y: number; o: number; b: BuildingType; l: number }
   | { e: 'chop'; x: number; y: number }
   | { e: 'err'; p: number; msg: string }
   | { e: 'info'; p: number; msg: string }
@@ -118,6 +121,8 @@ export type Command =
   | { c: 'place'; ids: number[]; b: BuildingType; x: number; y: number }
   | { c: 'train'; b: number; u: UnitType }
   | { c: 'cancel'; b: number }
+  | { c: 'upgrade'; b: number }
+  | { c: 'upcancel'; b: number }
   | { c: 'sell'; b: number }
   | { c: 'buy'; b: number; r: 'holz' | 'lehm' }
   | { c: 'auto'; b: number; on: boolean }

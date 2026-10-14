@@ -11,13 +11,22 @@ import { createRenderer } from '../render/factory';
 import type { BaseRenderer } from '../render/view';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES, portrait } from '../render/sprites';
 import { FACTIONS, FACTION_DEFS, type FactionId } from '../data/factions';
-import { MAP_IDS, MAP_INFO, type MapId } from '../sim/map';
+import { MAP_IDS, MAP_INFO, REAL_MAP_IDS, type MapId } from '../sim/map';
 import { World } from '../sim/world';
-import { loadSettings, readSave, saveSettings, writeSave, type Settings } from '../storage/save';
+import { AI } from '../ai/ai';
+import { clearAutosave, loadSettings, readAutosave, readSave, saveSettings, writeAutosave, writeSave, type SaveGame, type Settings } from '../storage/save';
 import { BACKGROUND_HTML, GUIDE_HTML, NETWORK_HTML } from './texts';
 
-const slotNames = (m: MapId) => [`${MAP_INFO[m].slotNames[0]} (Norden)`, `${MAP_INFO[m].slotNames[1]} (Süden)`];
-const randomMap = (): MapId => MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)];
+const slotNames = (m: MapId) =>
+  m === 'random' ? ['Startplatz A', 'Startplatz B'] : [`${MAP_INFO[m].slotNames[0]} (Norden)`, `${MAP_INFO[m].slotNames[1]} (Süden)`];
+const goalOptions = (sel: number) =>
+  RULES.prestigeGoals.map((g) => `<option value="${g}" ${g === sel ? 'selected' : ''}>${g ? `${g}${g < RULES.prestigeGoalDefault ? ' (kurz)' : g > RULES.prestigeGoalDefault ? ' (lang)' : ''}` : 'aus – nur militärischer Sieg'}</option>`).join('');
+const autoLabel = (w: World) => {
+  const secs = Math.floor(w.tick / RULES.tickRate);
+  const me = w.players[0];
+  return `${MAP_INFO[w.opts.mapId ?? 'schlei'].name} · ${FACTION_DEFS[me.faction].name} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} min`;
+};
+const randomMap = (): MapId => REAL_MAP_IDS[Math.floor(Math.random() * REAL_MAP_IDS.length)];
 // erfundene Namen der KI-Anführer
 const AI_NAMES: Record<FactionId, string> = {
   angeln: 'Bauernvogt Hinrich Petersen',
@@ -109,10 +118,13 @@ export class Menu {
   main(): void {
     this.closeLink();
     const save = readSave();
+    const auto = readAutosave();
     const box = this.show(`
       <h1>Angeln</h1><div class="sub">Fürsten der Schlei · Echtzeit-Strategie um 1600</div>
       <div class="menu-col">
-        <button class="btn primary" data-a="sp">Einzelspiel gegen die KI</button>
+        ${auto ? `<button class="btn primary" data-a="resume">Letzte Partie fortsetzen</button>
+        <div class="note" style="text-align:center;margin:-2px 0 4px">${esc(auto.label ?? '')} · gesichert ${new Date(auto.savedAt).toLocaleString('de-DE')}${auto.mp ? '<br>Mehrspieler: wird gegen die KI fortgesetzt' : ''}</div>` : ''}
+        <button class="btn ${auto ? '' : 'primary'}" data-a="sp">Einzelspiel gegen die KI</button>
         <button class="btn" data-a="load" ${save ? '' : 'disabled'}>Spielstand laden${save ? ` (${new Date(save.savedAt).toLocaleString('de-DE')})` : ''}</button>
         <button class="btn" data-a="host">Mehrspieler: Spiel erstellen</button>
         <button class="btn" data-a="join">Mehrspieler: Spiel beitreten</button>
@@ -120,8 +132,9 @@ export class Menu {
         <button class="btn" data-a="bg">Hintergrund &amp; Quellen</button>
         <button class="btn" data-a="settings">Einstellungen &amp; Netzwerk</button>
       </div>
-      <p class="note" style="text-align:center;margin-top:12px">Version 0.1 · Alle Grafiken und Klänge werden im Browser erzeugt · Kein Server nötig</p>`);
+      <p class="note" style="text-align:center;margin-top:12px">Version 0.2 · Alle Grafiken und Klänge werden im Browser erzeugt · Kein Server nötig</p>`);
     this.bind(box, {
+      resume: () => this.resumeAuto(),
       sp: () => this.singleSetup(),
       load: () => this.loadGame(),
       host: () => this.hostScreen(),
@@ -152,7 +165,7 @@ export class Menu {
 
   private mapOptions(sel: MapId | 'zufall', allowRandom: boolean): string {
     const opts = MAP_IDS.map((m) => `<option value="${m}" ${m === sel ? 'selected' : ''}>${MAP_INFO[m].name} (${MAP_INFO[m].region})</option>`).join('');
-    return (allowRandom ? `<option value="zufall" ${sel === 'zufall' ? 'selected' : ''}>zufällige Karte</option>` : '') + opts;
+    return (allowRandom ? `<option value="zufall" ${sel === 'zufall' ? 'selected' : ''}>eine der festen Karten (zufällig)</option>` : '') + opts;
   }
 
   /** Kurzbeschreibung einer Karte samt gekennzeichneter Freiheiten. */
@@ -180,7 +193,7 @@ export class Menu {
       <div class="row"><label>Startort</label><select data-f="slot"></select></div>
       <div class="row"><label>KI-Gegner</label><select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select>
         <select data-f="aifac"><option value="zufall">zufällige Partei</option>${this.factionOptions(null)}</select></div>
-      <div class="row"><label>Prestigeziel</label><select data-f="goal"><option value="150">150 (kurz)</option><option value="250" selected>250</option><option value="400">400 (lang)</option></select></div>
+      <div class="row"><label>Prestigeziel</label><select data-f="goal">${goalOptions(RULES.prestigeGoalDefault)}</select></div>
       <div class="row"><label>Startrohstoffe</label><select data-f="rich"><option value="0">normal</option><option value="1">reichlich</option></select></div>
       <div class="row"><label>Lehrmeister</label><select data-f="tut"><option value="1" ${s.tutorialDone ? '' : 'selected'}>an</option><option value="0" ${s.tutorialDone ? 'selected' : ''}>aus</option></select></div>
       <div class="row"><button class="btn primary" data-a="go">Partie beginnen</button><button class="btn" data-a="back">Zurück</button></div>`);
@@ -234,13 +247,42 @@ export class Menu {
 
   private launchLocal(world: World, tutorial: boolean, aiStates?: import('../ai/ai').AIState[]): void {
     const driver = new LocalDriver(world, 0, aiStates);
+    const snap = (): SaveGame => ({ v: 1, savedAt: Date.now(), me: 0, world: world.serialize(), ais: driver.ais.map((a) => a.s), tutorial });
     this.enterGame(
       () => Game.create(driver, {
         tutorial,
+        hints: this.settings.hints,
         onExit: () => this.exitGame(),
-        onSave: () => writeSave({ v: 1, savedAt: Date.now(), me: 0, world: world.serialize(), ais: driver.ais.map((a) => a.s), tutorial }),
+        onSave: () => writeSave(snap()),
+        autosave: () => writeAutosave({ ...snap(), label: autoLabel(world) }),
+        onFinished: () => clearAutosave(),
       }, this.settings.renderer),
     );
+  }
+
+  /** Automatisch gesicherte Partie fortsetzen; eine Mehrspielerpartie läuft gegen die KI weiter. */
+  private resumeAuto(): void {
+    const s = readAutosave();
+    if (!s) return this.main();
+    try {
+      const w = World.deserialize(s.world);
+      let ais = s.ais;
+      if (s.mp) {
+        ais = [...ais];
+        for (const p of w.players)
+          if (p.id !== 0 && !p.isAI) {
+            p.isAI = true;
+            p.aiLevel = 'normal';
+            p.name = `${p.name} (KI)`;
+            if (!ais.some((a) => a.p === p.id)) ais.push(new AI(p.id, 'normal').s);
+          }
+      }
+      this.launchLocal(w, s.tutorial, ais);
+    } catch (e) {
+      clearAutosave();
+      alert('Die gesicherte Partie konnte nicht geladen werden: ' + (e as Error).message);
+      this.main();
+    }
   }
 
   private loadGame(): void {
@@ -282,6 +324,7 @@ export class Menu {
     const box = this.show(`<h2>Einstellungen &amp; Netzwerk</h2>
       <div class="row"><label>Spielername</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
       <div class="row"><label>Grafik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
+      <div class="row"><label>Geländehinweise</label><label style="min-width:0"><input type="checkbox" data-f="hints" ${this.settings.hints ? 'checked' : ''}> kurzer Text beim Verweilen mit der Maus</label></div>
       <h3>Verbindungshilfen (ICE)</h3>
       <div class="row"><label><input type="radio" name="ice" value="stun" ${ice.mode === 'stun' ? 'checked' : ''}> STUN verwenden</label>
         <input type="text" data-f="stun" size="34" value="${esc(ice.stunUrl)}"></div>
@@ -311,6 +354,7 @@ export class Menu {
         }
         this.settings.name = v('name').slice(0, 20) || 'Spieler';
         this.settings.renderer = box.querySelector<HTMLSelectElement>('[data-f=renderer]')!.value === 'canvas' ? 'canvas' : 'auto';
+        this.settings.hints = box.querySelector<HTMLInputElement>('[data-f=hints]')!.checked;
         this.settings.ice = { mode, stunUrl: stun, turnUrl: turn, turnUser: v('tu'), turnPass: v('tp') };
         saveSettings(this.settings);
         msg.className = 'ok';
@@ -515,7 +559,7 @@ export class Menu {
       ${st.players[me] ? this.factionInfo(st.players[me].faction, st.players[me].color) : ''}
       <div class="row"><label>Karte</label>${isHost ? `<select data-f="map">${this.mapOptions(st.map, false)}</select>` : `<b>${MAP_INFO[st.map].name}</b>`}</div>
       ${this.mapInfo(st.map)}
-      <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${[150, 250, 400].map((g) => `<option value="${g}" ${g === st.goal ? 'selected' : ''}>${g}</option>`).join('')}</select>` : st.goal}
+      <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${goalOptions(st.goal)}</select>` : st.goal || "aus (nur militärisch)"}
         <label style="min-width:0;margin-left:16px">Startrohstoffe</label>${isHost ? `<select data-f="rich"><option value="0" ${st.rich ? '' : 'selected'}>normal</option><option value="1" ${st.rich ? 'selected' : ''}>reichlich</option></select>` : st.rich ? 'reichlich' : 'normal'}</div>
       <div class="row err">${conflicts.join(' ')}</div>
       <div class="row">${isHost ? '<button class="btn primary" data-a="start">Partie starten</button>' : '<span class="note">Der Host startet die Partie, sobald beide bereit sind.</span>'}
@@ -576,7 +620,13 @@ export class Menu {
           });
           const driver = new HostDriver(world, link);
           this.link = null; // gehört jetzt dem Treiber
-          this.enterGame(() => Game.create(driver, { tutorial: false, onExit: () => this.exitGame() }, this.settings.renderer));
+          this.enterGame(() => Game.create(driver, {
+            tutorial: false,
+            hints: this.settings.hints,
+            onExit: () => this.exitGame(),
+            autosave: () => writeAutosave({ v: 1, savedAt: Date.now(), me: 0, world: world.serialize(), ais: driver.ais.map((a) => a.s), tutorial: false, mp: true, label: autoLabel(world) }),
+            onFinished: () => clearAutosave(),
+          }, this.settings.renderer));
         },
       });
     };
@@ -658,7 +708,7 @@ export class Menu {
         started = true;
         const driver = new GuestDriver(m.seed, m.me, link, m.map);
         this.link = null;
-        this.enterGame(() => Game.create(driver, { tutorial: false, onExit: () => this.exitGame() }, this.settings.renderer));
+        this.enterGame(() => Game.create(driver, { tutorial: false, hints: this.settings.hints, onExit: () => this.exitGame() }, this.settings.renderer));
       } else if (m.t === 'bye') {
         const box = this.show(`<h2>Lobby geschlossen</h2><p>${esc(m.reason)}</p><div class="row"><button class="btn" data-a="back">Zum Hauptmenü</button></div>`);
         this.bind(box, { back: () => this.main() });

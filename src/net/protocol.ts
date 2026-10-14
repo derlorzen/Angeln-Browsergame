@@ -1,11 +1,12 @@
 // Nachrichtenformat zwischen Host und Gast (JSON über DataChannel) und strikte Prüfung eingehender Daten.
-import { isBuildingType, isUnitType } from '../data/defs';
+import { RULES, isBuildingType, isUnitType } from '../data/defs';
 import { isFaction, type FactionId } from '../data/factions';
 import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 2; // 2: Kartenwahl
+export const PROTOCOL_VERSION = 3; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“
+const goalOf = (g: unknown): number => ((RULES.prestigeGoals as readonly number[]).includes(g as number) ? (g as number) : RULES.prestigeGoalDefault);
 
 export interface LobbyPlayer {
   name: string;
@@ -81,6 +82,8 @@ export function validateCommand(raw: unknown): Command | null {
       if (!isInt(c.b, 1, 1e9) || !isUnitType(c.u)) return null;
       return { c: 'train', b: c.b, u: c.u };
     case 'cancel':
+    case 'upgrade':
+    case 'upcancel':
     case 'sell':
       if (!isInt(c.b, 1, 1e9)) return null;
       return { c: c.c, b: c.b };
@@ -140,11 +143,11 @@ export function parseHostMsg(raw: unknown): HostMsg | null {
       const st = m.st as LobbyState;
       if (!st || !Array.isArray(st.players) || st.players.length > 4 || !isMapId(st.map)) return null;
       for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction)) return null;
-      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: Number(st.goal) || 250, rich: !!st.rich, map: st.map } };
+      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: goalOf(st.goal), rich: !!st.rich, map: st.map } };
     }
     case 'start':
       if (!isInt(m.seed, 0, 2 ** 31) || !isInt(m.me, 0, 3) || !Array.isArray(m.players) || !isMapId(m.map)) return null;
-      return { t: 'start', seed: m.seed, goal: Number(m.goal) || 250, rich: !!m.rich, me: m.me, players: m.players as LobbyPlayer[], map: m.map };
+      return { t: 'start', seed: m.seed, goal: goalOf(m.goal), rich: !!m.rich, me: m.me, players: m.players as LobbyPlayer[], map: m.map };
     case 'snap': {
       const s = m.s as Snapshot;
       if (!s || !Array.isArray(s.ents) || !Array.isArray(s.hid) || !Array.isArray(s.gone) || !Array.isArray(s.trees) || !Array.isArray(s.ev)) return null;
