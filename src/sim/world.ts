@@ -202,7 +202,7 @@ export class World {
     return levelDef(this.bd(b.owner, b.type), b.type, b.lvl ?? 1);
   }
   trainTime(b: Building, u: UnitType): number {
-    return this.ud(b.owner, u).trainTime * (levelFx(b.type, b.lvl ?? 1).train ?? 1);
+    return this.ud(b.owner, u).trainTime * (levelFx(b.type, b.lvl ?? 1).train ?? 1) * (BUILDINGS[b.type].trainMul ?? 1);
   }
   /** Höchste Stufe eines fertigen Gebäudes dieses Typs (0 = keins). */
   bestLevel(p: number, t: BuildingType): number {
@@ -445,6 +445,12 @@ export class World {
         for (const u of this.ownedUnits(p, cmd.ids)) if (u.type === 'arbeiter') this.setOrder(u, { k: 'build', t: b.id });
         break;
       }
+      case 'repair': {
+        const b = this.ownedBuilding(p, cmd.t);
+        if (!b || !b.built || b.hp >= b.maxHp) return;
+        for (const u of this.ownedUnits(p, cmd.ids)) if (u.type === 'arbeiter') this.setOrder(u, { k: 'repair', t: b.id });
+        break;
+      }
       case 'staff': {
         const b = this.ownedBuilding(p, cmd.t);
         if (!b || !this.bdl(b).staffSlots) return;
@@ -459,6 +465,7 @@ export class World {
         const x = Math.floor(cmd.x), y = Math.floor(cmd.y);
         const def = this.bd(p, cmd.b);
         if ((def.age ?? 1) > pl.age) return this.err(p, `${def.name}: erst im ${AGES[def.age ?? 1].name}.`);
+        if (def.faction && def.faction !== pl.faction) return this.err(p, `${def.name}: nur für ${FACTION_DEFS[def.faction].name}.`);
         const why = checkPlacement(this.placementView(p), cmd.b, x, y);
         if (why) return this.err(p, why);
         if (!this.canAfford(p, def.cost)) return this.err(p, `${def.name}: ${this.missingText(p, def.cost)}`);
@@ -574,7 +581,7 @@ export class World {
   }
 
   buyPrice(p: number): number {
-    return Math.round(RULES.marketBuy.taler * (FACTION_DEFS[this.players[p].faction].marketBuyMul ?? 1));
+    return Math.round(RULES.marketBuy.taler * (FACTION_DEFS[this.players[p].faction].marketBuyMul ?? 1) * this.tfx(p).buy);
   }
 
   private uniqueOwnerName(t: UnitType): string {
@@ -589,7 +596,7 @@ export class World {
     if (pl.res.waren < s.waren) return false;
     const lv = levelFx('markt', Math.max(1, this.bestLevel(p, 'markt'))).taler ?? 1;
     const bahn = this.bestLevel(p, 'bahnhof') ? (BUILDINGS.bahnhof.talerMul ?? 1) : 1;
-    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1) * lv * bahn);
+    const taler = Math.round(s.taler * (FACTION_DEFS[pl.faction].marketTalerMul ?? 1) * lv * bahn * this.tfx(p).taler);
     pl.res.waren -= s.waren;
     pl.res.taler += taler;
     const prestige = s.prestige * (FACTION_DEFS[pl.faction].marketPrestigeMul ?? 1);
@@ -610,10 +617,17 @@ export class World {
       const def = this.bdl(t);
       for (const u of us) {
         if (u.type === 'arbeiter' && !t.built) this.setOrder(u, { k: 'build', t: t.id });
+        else if (u.type === 'arbeiter' && t.hp < t.maxHp) this.setOrder(u, { k: 'repair', t: t.id });
         else if (u.type === 'arbeiter' && def.staffSlots) this.setOrder(u, { k: 'staff', t: t.id });
         else movers.push(u);
       }
       if (movers.length) this.groupMove(movers, t.x + t.w / 2, t.y + t.h / 2, false);
+      return;
+    }
+    if (t && t.kind === 'b' && t.type === 'brarupmarkt') {
+      // neutralen Markt besetzen: Einheiten verteilen sich im Umkreis
+      this.groupMove(us, t.x + t.w / 2, t.y + t.h + 0.5, false);
+      this.emit({ e: 'info', p, msg: `Eure Einheiten besetzen den Markt. Er gehört euch, solange nur eure Einheiten im Umkreis von ${RULES.brarupRadius} Kacheln stehen.` });
       return;
     }
     const tile = this.idx(Math.floor(x), Math.floor(y));
@@ -725,7 +739,7 @@ export class World {
       if (e.owner < 0) continue;
       const p = this.players[e.owner];
       if (e.kind === 'u') p.pop += UNITS[e.type].pop;
-      else if (e.built) p.popCap += this.bdl(e).popCap ?? 0;
+      else if (e.built) p.popCap += (this.bdl(e).popCap ?? 0) + (e.type === 'wohnhaus' ? this.tfx(e.owner).popPer : 0);
     }
     for (const p of this.players) p.popCap = Math.min(p.popCap, RULES.maxPop);
   }
@@ -903,7 +917,7 @@ export class World {
         const t = this.findEnemy({ x: cx, y: cy, owner: b.owner }, def.attack.range, false);
         if (t && t.kind === 'u') {
           b.cd = def.attack.cooldown;
-          this.damage(t, Math.max(1, def.attack.dmg - this.ud(t.owner, t.type).armor), b.owner, b.id);
+          this.damage(t, Math.max(1, def.attack.dmg * this.tfx(b.owner).tower - this.ud(t.owner, t.type).armor), b.owner, b.id);
           this.emit({ e: 'shot', x: cx, y: cy, tx: t.x, ty: t.y, r: def.shot ?? 1 });
         }
       }
@@ -973,6 +987,9 @@ export class World {
         break;
       case 'build':
         this.doBuild(u, u.order.t);
+        break;
+      case 'repair':
+        this.doRepair(u, u.order.t);
         break;
       case 'staff':
         this.doStaff(u, u.order.t);
@@ -1268,6 +1285,38 @@ export class World {
       }
     } else if (r === 'fail') {
       this.err(u.owner, 'Baustelle ist nicht erreichbar.');
+      this.setOrder(u, { k: 'none' });
+    }
+  }
+
+  /** Reparieren: Arbeiter stellen Lebenspunkte wieder her; volle Reparatur kostet etwa ein Drittel des Holzpreises. */
+  private doRepair(u: Unit, id: number): void {
+    const b = this.building(id);
+    const w = this.map.w;
+    if (!b || b.owner !== u.owner || !b.built) return this.setOrder(u, { k: 'none' });
+    if (b.hp >= b.maxHp) return this.afterBuild(u, b);
+    const r = this.follow(u, b.x + b.w / 2, b.y + b.h / 2, 4_000_000 + b.id, (i) => rectDist((i % w) + 0.5, Math.floor(i / w) + 0.5, b) <= 0.8, 0);
+    if (r === 'arrived') {
+      u.anim = 2;
+      this.faceTo(u, b.x + b.w / 2, b.y + b.h / 2);
+      const def = BUILDINGS[b.type];
+      const hp = Math.min(b.maxHp - b.hp, ((b.maxHp * 0.6) / Math.max(10, def.buildTime)) * DT * this.tfx(u.owner).gather * this.tfx(u.owner).repair);
+      const wood = Math.max(10, def.cost.holz ?? def.cost.lehm ?? 30) / 3;
+      b.rd = (b.rd ?? 0) + (hp / b.maxHp) * wood;
+      const pl = this.players[u.owner];
+      if (b.rd >= 1) {
+        if (pl.res.holz < 1) {
+          this.err(u.owner, 'Reparatur unterbrochen: kein Holz.');
+          return this.setOrder(u, { k: 'none' });
+        }
+        const pay = Math.floor(b.rd);
+        pl.res.holz -= Math.min(pay, pl.res.holz);
+        b.rd -= pay;
+      }
+      b.hp += hp;
+      if (this.tick % 15 === 0) this.emit({ e: 'chop', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    } else if (r === 'fail') {
+      this.err(u.owner, 'Gebäude ist nicht erreichbar.');
       this.setOrder(u, { k: 'none' });
     }
   }

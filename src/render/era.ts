@@ -2,7 +2,7 @@
 // Dorfzentrum, Wohnhaus, Kaserne und Markt ab dem 20. Jahrhundert. Alles prozedural gezeichnet.
 import type { BuildingType } from '../data/defs';
 import { TH, TW, S, boxFaces, bush, dome, flatRoof, ground, poly, prng, roof, shade, shadowDiamond, solarPanels, type Ctx, type Face, type Iso, type Pt, type WallMat } from './draw';
-import { cart, chimney, crate, plankDoor, tinyPerson, window4 } from './props';
+import { animal, cart, chimney, crate, frontispiz, plankDoor, steppedGable, tinyPerson, wattle, window4 } from './props';
 
 export interface EraCtx {
   g: Ctx;
@@ -19,6 +19,7 @@ export const ERA_SIZE: Partial<Record<BuildingType, { n: number; top: number }>>
   manufaktur: { n: 3, top: 96 }, hafen: { n: 2, top: 92 }, schanze: { n: 2, top: 56 },
   bahnhof: { n: 3, top: 104 }, fabrik: { n: 3, top: 150 }, bunker: { n: 2, top: 44 },
   vertikalfarm: { n: 2, top: 170 }, gezeitenwerk: { n: 2, top: 84 }, schildturm: { n: 2, top: 160 },
+  meierei: { n: 2, top: 66 }, gestuet: { n: 3, top: 70 }, salzsiederei: { n: 2, top: 70 }, zollhaus: { n: 2, top: 84 },
 };
 /** Höhe der modernen Fassungen alter Gebäude */
 export function eraTop(type: BuildingType, age: number): number | undefined {
@@ -439,6 +440,121 @@ export function drawEra(type: BuildingType, age: number, x: EraCtx): boolean {
       out.hub = to1x(top);
       const fp = iso.p(0.8, 0.8, 96);
       banner(fp[0], fp[1], 16, 2);
+      return true;
+    }
+    // ================================================================ Parteigebäude
+    case 'meierei': {
+      // Angeliter: Fachwerk-Kuhstall mit Reetdach, Milchkannen, Rotvieh
+      ground(g, iso, 0.08, 0.08, 1.92, 1.92, '#7a8a48');
+      wattle(g, iso, [[0.1, 1.9], [1.9, 1.9]], 6);
+      shadowDiamond(g, iso, 0.25, 0.25, 1.4, 1.3);
+      const f = boxFaces(iso, 0.25, 0.25, 1.4, 1.25, 0, 18);
+      W(f.left, 'fachwerk', 0.08, 241, { sockel: true });
+      W(f.right, 'fachwerk', -0.15, 242, { sockel: true });
+      plankDoor(g, f.left, 0.35, 0.3, 0.8, 0.08, '#8a3a2a');
+      window4(g, f.right, 0.35, 0.45, 0.25, 0.3, -0.15);
+      roof(g, iso, 0.25, 0.25, 1.4, 1.25, 18, 22, 'x', 'reet', 0.25, 243);
+      // Milchkannen
+      for (let k = 0; k < 3; k++) {
+        const p = iso.p(1.55 + k * 0.1, 0.45 + k * 0.08);
+        g.fillStyle = '#c8ccd0';
+        g.fillRect(p[0] - 2.5, p[1] - 9, 5, 9);
+        g.fillStyle = '#9aa0a6';
+        g.fillRect(p[0] - 1.5, p[1] - 11, 3, 2);
+      }
+      animal(g, ...iso.p(1.55, 1.45), 'kuh', -1);
+      animal(g, ...iso.p(0.6, 1.7), 'kuh', 1);
+      const fp = iso.p(1.1, 0.75, 40);
+      banner(fp[0], fp[1], 14, 2);
+      return true;
+    }
+    case 'gestuet': {
+      // Schwansener: weißer Pferdestall mit Ziegeldach, Koppel mit Pferden
+      ground(g, iso, 0.05, 0.05, 2.95, 2.95, '#86a050');
+      wattle(g, iso, [[0.1, 1.5], [0.1, 2.9], [2.9, 2.9], [2.9, 1.5]], 7);
+      shadowDiamond(g, iso, 0.3, 0.3, 2.6, 1.3);
+      const f = boxFaces(iso, 0.3, 0.3, 2.6, 1.25, 0, 20);
+      W(f.left, 'putz', 0.08, 251, { sockel: true });
+      W(f.right, 'putz', -0.15, 252, { sockel: true });
+      for (let k = 0; k < 4; k++) plankDoor(g, f.left, 0.06 + k * 0.24, 0.12, 0.62, 0.08, k % 2 ? '#2f4a32' : '#3a5a3a');
+      roof(g, iso, 0.3, 0.3, 2.6, 1.25, 20, 18, 'x', 'ziegel', 0.3, 253);
+      const t = iso.p(1.45, 0.78, 46);
+      g.fillStyle = '#e8e2d0';
+      g.fillRect(t[0] - 4, t[1] - 12, 8, 12);
+      poly(g, [[t[0] - 6, t[1] - 12], [t[0] + 6, t[1] - 12], [t[0], t[1] - 22]], '#5e9a83');
+      animal(g, ...iso.p(0.9, 2.2), 'pferd', 1);
+      animal(g, ...iso.p(1.9, 2.5), 'pferd', -1);
+      animal(g, ...iso.p(2.4, 1.9), 'pferd', 1);
+      const fp = iso.p(2.85, 1.5);
+      banner(fp[0], fp[1], 34, 2);
+      out.flagPt = to1x([fp[0], fp[1] - 34]);
+      return true;
+    }
+    case 'salzsiederei': {
+      // Nordfriesen: Klinkerkate mit Siedepfanne, Salzhaufen und Dampf
+      ground(g, iso, 0.05, 0.05, 1.95, 1.95, '#a8a07a');
+      shadowDiamond(g, iso, 0.2, 0.2, 1.2, 1.2);
+      const f = boxFaces(iso, 0.2, 0.2, 1.2, 1.2, 0, 14);
+      W(f.left, 'klinker', 0.08, 261);
+      W(f.right, 'klinker', -0.15, 262);
+      frontispiz(g, f.left, 0.3, 0.4, 20, 0.08);
+      plankDoor(g, f.left, 0.4, 0.2, 0.8, 0.08, '#2f5f9a');
+      roof(g, iso, 0.2, 0.2, 1.2, 1.2, 14, 26, 'x', 'reet', 0.3, 263);
+      out.smoke = [chimney(g, iso, 0.7, 0.6, 32, 6)].map(to1x);
+      // Siedepfanne auf Feuer
+      const pf = iso.p(1.5, 1.0);
+      g.fillStyle = '#c84a1a';
+      g.beginPath();
+      g.ellipse(pf[0], pf[1] - 2, 9, 4, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#5a5a5a';
+      g.beginPath();
+      g.ellipse(pf[0], pf[1] - 6, 11, 5, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = '#e8eef0';
+      g.beginPath();
+      g.ellipse(pf[0], pf[1] - 7, 9, 3.6, 0, 0, Math.PI * 2);
+      g.fill();
+      out.smoke.push(to1x([pf[0], pf[1] - 10]));
+      // Salzkegel
+      for (const [x, y] of [[0.5, 1.6], [0.85, 1.7], [1.25, 1.65]] as [number, number][]) {
+        const p = iso.p(x, y);
+        poly(g, [[p[0] - 8, p[1]], [p[0] + 8, p[1]], [p[0], p[1] - 11]], '#f2f2ec', 'rgba(120,120,110,0.5)', 0.8);
+      }
+      const fp = iso.p(1.75, 0.3);
+      banner(fp[0], fp[1], 30, 2);
+      return true;
+    }
+    case 'zollhaus': {
+      // Dänen: Backsteinhaus mit Treppengiebel und Schlagbaum
+      pavement(g, iso, 2, '#8d8573', 271);
+      shadowDiamond(g, iso, 0.25, 0.25, 1.4, 1.35);
+      const f = boxFaces(iso, 0.25, 0.25, 1.4, 1.35, 0, 28);
+      W(f.left, 'ziegel', 0.08, 271, { sockel: true, bands: true });
+      W(f.right, 'ziegel', -0.15, 272, { sockel: true, bands: true });
+      plankDoor(g, f.left, 0.38, 0.24, 0.5, 0.08, '#7a2a1e');
+      window4(g, f.left, 0.08, 0.5, 0.18, 0.28, 0.08, '#8a2a22');
+      window4(g, f.right, 0.3, 0.5, 0.35, 0.28, -0.15);
+      roof(g, iso, 0.25, 0.25, 1.4, 1.35, 28, 22, 'x', 'ziegel', 0, 273);
+      steppedGable(g, iso, 1.4, 0.25, 1.35, 28, 22, 4);
+      // Schlagbaum rot-weiß
+      const a = iso.p(1.55, 1.75), b = iso.p(1.55, 0.5);
+      g.fillStyle = '#4a3a2a';
+      g.fillRect(a[0] - 1.5, a[1] - 14, 3, 14);
+      for (let k = 0; k < 6; k++) {
+        const x0 = a[0] + ((b[0] - a[0]) * k) / 6, y0 = a[1] - 12 + ((b[1] - a[1]) * k) / 6;
+        const x1 = a[0] + ((b[0] - a[0]) * (k + 1)) / 6, y1 = a[1] - 12 + ((b[1] - a[1]) * (k + 1)) / 6;
+        g.strokeStyle = k % 2 ? '#f4f0e6' : '#c03028';
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.lineTo(x1, y1);
+        g.stroke();
+      }
+      crate(g, iso, 0.4, 1.7, 0.2);
+      tinyPerson(g, ...iso.p(1.75, 1.3), '#7a2a1e', '#2a2a2a', 21);
+      const fp = iso.p(0.8, 0.8, 50);
+      banner(fp[0], fp[1], 20, 2);
       return true;
     }
     // ================================================================ moderne Fassungen alter Gebäude

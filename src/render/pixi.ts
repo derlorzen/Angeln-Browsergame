@@ -690,6 +690,26 @@ export class PixiRenderer extends BaseRenderer {
   private drawOverlay(now: number, ui: UIOverlay, alpha: number): void {
     const g = this.overlay, c = this.c, z = this.cam.z;
     g.clear();
+    // neutraler Markt: Besetzungsradius (gestrichelt, in der Farbe des Besitzers)
+    for (const b of c.buildings.values()) {
+      if (b.t !== 'brarupmarkt' || b.ghost) continue;
+      const mx = b.x + 1.5, my = b.y + 1.5, r = RULES.brarupRadius;
+      const col = c.brarup.c >= 0 ? hex(playerColor(c, c.brarup.c)) : 0xf0e6c8;
+      for (let k = 0; k < 48; k += 2) {
+        const a0 = (k / 48) * Math.PI * 2, a1 = ((k + 1) / 48) * Math.PI * 2;
+        g.moveTo(isoX(mx + Math.cos(a0) * r, my + Math.sin(a0) * r), isoY(mx + Math.cos(a0) * r, my + Math.sin(a0) * r))
+          .lineTo(isoX(mx + Math.cos(a1) * r, my + Math.sin(a1) * r), isoY(mx + Math.cos(a1) * r, my + Math.sin(a1) * r))
+          .stroke({ width: 1.6, color: col, alpha: 0.55 });
+      }
+    }
+    // untätige Arbeiter: kleines „z“
+    for (const u of c.units.values()) {
+      if (u.o !== c.me || u.t !== 'arbeiter' || u.a !== 0 || u.w) continue;
+      const ux = u.px + (u.x - u.px) * alpha, uy = u.py + (u.y - u.py) * alpha;
+      const bx = isoX(ux, uy) + 7, by = isoY(ux, uy) - 30 * UNIT_SCALE - 2 + Math.sin(now / 400 + u.i) * 1.5;
+      g.circle(bx, by, 4.5).fill({ color: 0xfff6d8, alpha: 0.85 }).stroke({ width: 0.8, color: 0x5a4a2a, alpha: 0.8 });
+      g.moveTo(bx - 2, by - 2).lineTo(bx + 2, by - 2).lineTo(bx - 2, by + 2).lineTo(bx + 2, by + 2).stroke({ width: 1.1, color: 0x3a2a1a });
+    }
     // Lebensbalken
     for (const u of c.units.values()) {
       const max = c.ud(u.o, u.t).hp;

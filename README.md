@@ -8,6 +8,8 @@ Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Lands
 - Sechs Karten zwischen Rendsburg und Esbjerg (Schlei, Flensburger Förde, Danewerk, Eider, Nordfriesische Marsch,
   Ribe/Kongeå) und eine bei jedem Start neu erzeugte **Zufallskarte**, alle mit fair ausgeglichenen Startplätzen
 - **Vier Zeitalter** (17., 18., 20. und 22. Jahrhundert) mit je neuen Gebäuden, Einheiten und Forschungen
+- **31 Forschungen** an den Gebäuden (zehn schon im 17. Jh., z. B. „Bessere Flügel“ an der Mühle), **ein eigenes Gebäude je
+  Partei**, **Reparieren** beschädigter Gebäude, Anzeige und Schnellwahl **untätiger Arbeiter**
 - Gebäude-Ausbaustufen II und III, automatisches Sichern mit „Letzte Partie fortsetzen“, dezente Geländehinweise
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
 - Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
@@ -69,6 +71,15 @@ HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sic
 | **Nordfriesen** „Lewwer duad üs Slaav!“ | Fischerei | Heringszaun +50 %, Räucherei 25 % schneller, Arbeiter kosten 30 Fisch statt Getreide, +120 Fisch zum Start; Hof −20 % | **Grabenspringer** – überspringt mit dem Springstock Knicks | Haubarg, Friesenhaus mit Frontispiz, Klinker, Schafe |
 | **Dänen** „For Konge og Fædreland!“ | Militär | Soldaten −15 %, Kaserne 25 % schneller, Amtshaus +30 % LP und stärkere Schützen | **Musketier** – größte Reichweite, hoher Schaden, langes Nachladen | Backstein-Renaissance mit Sandsteinbändern, Treppengiebel, Kupferhelme |
 
+**Eigenes Gebäude je Partei** (nur diese Partei kann es bauen, Taste **X** auf der Bauseite der Arbeiter):
+
+| Partei | Gebäude | Wirkung |
+|---|---|---|
+| Angeliter | **Meierei** (braucht Bauernhof) | macht aus 2 Getreide 3 Waren (Butter und Käse) |
+| Schwansener | **Gestüt** (3×3, braucht Kaserne) | bildet Späher und Gutsreiter 30 % schneller aus als die Kaserne |
+| Nordfriesen | **Salzsiederei** (am Ufer) | siedet ohne Arbeiter laufend Salz → Waren |
+| Dänen | **Zollhaus** | erhebt laufend Sundzoll → Taler |
+
 Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedlich (z. B. greifen die Dänen früher an).
 
 ## Karten
@@ -111,6 +122,15 @@ für die Besetzung des neutralen Markts (1 alle 20 s) und einmalig für die Fund
 - **Bevölkerung** begrenzt Arbeiter und Soldaten; Wohnhäuser +5 (max. 80).
 - **Neutraler Markt** (⚑, je Karte ein anderer Ort, z. B. Brarup-Markt): Wer ihn allein mit Einheiten besetzt,
   verkauft teurer, erhält doppeltes Prestige je Verkauf und laufend Prestige → umkämpfter Verkehrsknoten.
+  **So besetzt man ihn:** beliebige eigene Einheiten (auch Arbeiter) wählen und den Markt **rechts anklicken** – sie
+  stellen sich in den gestrichelten Kreis um den Markt. Er gehört euch, solange nur eure Einheiten im Kreis stehen
+  (der Kreis färbt sich dann in eurer Farbe); stehen dort Einheiten beider Seiten, gehört er niemandem. Ein Klick auf ⚑
+  in der oberen Leiste zeigt den Markt und erklärt das.
+- **Untätige Arbeiter:** Die Anzeige 💤 in der oberen Leiste zählt sie (leuchtet, sobald es welche gibt); Klick darauf
+  oder Taste **.** wählt reihum den nächsten und zeigt ihn. Untätige Arbeiter tragen zudem ein kleines „z“.
+- **Reparieren:** Beschädigte eigene Gebäude mit Arbeitern rechts anklicken – oder das Gebäude wählen und **Reparieren
+  (Taste X)** drücken, dann holen sich die drei nächsten Arbeiter den Auftrag. Eine volle Reparatur kostet etwa ein
+  Drittel des Holzpreises; ohne Holz bricht sie ab. Die Forschung „Feuerspritzen“ verdoppelt das Tempo.
 - **Fundstelle** („?“, z. B. Thorsberger Moor): Die erste Einheit dort bringt einmalig Prestige und Taler.
 - **Knicks** (Wallhecken) versperren Weg und Sicht; Wege und Tore führen hindurch. **Deiche** und das **Danewerk**
   ebenso (nur Stöpen/Tore), **Gräben** versperren nur den Weg. Watt ist begehbar, aber langsam.
@@ -141,7 +161,7 @@ einen fertigen Markt.
 **Steuerung:** Linksklick wählt, Rahmen ziehen wählt mehrere, Rechtsklick bewegt/arbeitet/greift an,
 Befehlskarte unten rechts (Tasten Q W E R / A S D F / Y X C V), Pfeiltasten/Bildrand/mittlere Maustaste bewegen die
 Kamera, Mausrad zoomt, Minikarte anklicken. Im Spiel: **F1** Hilfe, **F2** Lehrmeister, **F3** Leistungsanzeige,
-**Esc** Menü (Speichern im Einzelspiel), **Strg+Zahl** Gruppen.
+**Esc** Menü (Speichern im Einzelspiel), **Strg+Zahl** Gruppen, **.** nächster untätiger Arbeiter.
 
 ### Zeitalter
 
@@ -149,13 +169,16 @@ Die Siedlung entwickelt sich vom **17. Jahrhundert** (um 1600) über das **18.**
 **22. Jahrhundert** (um 2150). Der Aufstieg erfolgt im ausgewählten Dorfzentrum (Taste **A**), kostet Rohstoffe und Zeit
 und setzt zwei fertige Gebäude der Vorepoche voraus. Ab dem 20. Jahrhundert ändern Dorfzentrum, Wohnhäuser, Kaserne und
 Markt ihr Aussehen; ältere Gebäude bleiben als Altbestand stehen. Die neuen Gebäude stehen auf der zweiten Bauseite der
-Arbeiter (Taste **V** „Epochenbauten“), Forschungen an den genannten Gebäuden (Tasten A/S/D/F).
+Arbeiter (Taste **V** „Epochenbauten“), Forschungen an den genannten Gebäuden (Tasten A/S/D/F; Forschungen des nächsten
+Zeitalters werden schon angezeigt, sind aber noch gesperrt). Jede Forschung wirkt parteiweit und einmalig, auch auf
+vorhandene Einheiten.
 
 | Zeitalter | Voraussetzung (2 davon) | Neue Gebäude | Neue Einheiten | Forschungen |
 |---|---|---|---|---|
-| 18. Jh. – Aufklärung | Markt, Kaserne, Bockmühle, Räucherei | Leinenmanufaktur (Getreide+Holz → Waren), Hafen mit Kuttern, Sternschanze | Füsilier, Feldkanone | Fruchtwechsel (Hof), Schubkarren (Holzfäller), Exerzierreglement (Kaserne) |
-| 20. Jh. – Eisenbahn und Industrie | Manufaktur, Hafen, Schanze | Bahnhof (+25 % Taler), Konservenfabrik, Bunker | Infanterist, Panzerwagen (Landsknecht/Armbrust/Kanone entfallen) | Kunstdünger, Dampfmaschine (Mühle), Motorisierung |
-| 22. Jh. – Fusionszeitalter | Bahnhof, Fabrik, Bunker | Vertikalfarm, Gezeitenkraftwerk, Schildturm | Exo-Soldat, Kampfdrohne (fliegt über Wasser, Knicks, Deiche) | Pflanzengenetik (Vertikalfarm), Nanopanzerung, Robotik (Dorfzentrum) |
+| 17. Jh. – Frühe Neuzeit | – | Grundgebäude | Späher, Landsknecht, Armbrustschütze | Räderpflug (Hof), Geschmiedete Äxte (Holzfäller), Feinmaschige Reusen (Heringszaun), Eisenbeschlagene Spaten (Lehmgrube), **Bessere Flügel** (Mühle), Buchenholz-Räucherkammern, Lederwams (Kaserne), Geeichte Waage (Markt), Schießscharten (Dorfzentrum), Kachelöfen (Wohnhaus) |
+| 18. Jh. – Aufklärung | Markt, Kaserne, Bockmühle, Räucherei | Leinenmanufaktur (Getreide+Holz → Waren), Hafen mit Kuttern, Sternschanze | Füsilier, Feldkanone | Fruchtwechsel, Schubkarren, Exerzierreglement, Gezogene Läufe (+1 Reichweite), Windrose (Mühle), Schleppnetze (Hafen), Wechselbank (Markt), Feuerspritzen (Dorfzentrum), Spinnmaschine (Manufaktur) |
+| 20. Jh. – Eisenbahn und Industrie | Manufaktur, Hafen, Schanze | Bahnhof (+25 % Taler), Konservenfabrik, Bunker | Infanterist, Panzerwagen (Landsknecht/Armbrust/Kanone entfallen) | Kunstdünger, Dampfmaschine (Mühle), Motorisierung, Funkgeräte, Güterzüge (Bahnhof), Kühlhäuser (Fabrik) |
+| 22. Jh. – Fusionszeitalter | Bahnhof, Fabrik, Bunker | Vertikalfarm, Gezeitenkraftwerk, Schildturm | Exo-Soldat, Kampfdrohne (fliegt über Wasser, Knicks, Deiche) | Pflanzengenetik (Vertikalfarm), Nanopanzerung, Schildfelder, Plasmaladungen (Schildturm), Robotik (Dorfzentrum) |
 
 Die neuen Gebäude haben eigene Ausbaustufen II/III. Die Spezialeinheiten der Parteien bleiben in allen Zeitaltern
 verfügbar. Jeder Aufstieg bringt etwas Prestige (10/15/20). Am Markt lässt sich jetzt auch Getreide kaufen.

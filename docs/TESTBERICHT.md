@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 66/66 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 74/74 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -36,6 +36,7 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Geländehinweise | nur für erkundete Kacheln, mit Gelände und nächstem Ortsnamen |
 | Zufallskarte | gleicher Seed ergibt dieselbe Karte (Mehrspieler); 12 Seeds ergeben ≥ 5 unterschiedliche Grundformen und ≥ 6 verschiedene Ortsnamen; Fairnessprüfung mit 40 Seeds |
 | Zeitalter | Aufstieg nur mit 2 Voraussetzungsgebäuden, Kosten und Dauer, Prestige; Gebäude und Einheiten an das Zeitalter gebunden, Landsknechte ab dem 20. Jh. abgelöst; Vertikalfarm erzeugt Getreide; Forschung wirkt parteiweit (auch auf vorhandene Soldaten), späte Forschung abgelehnt, Abbruch erstattet; Drohne fliegt über Wasser; Zeitalter im Zustand für beide Spieler, im Spielstand und im Protokoll; KI erreicht in 40 Minuten das 20. Jh. und baut Epochengebäude |
+| Runde 4 | Arbeiter reparieren per Rechtsklick bis zu vollen LP und verbrauchen höchstens ⅓ der Holzkosten; ohne Holz Abbruch; Reparaturbefehl im Protokoll; jedes Grundgebäude hat mindestens eine Forschung im 17. Jh.; „Bessere Flügel“ beschleunigt die Mühle um 20 %; Kachelöfen +1 Wohnraum, Gezogene Läufe nur für Fernkämpfer; Parteigebäude nur für die eigene Partei baubar; Zollhaus bringt Taler, Meierei Waren, Gestüt bildet Gutsreiter schneller aus; Rechtsklick auf den neutralen Markt besetzt ihn |
 | KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
 ## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
@@ -59,13 +60,13 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 **STUN-Modus im Container:** Einladung entsteht nach ~11 s (Zeitlimit der ICE-Sammlung), nur Kandidaten vom Typ
 `host`, weil ausgehendes UDP zum STUN-Server dort nicht möglich ist; die Oberfläche weist darauf hin.
 
-## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 19/19 bestanden
+## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 20/20 bestanden
 
 Rahmenauswahl, Holz schlagen per Rechtsklick, Bauvorschau per Hotkey, ungültiger Platz rot + Begründung, gültiger Platz
 → Baustelle + Kosten, Arbeiter errichten das Gebäude, Speichern, Laden, **Ausbau des Dorfzentrums per Taste C auf
 Stufe II**, **Geländehinweis nach kurzem Verweilen**, **Zurück-Taste öffnet nur das Menü und sichert**, **nach Neuladen
 „Letzte Partie fortsetzen“ mit identischem Takt und Ausbaustufe**, **Zeitalter-Aufstieg per Taste A ins 18. Jahrhundert
-(Anzeige oben „18. Jh.“)**, keine Skriptfehler.
+(Anzeige oben „18. Jh.“)**, **Zähler untätiger Arbeiter stimmt, Klick darauf wählt einen aus**, keine Skriptfehler.
 
 ## 3c. Prestige-Tempo (KI gegen KI, normal, 12 Partien auf allen Karten)
 
@@ -137,4 +138,7 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
    Feinabstimmung mit menschlichen Testspielern steht aus.
 7. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
    mit Raumcode, Hostmigration, Mehrspieler-Spielstände.
-7. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.
+8. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.
+9. **Forschungen und Parteigebäude** sind nur per Einheitentest und KI-Partien geprüft; ob Zollhaus, Meierei, Gestüt und
+   Salzsiederei untereinander ausgewogen sind, zeigt erst das Spiel mit Menschen. Der Mehrspieler-Ende-zu-Ende-Test lief
+   einmal mit einer Zeitüberschreitung beim Verbindungsaufbau (10 s) ab und bestand beim zweiten Lauf mit 32/32.

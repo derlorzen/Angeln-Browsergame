@@ -348,6 +348,24 @@ export class CanvasRenderer extends BaseRenderer {
       // animierte Teile
       if (spr.hub) this.drawSails(sx + spr.hub[0] * z, sy + spr.hub[1] * z, b.ac ? now / 900 : 0.4);
       if (spr.smoke && (b.t !== 'raeucherei' || b.ac)) for (const p of spr.smoke) this.drawSmoke(sx + p[0] * z, sy + p[1] * z, now, b.i);
+      if (b.t === 'brarupmarkt') {
+        // Besetzungsradius
+        const mx = b.x + 1.5, my = b.y + 1.5, r = RULES.brarupRadius;
+        g.save();
+        g.setLineDash([6 * z, 6 * z]);
+        g.strokeStyle = this.c.brarup.c >= 0 ? playerColor(this.c, this.c.brarup.c) : '#f0e6c8';
+        g.globalAlpha = 0.55;
+        g.lineWidth = 1.6 * z;
+        g.beginPath();
+        for (let k = 0; k <= 48; k++) {
+          const a = (k / 48) * Math.PI * 2;
+          const [px, py] = this.toScreen(mx + Math.cos(a) * r, my + Math.sin(a) * r);
+          if (k) g.lineTo(px, py);
+          else g.moveTo(px, py);
+        }
+        g.stroke();
+        g.restore();
+      }
       if (b.t === 'brarupmarkt' && spr.flagPt) {
         const ctrl = this.c.brarup.c;
         const fx = sx + spr.flagPt[0] * z, fy = sy + spr.flagPt[1] * z;
@@ -491,6 +509,22 @@ export class CanvasRenderer extends BaseRenderer {
       u.hitFlash = Math.max(0, u.hitFlash - 0.08);
     }
     const max = this.c.ud(u.o, u.t).hp;
+    if (u.o === this.c.me && u.t === 'arbeiter' && u.a === 0 && !u.w) {
+      // untätiger Arbeiter: kleines „z“
+      const bx = sx + 7 * z, by = sy - (30 * UNIT_SCALE + 2 - Math.sin(now / 400 + u.i) * 1.5) * z;
+      g.fillStyle = 'rgba(255,246,216,0.85)';
+      g.beginPath();
+      g.arc(bx, by, 4.5 * z, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#3a2a1a';
+      g.lineWidth = 1.1 * z;
+      g.beginPath();
+      g.moveTo(bx - 2 * z, by - 2 * z);
+      g.lineTo(bx + 2 * z, by - 2 * z);
+      g.lineTo(bx - 2 * z, by + 2 * z);
+      g.lineTo(bx + 2 * z, by + 2 * z);
+      g.stroke();
+    }
     if (ui.selected.has(u.i) || u.h < max || ui.hover === u.i) this.hpBar(sx, sy - (((UNITS[u.t].mounted || UNITS[u.t].vehicle) ? 30 : 26) * UNIT_SCALE + 4 + this.hop(u, now)) * z, 20 * z, u.h / max);
   }
 

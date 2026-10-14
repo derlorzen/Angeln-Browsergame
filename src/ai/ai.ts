@@ -199,6 +199,16 @@ export class AI {
       }
     }
 
+    // Feinde nahe eigener Gebäude?
+    let threat: { x: number; y: number } | null = null;
+    for (const e of w.ents.values()) {
+      if (e.kind !== 'u' || !w.isEnemy(p, e.owner)) continue;
+      if (blds.some((b) => rectDist(e.x, e.y, b) < 9)) {
+        threat = { x: e.x, y: e.y };
+        break;
+      }
+    }
+
     // Arbeiter verteilen (Vormerkungen nur innerhalb dieses Denkschritts, der Weltzustand bleibt unberührt)
     const busy = (x: Unit, k: 'build' | 'staff', id: number) => {
       const r = this.reserved.get(x.id);
@@ -208,6 +218,13 @@ export class AI {
     for (const u of workers) {
       if (u.order.k !== 'none' || this.reserved.has(u.id)) continue;
       const site = unbuilt.find((b) => workers.filter((x) => busy(x, 'build', b.id)).length < 2);
+      // beschädigte Gebäude reparieren (höchstens zwei Arbeiter je Gebäude)
+      const hurt = !threat && me.res.holz > 30 ? blds.find((b) => b.built && b.hp < b.maxHp * 0.75 && workers.filter((x) => x.order.k === 'repair' && x.order.t === b.id).length + [...this.reserved.values()].filter((r) => r.k === 'repair' && r.t === b.id).length < 2) : undefined;
+      if (!site && hurt) {
+        this.cmd(w, { c: 'repair', ids: [u.id], t: hurt.id });
+        this.reserved.set(u.id, { k: 'repair', t: hurt.id });
+        continue;
+      }
       if (site) {
         this.cmd(w, { c: 'build', ids: [u.id], t: site.id });
         this.reserved.set(u.id, { k: 'build', t: site.id });
@@ -275,14 +292,6 @@ export class AI {
     }
 
     // Verteidigung: Feinde nahe eigener Gebäude
-    let threat: { x: number; y: number } | null = null;
-    for (const e of w.ents.values()) {
-      if (e.kind !== 'u' || !w.isEnemy(p, e.owner)) continue;
-      if (blds.some((b) => rectDist(e.x, e.y, b) < 9)) {
-        threat = { x: e.x, y: e.y };
-        break;
-      }
-    }
     if (threat) {
       const def = free.filter((u) => u.order.k === 'none' || (u.order.k === 'move' && !u.order.am));
       if (def.length) this.cmd(w, { c: 'move', ids: def.map((u) => u.id), x: threat.x, y: threat.y, am: true });

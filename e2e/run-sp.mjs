@@ -188,6 +188,20 @@ try {
   const ageInfo = await page.evaluate(() => ({ age: window.__game.client.age(0), top: document.querySelector('#topbar [data-r=age] b').textContent }));
   check('Zeitalter-Aufstieg per Befehlskarte: 18. Jahrhundert erreicht', ageBtn === 'Ins 18. Jh.' && ageInfo.age === 2 && ageInfo.top === '18. Jh.', `${ageBtn} → ${JSON.stringify(ageInfo)}`);
 
+  // Untätige Arbeiter: Zähler in der Leiste, Klick wählt einen aus
+  await page.waitForTimeout(400);
+  const idleInfo = await page.evaluate(() => {
+    const G = window.__game;
+    G.selected.clear();
+    G.hud.update(true);
+    const el = document.querySelector('#topbar [data-r=idle]');
+    const n = Number(el.querySelector('b').textContent);
+    el.click();
+    const sel = [...G.selected].map((id) => G.client.units.get(id));
+    return { n, real: G.idleWorkers().length, sel: sel.length, worker: sel.every((u) => u && u.t === 'arbeiter' && u.a === 0) };
+  });
+  check('Untätige Arbeiter: Zähler stimmt, Klick wählt einen aus', idleInfo.n === idleInfo.real && (idleInfo.n === 0 || (idleInfo.sel === 1 && idleInfo.worker)), JSON.stringify(idleInfo));
+
   // Dezenter Geländehinweis beim Verweilen
   await page.evaluate(() => { const G = window.__game; G.selected.clear(); G.hud.update(true); });
   let hint = '';

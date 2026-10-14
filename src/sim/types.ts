@@ -8,6 +8,7 @@ export type Order =
   | { k: 'attack'; t: number; leashX?: number; leashY?: number; resume?: { x: number; y: number } }
   | { k: 'gather'; tile: number }
   | { k: 'build'; t: number }
+  | { k: 'repair'; t: number }
   | { k: 'staff'; t: number };
 
 export type Anim = 0 | 1 | 2 | 3; // ruhend, gehend, arbeitend, kämpfend
@@ -67,6 +68,8 @@ export interface Building {
   up: number; // Fortschritt des laufenden Vorhabens in Sekunden, -1 = keins
   /** laufendes Vorhaben: Ausbaustufe, Zeitalter oder Technologie */
   upk?: 'lvl' | 'age' | TechId;
+  /** angefangene Reparaturkosten (Holz-Bruchteile) */
+  rd?: number;
 }
 
 export type Entity = Unit | Building;
@@ -123,6 +126,7 @@ export type Command =
   | { c: 'attack'; ids: number[]; t: number }
   | { c: 'gather'; ids: number[]; x: number; y: number }
   | { c: 'build'; ids: number[]; t: number }
+  | { c: 'repair'; ids: number[]; t: number }
   | { c: 'staff'; ids: number[]; t: number }
   | { c: 'stop'; ids: number[] }
   | { c: 'place'; ids: number[]; b: BuildingType; x: number; y: number }

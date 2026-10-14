@@ -110,6 +110,23 @@ export class Game {
     this.hintShown = true;
   }
 
+  /** Untätige eigene Arbeiter (stehen still, arbeiten nicht in einem Gebäude). */
+  idleWorkers() {
+    return [...this.client.units.values()].filter((u) => u.o === this.client.me && u.t === 'arbeiter' && u.a === 0 && !u.w);
+  }
+  selectIdleWorker(): void {
+    const idle = this.idleWorkers();
+    if (!idle.length) {
+      this.hud.message('Keine untätigen Arbeiter.');
+      return;
+    }
+    const u = idle[this.idleIdx++ % idle.length];
+    this.selected = new Set([u.i]);
+    this.renderer.centerOn(u.x, u.y);
+    this.renderer.marker(u.x, u.y, '#f5e7a0', performance.now());
+    this.hud.update(true);
+  }
+
   private lastAutosave = performance.now();
   private autosaveNow(): void {
     if (this.ended || !this.opts.autosave) return;
@@ -706,15 +723,7 @@ export class Game {
       return;
     }
     if (k === '.' || k === ',') {
-      const idle = [...this.client.units.values()].filter((u) => u.o === this.client.me && u.t === 'arbeiter' && u.a === 0 && !u.w);
-      if (!idle.length) {
-        this.hud.message('Keine untätigen Arbeiter.');
-        return;
-      }
-      const u = idle[this.idleIdx++ % idle.length];
-      this.selected = new Set([u.i]);
-      this.renderer.centerOn(u.x, u.y);
-      this.hud.update(true);
+      this.selectIdleWorker();
       return;
     }
     if (k === 'm' || k === 'M') {

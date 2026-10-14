@@ -33,6 +33,8 @@ const ERA_ORDER: [BuildingType, string][] = [
   ['schildturm', 'Y'],
 ];
 const KEYS = ['Q', 'W', 'E', 'R', 'A', 'S', 'D', 'F', 'Y', 'X', 'C', 'V'];
+/** Gebäude, das nur eine Partei bauen kann */
+const FACTION_BUILDING: Record<string, BuildingType> = { angeln: 'meierei', schwansen: 'gestuet', friesen: 'salzsiederei', daenen: 'zollhaus' };
 
 export class Hud {
   private top = document.getElementById('topbar')!;
@@ -66,8 +68,9 @@ export class Hud {
     for (const r of RES) parts.push(`<div class="res" data-r="${r}" data-tip="${esc(tips[r])}"><img src="${resIcon(r)}" alt=""><b>0</b></div>`);
     parts.push(`<div class="res" data-r="pop" data-tip="Bevölkerung / Obergrenze. Wohnhäuser erhöhen die Grenze um 5 (max. ${RULES.maxPop})."><img src="${resIcon('pop')}" alt=""><b>0</b></div>`);
     parts.push(`<div class="res goal" data-r="prestige" data-tip=""><img src="${resIcon('prestige')}" alt=""><b>0</b><span class="bar"><i></i></span><span class="bar enemy"><i></i></span></div>`);
-    parts.push(`<div class="res" data-r="brarup" data-tip="${esc(this.game.client.map.marketName)} (neutral, ⚑): Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
+    parts.push(`<div class="res" data-r="brarup" data-tip="${esc(this.game.client.map.marketName)} (neutral, ⚑) – Klick zeigt ihn. Besetzen: Einheiten wählen und Rechtsklick auf den Markt. Wer ihn allein mit Einheiten besetzt (Radius ${RULES.brarupRadius}), erhält bessere Preise, doppeltes Prestige je Verkauf und alle ${RULES.brarupTrickle.every} s 1 Prestige."><span>⚑</span><b style="min-width:90px">frei</b></div>`);
     parts.push(`<div class="res age" data-r="age" data-tip=""><span>⌛</span><b style="min-width:52px">17. Jh.</b></div>`);
+    parts.push(`<div class="res idle" data-r="idle" data-tip="Untätige Arbeiter. Klick (oder Taste .) wählt den nächsten und zeigt ihn; untätige Arbeiter tragen außerdem ein kleines „z“."><span>💤</span><b style="min-width:16px">0</b></div>`);
     parts.push('<div class="spacer"></div><span id="netinfo" class="note"></span><span id="clock">00:00</span>');
     parts.push('<button class="btn" data-act="help" title="Hilfe (F1)">Hilfe</button><button class="btn" data-act="tut" title="Lehrmeister (F2)">Lehrmeister</button><button class="btn" data-act="mute" title="Ton an/aus (M)">Ton</button><button class="btn" data-act="menu" title="Menü (Esc)">Menü</button>');
     this.top.innerHTML = parts.join('');
@@ -75,6 +78,12 @@ export class Hud {
     this.top.querySelectorAll<HTMLElement>('[data-act]').forEach((el) =>
       el.addEventListener('click', () => this.game.uiAction(el.dataset.act!)),
     );
+    this.resEls.get('idle')!.addEventListener('click', () => this.game.selectIdleWorker());
+    this.resEls.get('brarup')!.addEventListener('click', () => {
+      const m = this.game.client.map.market;
+      this.game.renderer.centerOn(m.x + 1.5, m.y + 1.5);
+      this.message(`${this.game.client.map.marketName}: Soldaten auswählen und Rechtsklick auf den Markt – sie stellen sich im gestrichelten Kreis auf. Der Markt gehört euch, solange nur eure Einheiten darin stehen.`);
+    });
     this.top.querySelectorAll<HTMLElement>('.res').forEach((el) => {
       el.addEventListener('mouseenter', () => this.showTip(el, () => el.dataset.tip || (el.dataset.r === 'age' ? this.ageTip() : this.prestigeTip())));
       el.addEventListener('mouseleave', () => this.hideTip());
@@ -104,6 +113,10 @@ export class Hud {
     const me = c.mePlayer;
     if (!me) return;
     this.resEls.get('age')!.querySelector('b')!.textContent = AGES[me.age ?? 1].short;
+    const idle = this.game.idleWorkers().length;
+    const ie = this.resEls.get('idle')!;
+    ie.querySelector('b')!.textContent = String(idle);
+    ie.classList.toggle('alert', idle > 0);
     for (const r of RES) {
       const el = this.resEls.get(r)!;
       const v = Math.floor(me.res?.[r] ?? 0);
@@ -234,7 +247,7 @@ export class Hud {
     }
     // Befehlskarte
     const res = c.mePlayer?.res;
-    const ckey = `${ids.join(',')}|${blds.map((b) => `${b.b}${b.q?.length}${b.as}${b.l ?? 1}${b.u === undefined ? '' : 'u' + b.uk}`).join()}|${c.age(c.me)}|${c.mePlayer?.techs?.length ?? 0}|${this.buildPage}|${res ? RES.map((r) => Math.floor(res[r])).join(',') : ''}|${g.attackMove}|${g.placement?.type}`;
+    const ckey = `${ids.join(',')}|${blds.map((b) => `${b.b}${b.q?.length}${b.as}${b.l ?? 1}${b.u === undefined ? '' : 'u' + b.uk}${b.h < b.m ? 'd' : ''}`).join()}|${c.age(c.me)}|${c.mePlayer?.techs?.length ?? 0}|${this.buildPage}|${res ? RES.map((r) => Math.floor(res[r])).join(',') : ''}|${g.attackMove}|${g.placement?.type}`;
     if (force || ckey !== this.cardKey) {
       this.cardKey = ckey;
       this.buttons = this.makeButtons(units, blds);
@@ -298,7 +311,8 @@ export class Hud {
       else if (b.t === 'brarupmarkt') {
         const ctrl = c.brarup.c;
         lines.push(ctrl < 0 ? (c.brarup.x ? 'Umkämpft – niemand hat die Kontrolle' : 'Unbesetzt') : `Kontrolliert von ${esc(c.players[ctrl]?.name ?? '?')}`);
-        lines.push(`Einheiten im Umkreis von ${RULES.brarupRadius} Kacheln besetzen den Markt.`);
+        lines.push(`Einheiten im gestrichelten Kreis (${RULES.brarupRadius} Kacheln) besetzen den Markt – nur eure, dann gehört er euch.`);
+        lines.push('So geht’s: Einheiten wählen, Rechtsklick auf den Markt.');
       } else if (mine) {
         if (b.s) lines.push(esc(b.s));
         if (d.staffSlots) lines.push(`Arbeiter: ${b.st?.length ?? 0}/${d.staffSlots}${b.t === 'bauernhof' ? ` · Felder: ${b.f?.length ?? 0}` : ''}`);
@@ -356,15 +370,20 @@ export class Hud {
         });
       }
       while (out.length < 9) out.push(null as unknown as CmdButton);
-      out.push({
-        key: 'X', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (X)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.',
-        state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }),
-      });
-      if (workers.length && own.length > workers.length)
+      // Parteigebäude (nur auf der ersten Bauseite)
+      const facB = workers.length && !this.buildPage ? FACTION_BUILDING[c.faction(c.me)] : undefined;
+      if (facB) {
+        const d = c.bd(c.me, facB);
         out.push({
-          key: 'C', glyph: '⚔', label: 'Angriff', tip: () => '<h4>Angriffsbewegung (C)</h4>Danach Linksklick auf ein Ziel.',
-          state: () => (g.attackMove ? 'on' : 'ok'), act: () => g.armAttackMove(),
+          key: 'X', icon: portrait('b', facB, color, c.faction(c.me), c.age(c.me)), label: d.name,
+          tip: () => `${this.buildingTip(facB)}<div class="row2"><b>Nur für ${FACTION_DEFS[c.faction(c.me)].name}</b></div>`,
+          state: () => (d.requires?.some((r) => !c.hasBuilt(r)) ? 'na' : !this.canAfford(d.cost) ? 'poor' : g.placement?.type === facB ? 'on' : 'ok'),
+          act: () => g.beginPlacement(facB),
         });
+      } else out.push(null as unknown as CmdButton);
+      out.push(workers.length
+        ? { key: 'C', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (C)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.', state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }) }
+        : { key: 'C', glyph: '✋', label: 'Halt', tip: () => '<h4>Halt (C)</h4>Einheiten brechen ihre aktuelle Aufgabe ab.', state: () => 'ok', act: () => g.issue({ c: 'stop', ids: own.map((u) => u.i) }) });
       if (workers.length) {
         while (out.length < 11) out.push(null as unknown as CmdButton);
         const era = this.buildPage;
@@ -449,6 +468,24 @@ export class Hud {
           state: () => ((c.mePlayer?.res?.taler ?? 0) >= buyPrice ? 'ok' : 'poor'),
           act: () => g.issue({ c: 'buy', b: b.i, r: 'getreide' }),
         });
+      }
+      // Reparieren: die nächsten (bevorzugt untätigen) Arbeiter schicken
+      if (b.b && b.h < b.m) {
+        while (out.length < 12) out.push(null as unknown as CmdButton);
+        if (!out[9])
+          out[9] = {
+            key: 'X', glyph: '🔨', label: 'Reparieren',
+            tip: () => `<h4>Reparieren (X)</h4>Schickt bis zu drei Arbeiter (untätige zuerst). Eine volle Reparatur kostet etwa ein Drittel des Holzpreises.<br>Alternativ: Arbeiter wählen und Rechtsklick auf das beschädigte Gebäude.`,
+            state: () => ([...c.units.values()].some((u) => u.o === c.me && u.t === 'arbeiter') ? 'ok' : 'na'),
+            act: () => {
+              const cx = b.x + 1, cy = b.y + 1;
+              const ws = [...c.units.values()].filter((u) => u.o === c.me && u.t === 'arbeiter')
+                .sort((p, q) => Number(!(p.a === 0 && !p.w)) - Number(!(q.a === 0 && !q.w)) || Math.hypot(p.x - cx, p.y - cy) - Math.hypot(q.x - cx, q.y - cy))
+                .slice(0, 3);
+              if (ws.length) g.issue({ c: 'repair', ids: ws.map((u) => u.i), t: b.i });
+              g.hud.message(`${ws.length} Arbeiter reparieren ${c.bname(b)}.`);
+            },
+          };
       }
       // Zeitalter (Dorfzentrum) und Technologien auf freien Plätzen der zweiten Reihe
       const free = (pref: number[]) => {

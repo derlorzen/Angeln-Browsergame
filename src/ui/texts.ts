@@ -84,7 +84,8 @@ erhöhen die Grenze.</p>
 <li><b>Waren:</b> Bockmühle (4 Getreide → 3 Waren) und Räucherei (3 Fisch + 1 Holz → 2 Waren).</li>
 <li><b>Taler &amp; Prestige:</b> Waren am eigenen Markt verkaufen. Wer den <b>neutralen Markt</b> (⚑; je nach Karte z. B.
 Brarup-Markt, Flensburger Markt oder Ochsenmarkt Ribe) allein mit Einheiten besetzt, erhält mehr Taler, doppeltes
-Prestige je Verkauf und laufend Prestige.</li>
+Prestige je Verkauf und laufend Prestige. <i>Besetzen:</i> Einheiten wählen und den Markt rechts anklicken – sie stellen
+sich in den gestrichelten Kreis. Er gehört euch, solange nur eure Einheiten darin stehen; ein Klick auf ⚑ oben zeigt ihn.</li>
 <li><b>Fundstelle:</b> (je nach Karte z. B. Thorsberger Moor, Haithabu oder Grabhügel auf der Heide) Die erste Einheit
 an der Fundstelle („?“) bringt einmalig ${RULES.moorReward.prestige} Prestige und ${RULES.moorReward.taler} Taler.</li>
 </ul>
@@ -98,6 +99,13 @@ auf. Jeder Aufstieg kostet Rohstoffe und Zeit und verlangt zwei fertige Gebäude
 Gebäude (zweite Bauseite der Arbeiter, Taste V), neue Einheiten in der Kaserne und neue Forschungen bereit; ab dem
 20. Jahrhundert ändern Dorfzentrum, Wohnhäuser, Kaserne und Markt ihr Aussehen. Kampfdrohnen fliegen über Wasser,
 Knicks und Deiche hinweg.</p>
+<p><b>Forschungen:</b> Fast jedes Gebäude bietet Forschungen (Tasten A/S/D/F an der Befehlskarte), z. B. „Bessere Flügel“
+an der Mühle oder „Lederwams“ in der Kaserne. Sie wirken einmalig und parteiweit.</p>
+<p><b>Eigene Gebäude:</b> Jede Partei hat ein Gebäude, das nur sie bauen kann (Taste X bei den Arbeitern): Meierei
+(Angeliter), Gestüt (Schwansener), Salzsiederei (Nordfriesen), Zollhaus (Dänen).</p>
+<p><b>Reparieren:</b> Beschädigte Gebäude mit Arbeitern rechts anklicken oder am Gebäude „Reparieren“ (Taste X) wählen.
+Kostet etwas Holz.</p>
+<p><b>Untätige Arbeiter:</b> Die Anzeige 💤 oben zählt sie; Klick darauf oder Taste „.“ springt zum nächsten.</p>
 <p><b>Sichern:</b> Die Partie wird regelmäßig automatisch gesichert. Nach versehentlichem Schließen bietet das Hauptmenü
 „Letzte Partie fortsetzen“ an.</p>
 <p><b>Kampf:</b> Kaserne bildet Späher (schnell, weite Sicht), Landsknechte (Nahkampf, stark gegen Gebäude) und

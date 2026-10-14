@@ -67,6 +67,7 @@ export function validateCommand(raw: unknown): Command | null {
       return { c: 'move', ids: c.ids, x: c.x as number, y: c.y as number, am: c.am === true };
     case 'attack':
     case 'build':
+    case 'repair':
     case 'staff':
       if (!isIds(c.ids) || !isInt(c.t, 1, 1e9)) return null;
       return { c: c.c, ids: c.ids, t: c.t };

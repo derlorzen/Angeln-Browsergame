@@ -37,6 +37,11 @@ export const BUILDING_TYPES = [
   'vertikalfarm',
   'gezeitenwerk',
   'schildturm',
+  // Parteigebäude (nur für eine Partei)
+  'meierei',
+  'gestuet',
+  'salzsiederei',
+  'zollhaus',
 ] as const;
 export type BuildingType = (typeof BUILDING_TYPES)[number];
 
@@ -75,6 +80,10 @@ export interface BuildingDef {
   talerMul?: number;
   /** Schusseffekt der Verteidigung: 1 Pfeil, 3 Granate, 4 Energiestrahl */
   shot?: 1 | 3 | 4;
+  /** nur für diese Partei baubar */
+  faction?: 'angeln' | 'schwansen' | 'friesen' | 'daenen';
+  /** Zeitfaktor für die Ausbildung in diesem Gebäude */
+  trainMul?: number;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -200,6 +209,31 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     desc: 'Energieschild mit Strahlwaffe. Beschießt Feinde auf 9 Kacheln.',
     w: 2, h: 2, hp: 3600, cost: { lehm: 400, taler: 250 }, buildTime: 55, placement: 'normal', buildable: true, vision: 10,
     attack: { dmg: 34, range: 9, cooldown: 2.2 }, shot: 4,
+  },
+  // ---------------------------------------------------------------- Parteigebäude
+  meierei: {
+    name: 'Meierei', faction: 'angeln',
+    desc: 'Angler Rotvieh gibt Milch für Butter und Käse: 2 Getreide (Futter) → 3 Waren alle 5 s, selbstständig. Nur für Angeliter.',
+    w: 2, h: 2, hp: 500, cost: { holz: 100, lehm: 50 }, buildTime: 25, placement: 'normal', buildable: true,
+    requires: ['bauernhof'], vision: 5, process: { input: { getreide: 2 }, output: { waren: 3 }, time: 5 },
+  },
+  gestuet: {
+    name: 'Gestüt', faction: 'schwansen',
+    desc: 'Pferdezucht des Guts: bildet Jagdreiter und Gutsreiter 30 % schneller aus als die Kaserne. Nur für Schwansener.',
+    w: 3, h: 3, hp: 700, cost: { holz: 140, lehm: 60 }, buildTime: 35, placement: 'normal', buildable: true,
+    requires: ['kaserne'], vision: 6, trains: ['spaeher', 'gutsreiter'], trainMul: 0.7,
+  },
+  salzsiederei: {
+    name: 'Salzsiederei', faction: 'friesen',
+    desc: 'Salztorf aus dem Watt wird verbrannt und die Asche zu Salz gesiedet: 1 Ware alle 3 s, selbstständig. Nur am Ufer, nur für Nordfriesen.',
+    w: 2, h: 2, hp: 450, cost: { holz: 120 }, buildTime: 25, placement: 'ufer', buildable: true, vision: 5,
+    produce: { res: 'waren', amount: 1, time: 3, perWorker: false },
+  },
+  zollhaus: {
+    name: 'Zollhaus', faction: 'daenen',
+    desc: 'Königlicher Zoll auf Ochsen und Waren: 1 Taler alle 4 s, selbstständig. Nur für Dänen.',
+    w: 2, h: 2, hp: 700, cost: { holz: 80, lehm: 120 }, buildTime: 30, placement: 'normal', buildable: true, vision: 6,
+    produce: { res: 'taler', amount: 1, time: 4, perWorker: false },
   },
 };
 
@@ -399,6 +433,22 @@ export const UPGRADES: Partial<Record<BuildingType, UpgradeDef[]>> = {
   gezeitenwerk: [
     { name: 'Zweite Turbine', desc: '+30 % Ertrag.', cost: { lehm: 200, taler: 250 }, time: 35, fx: { produce: 1.3, hp: 1.3 } },
     { name: 'Gezeitenpark', desc: '+60 % Ertrag.', cost: { lehm: 300, taler: 400 }, time: 45, fx: { produce: 1.6, hp: 1.6 } },
+  ],
+  meierei: [
+    { name: 'Große Meierei', desc: 'Mehr Kühe: 25 % schneller.', cost: { holz: 100, lehm: 60 }, time: 25, fx: { process: 0.75, hp: 1.3 } },
+    { name: 'Molkerei', desc: '40 % schneller.', cost: { holz: 150, lehm: 100, taler: 60 }, time: 35, fx: { process: 0.6, hp: 1.6 } },
+  ],
+  gestuet: [
+    { name: 'Landgestüt', desc: 'Ausbildung weitere 15 % schneller.', cost: { holz: 120, taler: 80 }, time: 30, fx: { train: 0.85, hp: 1.3 } },
+    { name: 'Hauptgestüt', desc: 'Ausbildung weitere 30 % schneller.', cost: { holz: 180, lehm: 80, taler: 150 }, time: 40, fx: { train: 0.7, hp: 1.6 } },
+  ],
+  salzsiederei: [
+    { name: 'Große Siedepfannen', desc: '+30 % Salz.', cost: { holz: 120 }, time: 25, fx: { produce: 1.3 } },
+    { name: 'Saline', desc: '+60 % Salz.', cost: { holz: 160, lehm: 80, taler: 60 }, time: 35, fx: { produce: 1.6, hp: 1.4 } },
+  ],
+  zollhaus: [
+    { name: 'Zollamt', desc: '+30 % Zolleinnahmen.', cost: { lehm: 120, taler: 60 }, time: 25, fx: { produce: 1.3, hp: 1.3 } },
+    { name: 'Oberzollamt', desc: '+60 % Zolleinnahmen.', cost: { lehm: 180, taler: 120 }, time: 35, fx: { produce: 1.6, hp: 1.6 } },
   ],
   schildturm: [
     { name: 'Verstärkter Schild', desc: '+40 % Lebenspunkte und Schaden.', cost: { lehm: 250, taler: 250 }, time: 35, fx: { hp: 1.4, dmg: 1.4 } },
