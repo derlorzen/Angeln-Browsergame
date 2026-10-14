@@ -149,3 +149,7 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 11. **Größere Karten (128 × 128 statt 96 × 96):** Die Wege sind länger, Angriffe und Marktbesetzung dauern entsprechend
     länger. Spielstände und die automatische Sicherung aus der Version mit 96er-Karten lassen sich nicht mehr laden
     (klare Meldung im Hauptmenü).
+12. **Einmaliger Ausreißer im Mehrspielertest:** Nach der Kartenvergrößerung schlug die Prüfung „Doppelte/veraltete
+    Befehle werden nur einmal ausgeführt“ in einem von vier Läufen fehl (80 statt 40 Getreide abgebucht, also zwei
+    statt einer Ausbildung). Drei Wiederholungen bestanden mit 32/32. Die Ursache ist nicht geklärt; möglich ist ein
+    zeitversetzt eingetroffener Befehl aus einem früheren Testschritt. Beobachten.
