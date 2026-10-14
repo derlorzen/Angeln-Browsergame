@@ -112,7 +112,7 @@ abstract class SimDriver {
 export class LocalDriver extends SimDriver implements Driver {
   kind = 'local' as const;
   constructor(world: World, me: number, aiStates?: AIState[]) {
-    super(world, me, new ClientState(world.opts.seed, me, world.opts.mapId ?? 'schlei'));
+    super(world, me, new ClientState(world.opts.seed, me, world.opts.mapId ?? 'schlei', world.players.length));
     if (aiStates) this.ais = aiStates.map((s) => new AI(s.p, s.level, s));
     // geladene Bäume übernehmen (Spielstand)
     this.client.trees.set(world.map.trees);
@@ -120,97 +120,127 @@ export class LocalDriver extends SimDriver implements Driver {
   }
 }
 
+/** Verbindung des Hosts zu einem Mitspieler (eigener gefilterter Zustand, Sequenzprüfung, Ping). */
+interface GuestConn {
+  id: number; // Spielernummer
+  link: PeerLink;
+  snap: Snapshotter;
+  lastSeq: number;
+  limiter: RateLimiter;
+  pingN: number;
+  lastPong: number;
+  pingSent: Map<number, number>;
+  gone: boolean;
+  needFull: boolean;
+  latency: number;
+}
+
 export class HostDriver extends SimDriver implements Driver {
   kind = 'host' as const;
-  private guestSnap: Snapshotter;
-  private lastSeq = 0;
-  private limiter = new RateLimiter(30, 60);
-  private pingN = 0;
-  private lastPong = performance.now();
-  private pingSent = new Map<number, number>();
-  guestGone = false;
-  readonly guestId = 1;
+  private guests: GuestConn[] = [];
+  /** für Tests und Oberfläche: true, sobald alle Mitspieler gegangen sind */
+  get guestGone(): boolean {
+    return this.guests.every((g) => g.gone);
+  }
 
-  constructor(world: World, readonly link: PeerLink) {
-    super(world, 0, new ClientState(world.opts.seed, 0, world.opts.mapId ?? 'schlei'));
-    this.guestSnap = new Snapshotter(this.guestId);
-    link.onMessage = (raw) => this.onMessage(raw);
-    link.onClose = (reason) => this.guestLeft(reason);
+  /** @param links Spielernummer → Verbindung des jeweiligen Mitspielers */
+  constructor(world: World, links: Map<number, PeerLink> | PeerLink) {
+    super(world, 0, new ClientState(world.opts.seed, 0, world.opts.mapId ?? 'schlei', world.players.length));
+    const map = links instanceof Map ? links : new Map([[1, links]]);
+    for (const [id, link] of map) {
+      const g: GuestConn = {
+        id, link, snap: new Snapshotter(id), lastSeq: 0, limiter: new RateLimiter(30, 60), pingN: 0,
+        lastPong: performance.now(), pingSent: new Map(), gone: false, needFull: false, latency: 0,
+      };
+      link.onMessage = (raw) => this.onMessage(g, raw);
+      link.onClose = (reason) => this.guestLeft(g, reason);
+      this.guests.push(g);
+    }
+  }
+
+  /** Erste Verbindung (für Tests mit einem Mitspieler) */
+  get link(): PeerLink {
+    return this.guests[0].link;
   }
 
   start(): void {
     super.start();
-    this.link.send({ t: 'snap', s: this.guestSnap.make(this.world, true) } satisfies HostMsg);
+    for (const g of this.guests) g.link.send({ t: 'snap', s: g.snap.make(this.world, true) } satisfies HostMsg);
   }
 
-  private onMessage(raw: unknown): void {
+  private onMessage(g: GuestConn, raw: unknown): void {
     const m = parseGuestMsg(raw);
-    if (!m) return;
+    if (!m || g.gone) return;
     const now = performance.now();
     switch (m.t) {
       case 'cmd':
         // doppelte oder veraltete Befehle verwerfen, Fluten begrenzen
-        if (m.s <= this.lastSeq) return;
-        this.lastSeq = m.s;
-        if (!this.limiter.take(now)) return;
-        this.world.queueCommand(this.guestId, m.c);
+        if (m.s <= g.lastSeq) return;
+        g.lastSeq = m.s;
+        if (!g.limiter.take(now)) return;
+        this.world.queueCommand(g.id, m.c);
         break;
       case 'ping':
-        this.link.send({ t: 'pong', n: m.n } satisfies HostMsg);
+        g.link.send({ t: 'pong', n: m.n } satisfies HostMsg);
         break;
       case 'pong': {
-        this.lastPong = now;
-        const sent = this.pingSent.get(m.n);
-        if (sent) this.latencyMs = now - sent;
-        this.pingSent.delete(m.n);
+        g.lastPong = now;
+        const sent = g.pingSent.get(m.n);
+        if (sent) g.latency = now - sent;
+        g.pingSent.delete(m.n);
+        this.latencyMs = Math.max(...this.guests.filter((x) => !x.gone).map((x) => x.latency), 0);
         break;
       }
       case 'bye':
-        this.guestLeft('Der Mitspieler hat die Partie verlassen.');
+        this.guestLeft(g, 'hat die Partie verlassen.');
         break;
     }
   }
 
-  private guestLeft(reason: string): void {
-    if (this.guestGone) return;
-    this.guestGone = true;
-    this.onNotice(`${reason} Die Partie läuft weiter – die KI übernimmt seine Siedlung.`, false);
-    const p = this.world.players[this.guestId];
+  private guestLeft(g: GuestConn, reason: string): void {
+    if (g.gone) return;
+    g.gone = true;
+    const p = this.world.players[g.id];
+    const who = p?.name ?? 'Ein Mitspieler';
+    this.onNotice(`${who}: ${reason} Die Partie läuft weiter – die KI übernimmt die Siedlung.`, false);
     if (p && !p.defeated) {
       p.isAI = true;
-      this.ais.push(new AI(this.guestId, 'normal'));
+      this.ais.push(new AI(g.id, 'normal'));
     }
   }
 
   protected afterStep(): void {
-    if (this.guestGone) return;
     const w = this.world;
-    this.guestSnap.collectTrees(w);
-    // Rückstau: keine Deltas stapeln, stattdessen später vollständigen Zustand senden
-    const congested = this.link.buffered > 512 * 1024;
-    if (congested) {
-      this.needFull = true;
-      return;
-    }
-    const full = this.needFull || w.tick % 30 === 0;
-    this.needFull = false;
-    const s = this.guestSnap.make(w, full);
-    s.ack = this.lastSeq;
-    this.link.send({ t: 'snap', s } satisfies HostMsg);
-    if (w.tick % 10 === 0) {
-      this.pingN++;
-      this.pingSent.set(this.pingN, performance.now());
-      if (this.pingSent.size > 20) this.pingSent.delete(this.pingSent.keys().next().value!);
-      this.link.send({ t: 'ping', n: this.pingN } satisfies HostMsg);
-      if (performance.now() - this.lastPong > 15000) this.guestLeft('Der Mitspieler antwortet nicht mehr (Zeitüberschreitung).');
+    for (const g of this.guests) {
+      if (g.gone) continue;
+      g.snap.collectTrees(w);
+      // Rückstau: keine Deltas stapeln, stattdessen später vollständigen Zustand senden
+      if (g.link.buffered > 512 * 1024) {
+        g.needFull = true;
+        continue;
+      }
+      const full = g.needFull || w.tick % 30 === 0;
+      g.needFull = false;
+      const s = g.snap.make(w, full);
+      s.ack = g.lastSeq;
+      g.link.send({ t: 'snap', s } satisfies HostMsg);
+      if (w.tick % 10 === 0) {
+        g.pingN++;
+        g.pingSent.set(g.pingN, performance.now());
+        if (g.pingSent.size > 20) g.pingSent.delete(g.pingSent.keys().next().value!);
+        g.link.send({ t: 'ping', n: g.pingN } satisfies HostMsg);
+        if (performance.now() - g.lastPong > 15000) this.guestLeft(g, 'antwortet nicht mehr (Zeitüberschreitung).');
+      }
     }
   }
-  private needFull = false;
 
   stop(): void {
     super.stop();
-    this.link.send({ t: 'bye', reason: 'Der Host hat die Partie beendet.' } satisfies HostMsg);
-    window.setTimeout(() => this.link.close(), 300);
+    for (const g of this.guests) {
+      g.link.send({ t: 'bye', reason: 'Der Host hat die Partie beendet.' } satisfies HostMsg);
+      const l = g.link;
+      window.setTimeout(() => l.close(), 300);
+    }
   }
 }
 
@@ -228,8 +258,8 @@ export class GuestDriver implements Driver {
   private pingSent = new Map<number, number>();
   private ended = false;
 
-  constructor(seed: number, me: number, readonly link: PeerLink, mapId: MapId = 'schlei') {
-    this.client = new ClientState(seed, me, mapId);
+  constructor(seed: number, me: number, readonly link: PeerLink, mapId: MapId = 'schlei', players = 2) {
+    this.client = new ClientState(seed, me, mapId, players);
     link.onMessage = (raw) => this.onMessage(raw);
     link.onClose = (reason) => this.end(`Verbindung zum Host verloren: ${reason}`);
   }

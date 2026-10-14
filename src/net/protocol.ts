@@ -2,26 +2,33 @@
 import { RULES, isBuildingType, isUnitType } from '../data/defs';
 import { isFaction, type FactionId } from '../data/factions';
 import { isTechId } from '../data/ages';
-import { MAP_H, MAP_W, isMapId, type MapId } from '../sim/map';
+import { MAP_MAX, isMapId, type MapId } from '../sim/map';
 import type { Snapshot } from '../sim/snapshot';
 import type { Command } from '../sim/types';
 
-export const PROTOCOL_VERSION = 6; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter, 5: Lager und Abreißen, 6: Karten 128×128
+export const PROTOCOL_VERSION = 7; // 2: Kartenwahl, 3: Ausbaustufen, Prestigeziel „aus“, 4: Zeitalter, 5: Lager und Abreißen, 6: Karten 128×128, 7: bis zu vier Spieler
 const goalOf = (g: unknown): number => ((RULES.prestigeGoals as readonly number[]).includes(g as number) ? (g as number) : RULES.prestigeGoalDefault);
 
+/** Belegung eines Lobbyplatzes: Host, verbundener Mitspieler, KI, frei (wartet auf Beitritt) oder geschlossen. */
+export type SeatKind = 'host' | 'human' | 'ai' | 'open' | 'closed';
+export const SEAT_KINDS: readonly SeatKind[] = ['host', 'human', 'ai', 'open', 'closed'];
 export interface LobbyPlayer {
   name: string;
   color: number;
   slot: number;
   ready: boolean;
   faction: FactionId;
+  kind?: SeatKind;
+  ai?: 'leicht' | 'normal';
 }
 export interface LobbyState {
-  players: LobbyPlayer[]; // [0] = Host, [1] = Gast
+  players: LobbyPlayer[]; // Plätze 0…3 (Index = Platz), [0] = Host
   goal: number;
   rich: boolean;
   map: MapId;
 }
+/** Spieler, die an der Partie teilnehmen (Host, Mitspieler, KI) – in dieser Reihenfolge erhalten sie ihre Spielernummern. */
+export const seated = (st: LobbyState): LobbyPlayer[] => st.players.filter((p) => p.kind === undefined || p.kind === 'host' || p.kind === 'human' || p.kind === 'ai');
 
 export type GuestMsg =
   | { t: 'hello'; v: number; name: string; faction: FactionId }
@@ -33,7 +40,7 @@ export type GuestMsg =
   | { t: 'bye' };
 
 export type HostMsg =
-  | { t: 'welcome'; v: number }
+  | { t: 'welcome'; v: number; seat?: number }
   | { t: 'reject'; reason: string }
   | { t: 'lobby'; st: LobbyState }
   | { t: 'start'; seed: number; goal: number; rich: boolean; me: number; players: LobbyPlayer[]; map: MapId }
@@ -53,11 +60,16 @@ export function cleanName(v: unknown, fallback: string): string {
   return s || fallback;
 }
 
+const cleanPlayer = (p: LobbyPlayer): LobbyPlayer => ({
+  name: cleanName(p.name, '?'), color: p.color, slot: p.slot, ready: !!p.ready, faction: p.faction,
+  kind: p.kind && SEAT_KINDS.includes(p.kind) ? p.kind : undefined, ai: p.ai === 'leicht' ? 'leicht' : p.ai === 'normal' ? 'normal' : undefined,
+});
+
 /** Prüft einen Spielbefehl strukturell. Inhaltliche Prüfung (Besitz, Kosten, Bauplatz) erfolgt in der Simulation. */
 export function validateCommand(raw: unknown): Command | null {
   if (!raw || typeof raw !== 'object') return null;
   const c = raw as Record<string, unknown>;
-  const xy = () => isNum(c.x, 0, MAP_W) && isNum(c.y, 0, MAP_H);
+  const xy = () => isNum(c.x, 0, MAP_MAX) && isNum(c.y, 0, MAP_MAX);
   switch (c.c) {
     case 'smart':
       if (!isIds(c.ids) || !xy() || (c.t !== undefined && !isInt(c.t, 1, 1e9))) return null;
@@ -78,7 +90,7 @@ export function validateCommand(raw: unknown): Command | null {
       if (!isIds(c.ids)) return null;
       return { c: 'stop', ids: c.ids };
     case 'place':
-      if (!isIds(c.ids) || !isBuildingType(c.b) || !isInt(c.x, 0, MAP_W) || !isInt(c.y, 0, MAP_H)) return null;
+      if (!isIds(c.ids) || !isBuildingType(c.b) || !isInt(c.x, 0, MAP_MAX) || !isInt(c.y, 0, MAP_MAX)) return null;
       return { c: 'place', ids: c.ids, b: c.b, x: c.x, y: c.y };
     case 'train':
       if (!isInt(c.b, 1, 1e9) || !isUnitType(c.u)) return null;
@@ -118,7 +130,7 @@ export function parseGuestMsg(raw: unknown): GuestMsg | null {
       if (!isInt(m.v, 0, 1000)) return null;
       return { t: 'hello', v: m.v, name: cleanName(m.name, 'Gast'), faction: isFaction(m.faction) ? m.faction : 'angeln' };
     case 'lset':
-      if (!isInt(m.color, 0, 3) || !isInt(m.slot, 0, 1) || typeof m.ready !== 'boolean' || !isFaction(m.faction)) return null;
+      if (!isInt(m.color, 0, 3) || !isInt(m.slot, 0, 3) || typeof m.ready !== 'boolean' || !isFaction(m.faction)) return null;
       return { t: 'lset', name: cleanName(m.name, 'Gast'), color: m.color, slot: m.slot, ready: m.ready, faction: m.faction };
     case 'cmd': {
       if (!isInt(m.s, 1, 1e12)) return null;
@@ -142,19 +154,20 @@ export function parseHostMsg(raw: unknown): HostMsg | null {
   const m = raw as Record<string, unknown>;
   switch (m.t) {
     case 'welcome':
-      return isInt(m.v, 0, 1000) ? { t: 'welcome', v: m.v } : null;
+      return isInt(m.v, 0, 1000) ? { t: 'welcome', v: m.v, seat: isInt(m.seat, 0, 3) ? m.seat : undefined } : null;
     case 'reject':
     case 'bye':
       return { t: m.t, reason: typeof m.reason === 'string' ? m.reason.slice(0, 300) : 'Verbindung beendet.' } as HostMsg;
     case 'lobby': {
       const st = m.st as LobbyState;
       if (!st || !Array.isArray(st.players) || st.players.length > 4 || !isMapId(st.map)) return null;
-      for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction)) return null;
-      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...p, name: cleanName(p.name, '?'), ready: !!p.ready })), goal: goalOf(st.goal), rich: !!st.rich, map: st.map } };
+      for (const p of st.players) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction) || (p.kind !== undefined && !SEAT_KINDS.includes(p.kind))) return null;
+      return { t: 'lobby', st: { players: st.players.map((p) => ({ ...cleanPlayer(p), ready: !!p.ready })), goal: goalOf(st.goal), rich: !!st.rich, map: st.map } };
     }
     case 'start':
-      if (!isInt(m.seed, 0, 2 ** 31) || !isInt(m.me, 0, 3) || !Array.isArray(m.players) || !isMapId(m.map)) return null;
-      return { t: 'start', seed: m.seed, goal: goalOf(m.goal), rich: !!m.rich, me: m.me, players: m.players as LobbyPlayer[], map: m.map };
+      if (!isInt(m.seed, 0, 2 ** 31) || !isInt(m.me, 0, 3) || !Array.isArray(m.players) || m.players.length < 2 || m.players.length > 4 || m.me >= m.players.length || !isMapId(m.map)) return null;
+      for (const p of m.players as LobbyPlayer[]) if (!p || !isInt(p.color, 0, 3) || !isInt(p.slot, 0, 3) || !isFaction(p.faction)) return null;
+      return { t: 'start', seed: m.seed, goal: goalOf(m.goal), rich: !!m.rich, me: m.me, players: (m.players as LobbyPlayer[]).map(cleanPlayer), map: m.map };
     case 'snap': {
       const s = m.s as Snapshot;
       if (!s || !Array.isArray(s.ents) || !Array.isArray(s.hid) || !Array.isArray(s.gone) || !Array.isArray(s.trees) || !Array.isArray(s.ev)) return null;

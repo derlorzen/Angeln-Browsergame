@@ -4,7 +4,7 @@
 Chromium 141 (headless, Playwright 1.55). WebGL läuft dort über **SwiftShader** (Software-Emulation der GPU).
 Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetanschluss zur Verfügung.
 
-## 1. Automatisierte Tests (`npm test`, Vitest) – 78/78 bestanden
+## 1. Automatisierte Tests (`npm test`, Vitest) – 88/88 bestanden
 
 | Bereich | Geprüft |
 |---|---|
@@ -38,6 +38,8 @@ Es stand **kein** echter Laptop, kein zweites Gerät und kein zweiter Internetan
 | Zeitalter | Aufstieg nur mit 2 Voraussetzungsgebäuden, Kosten und Dauer, Prestige; Gebäude und Einheiten an das Zeitalter gebunden, Landsknechte ab dem 20. Jh. abgelöst; Vertikalfarm erzeugt Getreide; Forschung wirkt parteiweit (auch auf vorhandene Soldaten), späte Forschung abgelehnt, Abbruch erstattet; Drohne fliegt über Wasser; Zeitalter im Zustand für beide Spieler, im Spielstand und im Protokoll; KI erreicht in 40 Minuten das 20. Jh. und baut Epochengebäude |
 | Runde 4 | Arbeiter reparieren per Rechtsklick bis zu vollen LP und verbrauchen höchstens ⅓ der Holzkosten; ohne Holz Abbruch; Reparaturbefehl im Protokoll; jedes Grundgebäude hat mindestens eine Forschung im 17. Jh.; „Bessere Flügel“ beschleunigt die Mühle um 20 %; Kachelöfen +1 Wohnraum, Gezogene Läufe nur für Fernkämpfer; Parteigebäude nur für die eigene Partei baubar; Zollhaus bringt Taler, Meierei Waren, Gestüt bildet Gutsreiter schneller aus; Rechtsklick auf den neutralen Markt besetzt ihn |
 | Lager, Abreißen, Verarbeitung | Lagergrenze 400 am Start, Speicher +250 (Stufe III +600), Überschuss verfällt mit Meldung, Taler unbegrenzt, Hof ruht bei vollem Lager, Grenze im Zustand für den Spieler; Abreißen erstattet 50 %, Dorfzentrum nicht abreißbar, Befehl im Protokoll; Mühle lässt 40 Getreide übrig und lässt sich anhalten/fortsetzen |
+| Vier Spieler (`maps4.test.ts`) | alle sieben Karten × 4 Seeds mit 160 × 160 Kacheln: vier begehbare, gegenseitig erreichbare Startplätze mit mindestens 35 % der Kartenbreite Abstand (gemessen 56–109 Kacheln), Marktwege höchstens 45 % unterschiedlich, Holz ≥ 45 je Platz und Verhältnis ≥ 0,75, Acker ≥ 130 und Verhältnis ≥ 0,6, Fischplätze ≥ 3, Bauplätze; vier KIs (dreimal dieselbe Partei) spielen 15 Minuten ohne Fehler (0,7 ms je Takt) |
+| Spielcode-Vermittlung (`rooms.test.ts`) | Raum eröffnen, Beitritt mit beliebig geschriebenem Code, Angebot/Antwort werden nur zwischen Host und Gast weitergereicht, fremde Token abgewiesen, nach Spielbeginn keine Beitritte, höchstens drei Mitspieler, unbekannter Code mit verständlicher Meldung, übergroße Nachricht abgewiesen, Wiederverbinden mit Last-Event-ID liefert Verpasstes nach |
 | KI je Karte | KI gegen KI auf jeder Karte 8 Minuten ohne Fehler, beide Seiten ≥ 6 Gebäude |
 
 ## 2. Browser-Ende-zu-Ende: Mehrspieler (`npm run e2e`) – 32/32 bestanden
@@ -60,6 +62,21 @@ Zwei **getrennte Chromium-Prozesse** auf demselben Rechner, ICE-Modus „ohne IC
 
 **STUN-Modus im Container:** Einladung entsteht nach ~11 s (Zeitlimit der ICE-Sammlung), nur Kandidaten vom Typ
 `host`, weil ausgehendes UDP zum STUN-Server dort nicht möglich ist; die Oberfläche weist darauf hin.
+
+## 2b. Browser-Ende-zu-Ende: Spielcode und vier Plätze (`node e2e/run-e2e-code.mjs`)
+
+Drei **getrennte Chromium-Prozesse** (Host + zwei Mitspieler) auf demselben Rechner, Vermittlung über den
+Produktionsserver (`node server/server.mjs`) bzw. die Vite-Vorschau, ICE-Modus „ohne ICE-Dienste“:
+
+- Host eröffnet ein Spiel und erhält einen sechsstelligen Spielcode; ein unbekannter Code wird verständlich abgelehnt
+- Mitspieler 1 tritt **nur mit dem Code** bei (klein geschrieben, ohne Bindestrich), Mitspieler 2 über den
+  **Einladungslink** (`?spiel=CODE` füllt den Code aus)
+- Platz 4 wird mit einer KI besetzt; drei Spieler wählen dieselbe Partei (Angeliter)
+- Partie startet bei allen drei Menschen: vier Parteien, Karte 160 × 160, jeder Mitspieler mit eigener Spielernummer,
+  sieht nur eigene Einheiten; ein Befehl von Mitspieler 2 wird beim Host ausgeführt
+- Mitspieler 1 schließt die Seite → KI übernimmt, Mitspieler 2 spielt weiter; keine Skriptfehler
+
+Ergebnis: siehe Abschnitt 5, Punkt 13 (Stabilität über viele Wiederholungen).
 
 ## 3. Browser-Ende-zu-Ende: Einzelspieler (`npm run e2e:sp`) – 20/20 bestanden
 
@@ -137,8 +154,8 @@ fps, Einheiten). Bei Problemen mit alten Grafiktreibern kann unter *Einstellunge
 5. **Kartenbalance mit Menschen** nicht erprobt; die Fairness ist nur über Messgrößen (Wege, Holz, Acker, Fischplätze) und KI-Partien geprüft.
 6. **Balance:** Wirtschaftliche Siege überwiegen; die Parteien liegen in KI-Partien zwischen 7 und 11 von 18 Siegen.
    Feinabstimmung mit menschlichen Testspielern steht aus.
-7. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, 4-Spieler-Partien (vorbereitet), Komfortmodus
-   mit Raumcode, Hostmigration, Mehrspieler-Spielstände.
+7. **Nicht umgesetzt (bewusst nachgelagert):** Hafen mit Fischerbooten, Hostmigration, Mehrspieler-Spielstände
+   (die automatische Sicherung des Hosts setzt eine Mehrspielerpartie gegen die KI fort), Teams/Bündnisse.
 8. Die Sounds sind einfache Synthesizer-Klänge; Musik fehlt.
 9. **Forschungen und Parteigebäude** sind nur per Einheitentest und KI-Partien geprüft; ob Zollhaus, Meierei, Gestüt und
    Salzsiederei untereinander ausgewogen sind, zeigt erst das Spiel mit Menschen. Der Mehrspieler-Ende-zu-Ende-Test lief

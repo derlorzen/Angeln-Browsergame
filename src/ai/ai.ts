@@ -310,11 +310,12 @@ export class AI {
     const waveSize = Math.round(((easy ? 9 : 7) + this.s.wave * 2) / aggr);
     const available = free.filter((u) => u.order.k === 'none');
     if (!threat && w.tick > firstAttack && available.length >= waveSize && w.tick - this.s.lastAttackTick > 900) {
-      const enemy = w.players.find((q) => q.id !== p && !q.defeated);
+      // bei mehreren Gegnern: das nächstgelegene gegnerische Dorfzentrum
+      const enemyDZs = [...w.ents.values()].filter((e): e is Building => e.kind === 'b' && e.type === 'dorfzentrum' && w.isEnemy(p, e.owner));
+      enemyDZs.sort((a, b) => Math.hypot(a.x - dz.x, a.y - dz.y) - Math.hypot(b.x - dz.x, b.y - dz.y));
+      const enemy = enemyDZs.length ? w.players[enemyDZs[0].owner] : w.players.find((q) => q.id !== p && !q.defeated);
       if (enemy) {
-        let target: { x: number; y: number } | null = null;
-        for (const e of w.ents.values())
-          if (e.kind === 'b' && e.owner === enemy.id && e.type === 'dorfzentrum') target = { x: e.x + 1.5, y: e.y + 1.5 };
+        let target: { x: number; y: number } | null = enemyDZs.length ? { x: enemyDZs[0].x + 1.5, y: enemyDZs[0].y + 1.5 } : null;
         if (!target) {
           const sl = w.map.slots[enemy.slot];
           target = { x: sl.x + 1.5, y: sl.y + 1.5 };
@@ -328,7 +329,9 @@ export class AI {
     // Angreifer, die untätig herumstehen, ziehen weiter zum Dorfzentrum
     if (this.s.attackers.length && w.tick % 50 === 0) {
       const idle = this.s.attackers.map((id) => w.unit(id)!).filter((u) => u.order.k === 'none');
-      const enemyDZ = [...w.ents.values()].find((e) => e.kind === 'b' && e.type === 'dorfzentrum' && w.isEnemy(p, e.owner)) as Building | undefined;
+      const enemyDZ = [...w.ents.values()]
+        .filter((e): e is Building => e.kind === 'b' && e.type === 'dorfzentrum' && w.isEnemy(p, e.owner))
+        .sort((a, b) => Math.hypot(a.x - dz.x, a.y - dz.y) - Math.hypot(b.x - dz.x, b.y - dz.y))[0];
       if (idle.length && enemyDZ) this.cmd(w, { c: 'attack', ids: idle.map((u) => u.id), t: enemyDZ.id });
     }
   }

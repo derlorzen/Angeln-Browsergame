@@ -12,8 +12,12 @@ Grafiken, Regeln und Klängen. Schauplatz: eine fiktive, frühneuzeitliche Lands
   Partei**, **Reparieren** beschädigter Gebäude, Anzeige und Schnellwahl **untätiger Arbeiter**
 - Gebäude-Ausbaustufen II und III, automatisches Sichern mit „Letzte Partie fortsetzen“, dezente Geländehinweise
 - Vier spielbare Parteien mit eigenem Baustil, eigenen Figuren, Boni und Spezialeinheit (siehe unten)
-- Einzelspieler gegen eine KI (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
-- Online-Modus für zwei Menschen über **direktes WebRTC**, ohne eigenen Server (manueller Code-Austausch)
+- Einzelspieler gegen eine bis drei KIs (zwei Stufen, Partei wählbar), mit Lehrmeister-Einstieg
+- **Mehrspieler bis zu vier Spieler mit Spielcode:** Der Host eröffnet ein Spiel und nennt einen kurzen Code
+  (z. B. `K7M-2QX`) oder schickt einen Einladungslink; Mitspieler geben nur diesen Code ein. Freie Plätze kann die KI
+  übernehmen, jede Partei darf mehrfach gewählt werden. Die Partie läuft direkt zwischen den Browsern (WebRTC); der
+  Server vermittelt nur den Verbindungsaufbau. Ohne Vermittlung bleibt der manuelle Code-Austausch als Rückfall.
+- Drei oder vier Spieler bekommen eine größere Karte (160 × 160 Kacheln) mit vier verteilten Startplätzen
 - Militärischer Sieg (gegnerisches Dorfzentrum zerstören) oder wirtschaftlicher Sieg (Prestige aus Handel)
 - Darstellung mit **PixiJS 8 (WebGL)**, automatischer Rückfall auf Canvas 2D
 - Alle Grafiken und Klänge werden beim Start im Browser erzeugt; keine externen Assets, keine KI-Aufrufe zur Laufzeit
@@ -35,30 +39,36 @@ Weitere Befehle:
 
 ```bash
 npm run build        # Typprüfung + Produktionsbuild nach dist/
-npm run preview      # dist/ lokal ausliefern (http://localhost:4173)
+npm run preview      # dist/ lokal ausliefern (http://localhost:4173), inkl. Spielcode-Vermittlung
+npm start            # Produktionsserver: dist/ + Spielcode-Vermittlung (PORT, Standard 80)
 npm test             # Unit-/Simulationstests (Vitest)
 npm run e2e          # Mehrspieler-Ende-zu-Ende-Test mit zwei Chromium-Prozessen (benötigt laufenden Server, s. u.)
+node e2e/run-e2e-code.mjs  # Spielcode, drei Browser + KI (BASE_URL=http://localhost:4173/)
 ```
 
 Für Mehrspieler-Tests auf **einem** Rechner genügen zwei Browserfenster (z. B. ein normales und ein privates Fenster),
 beide auf derselben Adresse.
 
-## Statisches HTTPS-Hosting
+## Hosting
 
-Das Spiel ist eine rein statische Seite: `npm run build` erzeugt den Ordner `dist/` mit `index.html` und gebündelten
-JS/CSS-Dateien (relative Pfade, also in jedem Unterverzeichnis lauffähig). Der Server liefert nur Dateien aus; er
-simuliert keine Partien und speichert keine Spielstände.
+**Empfohlen (mit Spielcode):** `npm start` bzw. das beiliegende `Dockerfile` startet einen kleinen Node-Server ohne
+weitere Abhängigkeiten (`server/server.mjs`). Er liefert das gebaute Spiel aus und vermittelt unter `/api/rooms`
+die Spielcodes: Über ihn laufen nur die WebRTC-Verbindungsangebote (wenige Kilobyte je Mitspieler), keine Spielzüge,
+keine Spielstände, keine Konten. Räume verfallen nach drei Stunden ohne Aktivität; Grenzen gegen Missbrauch sind
+eingebaut (max. 500 Räume, 3 Mitspieler je Raum, 64 KB je Anfrage, Begrenzung neuer Räume je Adresse).
 
-Beispiele:
+- **Coolify (oder jeder Docker-Host):** *New Resource → Application → GitHub-Repository*, Branch wählen, Build Pack
+  **Dockerfile**, Port **80**, eine Domain mit `https://` eintragen – Coolify holt das Let's-Encrypt-Zertifikat.
+  Eine bestehende Installation übernimmt die Änderung beim nächsten Deploy automatisch (das Bild enthält jetzt den
+  Node-Server statt nginx; Port und Einstellungen bleiben gleich).
+
+**Rein statisch (ohne Spielcode):** `dist/` funktioniert auch auf jedem statischen Webspace. Dann gibt es keine
+Spielcode-Vermittlung; das Spiel meldet das und bietet den manuellen Austausch der langen Codes an.
 
 - **GitHub Pages:** Inhalt von `dist/` in einen Branch `gh-pages` oder per GitHub Actions („Deploy static content“) veröffentlichen.
 - **Netlify / Cloudflare Pages:** Build-Befehl `npm run build`, Ausgabeverzeichnis `dist`.
 - **Eigener Webserver (nginx, Apache, Caddy):** `dist/` in das Web-Wurzelverzeichnis kopieren, HTTPS aktivieren.
 
-- **Coolify (oder jeder Docker-Host):** Das beiliegende `Dockerfile` baut das Spiel und liefert es mit nginx auf
-  Port 80 aus (`deploy/nginx.conf`). In Coolify: *New Resource → Application → GitHub-Repository*, Branch wählen,
-  Build Pack **Dockerfile**, Port **80**, eine Domain mit `https://` eintragen – Coolify holt das Let's-Encrypt-Zertifikat.
-  Alternativ ohne Docker: Build Pack *Nixpacks* mit „Static site“, Build-Befehl `npm run build`, Verzeichnis `dist`.
 
 HTTPS ist wichtig: WebRTC und die Zwischenablage-Funktion verlangen einen „sicheren Kontext“ (HTTPS oder `localhost`).
 
@@ -85,7 +95,13 @@ Jede Partei kann jeden Startplatz besetzen; die KI spielt je Partei unterschiedl
 ## Karten
 
 Alle Karten sind 128 × 128 Kacheln groß; die beiden Startplätze liegen mindestens zwei Drittel der Kartenbreite
-auseinander (Luftlinie 89–123 Kacheln).
+auseinander (Luftlinie 89–123 Kacheln). **Mit drei oder vier Spielern** wächst die Karte auf 160 × 160 Kacheln:
+Zu den beiden Startorten kommen zwei weitere, die der Kartengenerator auf festem Land so wählt, dass alle vier
+möglichst weit voneinander (mindestens 56, meist 75–110 Kacheln) und ähnlich weit vom Markt entfernt liegen; der
+neutrale Markt rückt dafür in die Mitte. Auf der Schlei kommen Brücken nach Schwansen hinzu (Missunde, Lindaunis),
+auf der Förde eine Fähre Holnis–Brunsnæs, an der Eider weitere Furten. Völlig gleich lang sind die Wege zum Markt
+bei vier Spielern nicht überall: Auf wasserreichen Karten (Marsch, Eider, Schlei) unterscheiden sie sich um bis zu
+rund 45 %, auf den übrigen deutlich weniger.
 
 | Karte | Startorte | Neutraler Markt | Fundstelle | Besonderheiten |
 |---|---|---|---|---|
@@ -198,16 +214,21 @@ vorhandene Einheiten.
 Die neuen Gebäude haben eigene Ausbaustufen II/III. Die Spezialeinheiten der Parteien bleiben in allen Zeitaltern
 verfügbar. Jeder Aufstieg bringt etwas Prestige (10/15/20). Am Markt lässt sich jetzt auch Getreide kaufen.
 
-## Code-Austausch im Mehrspieler (Kurzfassung)
+## Mehrspieler (Kurzfassung)
 
-1. Spieler A: *Mehrspieler: Spiel erstellen* → *Einladung erzeugen* → langen Einladungscode kopieren und z. B. per Messenger schicken.
-2. Spieler B: *Spiel beitreten* → Code einfügen → *Antwortcode erzeugen* → Antwortcode zurückschicken.
-3. Spieler A fügt den Antwortcode ein → *Verbinden*. Sobald der DataChannel offen ist, erscheint die Lobby.
-4. A wählt die Karte, beide wählen Partei/Farbe/Startort, setzen „bereit“, A startet.
+1. **Host:** *Mehrspieler: Spiel erstellen* → Name → *Spiel eröffnen*. Die Lobby zeigt einen Spielcode wie **K7M-2QX**
+   (Knöpfe „Code kopieren“ und „Einladungslink kopieren“).
+2. **Mitspieler (bis zu drei):** *Mehrspieler: Mit Spielcode beitreten* → Code eingeben → *Beitreten* – oder einfach
+   den Einladungslink öffnen. Groß-/Kleinschreibung und Bindestrich sind egal.
+3. In der Lobby wählt jeder Partei, Farbe und Startort; **dieselbe Partei darf mehrfach** vorkommen. Der Host wählt
+   Karte, Prestigeziel und Startrohstoffe und kann freie Plätze mit einer **KI** (leicht/normal) besetzen, schließen
+   oder Mitspieler entfernen. Mit drei oder vier Spielern spielt jeder gegen jeden auf der großen Karte.
+4. Alle setzen „bereit“, der Host startet. Verlässt ein Mitspieler die Partie, übernimmt die KI seine Siedlung.
 
-Es gibt **keinen** Vermittlungsserver. Ein optionaler öffentlicher STUN-Server hilft beim Finden der Verbindungswege
-(abschaltbar), TURN ist nicht voreingestellt (optional eigener Server). Direktes WebRTC funktioniert nicht durch jedes
-NAT bzw. jede Firewall – Details und Grenzen in [docs/NETZWERK.md](docs/NETZWERK.md).
+Der Browser des Hosts berechnet die Partie; die anderen senden nur Befehle und erhalten den für sie sichtbaren Zustand.
+Ein öffentlicher STUN-Server hilft beim Finden der Verbindungswege (abschaltbar), TURN ist nicht voreingestellt
+(optional eigener Server). Direktes WebRTC funktioniert nicht durch jedes NAT bzw. jede Firewall – Details, der
+manuelle Code-Austausch ohne Server und die Grenzen stehen in [docs/NETZWERK.md](docs/NETZWERK.md).
 
 ## Hintergrund und Freiheiten
 

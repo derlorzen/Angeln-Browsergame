@@ -1,18 +1,38 @@
-# Mehrspieler: Code-Austausch, Netzwerkgrenzen, Synchronisation
+# Mehrspieler: Spielcode, Code-Austausch, Netzwerkgrenzen, Synchronisation
 
 ## Begriffe
 
 | Baustein | Was er tut | In diesem Spiel |
 |---|---|---|
-| **Statisches Hosting** | liefert HTML/JS/CSS aus | beliebiger HTTPS-Webspace; simuliert nichts, speichert nichts |
-| **Signaling** | Austausch der Verbindungsbeschreibungen (SDP-Angebot/-Antwort inkl. ICE-Kandidaten) | **manuell**: Einladungs- und Antwortcode werden von den Spielern selbst übermittelt |
+| **Hosting** | liefert HTML/JS/CSS aus | `server/server.mjs` (Docker/Coolify) oder beliebiger HTTPS-Webspace; simuliert nichts, speichert nichts |
+| **Signaling** | Austausch der Verbindungsbeschreibungen (SDP-Angebot/-Antwort inkl. ICE-Kandidaten) | **Spielcode-Vermittlung** über `/api/rooms` des eigenen Servers (`server/rooms.mjs`); Rückfall: **manuell**, Einladungs- und Antwortcode werden von den Spielern selbst übermittelt |
 | **STUN** | ermittelt die von außen sichtbare Adresse (für NAT-Durchdringung) | optional, Standard `stun:stun.l.google.com:19302`, in *Einstellungen* änderbar oder abschaltbar. Externer Dienst, sieht keine Spieldaten |
 | **TURN** | Relay-Server, leitet den Datenverkehr weiter, wenn direkt nichts geht | **nicht** voreingestellt; optional eigener TURN-Server eintragbar |
 
-Es wird keine Bibliothek verwendet, die stillschweigend einen Vermittlungsserver nutzt. Der Verbindungsaufbau nutzt
-nur die Browser-API `RTCPeerConnection` und einen `RTCDataChannel` (`src/net/peer.ts`).
+Es wird keine Bibliothek verwendet, die stillschweigend einen fremden Vermittlungsserver nutzt. Der Verbindungsaufbau
+nutzt nur die Browser-API `RTCPeerConnection` und einen `RTCDataChannel` (`src/net/peer.ts`); die Spielcode-Vermittlung
+läuft auf demselben Server, der das Spiel ausliefert.
 
-## Ablauf (verbindlicher manueller Modus)
+## Ablauf mit Spielcode (Standard)
+
+1. Host: *Spiel erstellen* → `POST api/rooms` → der Server legt einen Raum an und antwortet mit einem sechsstelligen
+   Code (Alphabet ohne verwechselbare Zeichen I, L, O, 0, 1) und einem geheimen Token.
+2. Mitspieler: *Mit Spielcode beitreten* → `POST api/rooms/<code>/join` → Token und Teilnehmernummer. Der Host erfährt
+   über seinen Ereignisstrom (`GET …/events`, Server-Sent Events) von dem Beitritt.
+3. Der Host erzeugt für diesen Mitspieler ein WebRTC-Angebot (derselbe Einladungscode wie im manuellen Modus) und
+   schickt es über `POST …/msg` an ihn; der Mitspieler antwortet auf demselben Weg mit dem Antwortcode.
+4. Der DataChannel öffnet sich, der Mitspieler sendet `hello` und erhält einen Lobbyplatz. Bis zu drei Mitspieler,
+   je einer eigenen Verbindung zum Host (Sterntopologie).
+5. Beim Start schließt der Host den Raum (`…/close`, keine Beitritte mehr). Die Partie läuft danach nur noch über die
+   direkten Verbindungen; der Server sieht keine Spielzüge.
+
+Kommt die direkte Verbindung nicht innerhalb von 15 s zustande, versucht es der Mitspieler automatisch ein zweites
+Mal. Grenzen des Vermittlungsservers: höchstens 500 offene Räume, 3 Mitspieler je Raum, 64 KB je Anfrage, 48 KB je
+Nachricht, 50 wartende Nachrichten je Teilnehmer, 20 neue Räume und 60 Fehlversuche je Adresse und Minute; Räume
+verfallen nach drei Stunden ohne Aktivität. Ein Spielcode ist kein Passwort: Wer ihn kennt, kann beitreten, solange
+Plätze offen sind – der Host kann Mitspieler in der Lobby entfernen und Plätze schließen.
+
+## Ablauf ohne Server (manueller Code-Austausch, für zwei Spieler)
 
 1. A: *Spiel erstellen* → Browser erzeugt ein WebRTC-Angebot und wartet, bis die ICE-Sammlung abgeschlossen ist (max. 8 s).
 2. Daraus entsteht der **Einladungscode** `ANGELN-EINLADUNG-1Z.<base64url>`: JSON `{app, v, k:'offer', sid, ts, sdp, name}`,
@@ -23,8 +43,8 @@ nur die Browser-API `RTCPeerConnection` und einen `RTCDataChannel` (`src/net/pee
 5. B schickt den Antwortcode zurück, A fügt ihn ein → DataChannel öffnet sich → gemeinsame Lobby.
 6. Beide wählen Name, Farbe, Startort und bestätigen „bereit“; A startet (gleicher Kartenseed auf beiden Seiten).
 
-Ein sechsstelliger Code ohne Vermittlung kann die Gegenstelle nicht finden – deshalb sind die Codes lang.
-Ein optionaler Komfortmodus mit Raumcode und Signaling-Dienst wäre später ergänzbar, ist aber nicht Voraussetzung.
+Ein sechsstelliger Code ohne Vermittlung kann die Gegenstelle nicht finden – deshalb sind die Codes in diesem Modus
+lang. Er ist für statisches Hosting ohne `/api/rooms` gedacht und erreichbar über „Ohne Server: …“ in den Menüs.
 
 ### Prüfung der Codes (nicht vertrauenswürdige Eingaben, `src/net/signal.ts`)
 
@@ -71,18 +91,21 @@ Ein optionaler Komfortmodus mit Raumcode und Signaling-Dienst wäre später erg�
 Der Gast kann keine Ressourcen erfinden oder fremde Einheiten steuern. **Gegen Manipulation durch den Host gibt es
 in dieser Architektur keine unabhängige Kontrolle** – der Host könnte seinen eigenen Browser verändern.
 
-### Vorbereitung auf 4 Spieler
+### Bis zu vier Spieler
 
-Simulation, Snapshots (je Empfänger), Lobby-Format (`players[]`, bis 4) und Karte (4 Startplätze: Kappeln, Arnis,
-Steinberg, Boren) sind bereits für mehrere Spieler ausgelegt. Für 4 Spieler fehlt nur, dass der Host mehrere
-`PeerLink`s verwaltet (Sterntopologie, eine Einladung je Gast).
+Der Host verwaltet je Mitspieler einen `PeerLink` mit eigenem Snapshotter (eigene Sicht), eigener Sequenzprüfung,
+Flutbegrenzung und Ping (`HostDriver`, `src/game/drivers.ts`). Die Lobby hat vier Plätze (Host, Mitspieler, KI, offen,
+geschlossen); Farben und Startorte hält der Host eindeutig, Parteien dürfen sich wiederholen. Mit drei oder vier
+Spielern wird die Karte mit 160 × 160 Kacheln erzeugt – beide Seiten leiten Größe und Startplätze aus Seed, Karte und
+Spielerzahl ab. Scheidet ein Spieler aus, kann er zuschauen; verlässt ein Mitspieler die Partie, übernimmt die KI.
+Der Host muss bis zum Ende im Spiel bleiben (keine Hostmigration).
 
 ## Testanleitung über zwei Internetanschlüsse (noch offen, siehe Testbericht)
 
-1. Spiel per HTTPS hosten (z. B. GitHub Pages) – oder beide Personen starten `npm run dev` lokal.
+1. Spiel per HTTPS hosten (Docker/Coolify mit Spielcode-Vermittlung) – oder beide Personen starten `npm run dev` lokal.
 2. Gerät A im Heim-WLAN, Gerät B z. B. per Mobilfunk-Hotspot (anderer Anschluss).
 3. Beide: *Einstellungen* → STUN aktiv lassen.
-4. A erstellt Einladung, schickt sie per Messenger; B antwortet; A verbindet.
+4. A eröffnet ein Spiel und nennt B den Spielcode; B tritt bei.
 5. Notieren: Verbindung ja/nein, Zeit bis zur Lobby, angezeigte Latenz oben rechts (z. B. „Host · 45 ms“),
    ob Bewegungen beim Gast flüssig sind, Verhalten beim Schließen eines Tabs.
 6. Bei Fehlschlag: mit einem anderen Netz (z. B. beide Heim-WLANs) wiederholen; optional eigenen TURN eintragen.

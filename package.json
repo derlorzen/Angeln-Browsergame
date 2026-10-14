@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "start": "node server/server.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "node e2e/run-e2e.mjs",
@@ -16,6 +17,7 @@
     "shots:maps": "node e2e/showcase-maps.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.15.21",
     "playwright-core": "1.55.1",
     "typescript": "5.8.3",
     "vite": "6.3.5",

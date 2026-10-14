@@ -19,12 +19,13 @@ src/
     rng.ts, types.ts
   ai/ai.ts             KI – nutzt ausschließlich normale Spielerbefehle
   net/                 Netzwerk
+    rooms.ts           Spielcode-Vermittlung im Browser: Raum eröffnen/beitreten, Angebote über den Server austauschen
     signal.ts          Einladungs-/Antwortcodes: versioniert, komprimiert, streng geprüft
     peer.ts            RTCPeerConnection + DataChannel, ICE-Einstellungen, Zeitlimits, Fehlermeldungen
     protocol.ts        Nachrichtenformate, Validierung, Ratenbegrenzung
   game/
     client.ts          ClientState: Sicht eines Spielers, nur aus Snapshots gespeist (lokal wie im Netz)
-    drivers.ts         LocalDriver (Einzelspiel), HostDriver (Simulation + Gast), GuestDriver (nur Anzeige/Befehle)
+    drivers.ts         LocalDriver (Einzelspiel), HostDriver (Simulation + bis zu drei Mitspieler), GuestDriver (nur Anzeige/Befehle)
     game.ts            Spielbildschirm: Eingabe, Kamera, Ereignisse, Dialoge, Spielschleife (requestAnimationFrame)
   render/
     view.ts            BaseRenderer: Kamera, Koordinaten, Picking, Effekte, Nebelbild
@@ -37,7 +38,17 @@ src/
   ui/                  HUD (Ressourcenleiste, Auswahlfenster, Befehlskarte, Tooltips), Menüs/Lobby, Lehrmeister, Texte
   audio/sound.ts       synthetische Klänge (WebAudio)
   storage/save.ts      Einstellungen und Einzelspieler-Spielstand (localStorage)
+server/
+  server.mjs           Produktionsserver ohne Abhängigkeiten: liefert dist/ aus (gzip, Cache-Header), bindet rooms.mjs ein
+  rooms.mjs            Spielcode-Räume: Raum/Beitritt/Nachricht/Schließen per POST, Ereignisse per Server-Sent Events,
+                       Grenzen gegen Missbrauch; auch im Vite-Entwicklungs- und Vorschauserver eingebunden (vite.config.ts)
 ```
+
+Kartengröße: 128 × 128 Kacheln für zwei Spieler, 160 × 160 für drei oder vier (`mapSizeFor`). Die Kartenmaler sind in
+Einheiten der ursprünglichen 96er-Karte entworfen und werden über `Painter.SC` skaliert; die Ausgleichsschritte danach
+arbeiten in Kacheln. Bei vier Spielern wählt der Generator die Plätze 3 und 4 auf festem Land so, dass der kleinste
+Abstand aller vier möglichst groß und der Abstand zur Mitte ähnlich ist; alle Fairnessschritte laufen über alle aktiven
+Startplätze.
 
 ## Datenfluss
 

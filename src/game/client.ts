@@ -41,8 +41,8 @@ export class ClientState {
   /** Wenn gesetzt (lokaler Host), wird die Sichtbarkeit direkt übernommen statt neu berechnet. */
   externalVis: Uint8Array | null = null;
 
-  constructor(seed: number, public me: number, mapId: MapId = 'schlei') {
-    this.map = generateMap(seed, mapId);
+  constructor(seed: number, public me: number, mapId: MapId = 'schlei', players = 2) {
+    this.map = generateMap(seed, mapId, players);
     this.trees = this.map.trees; // eigene Kopie, da generateMap bei jedem Aufruf neu erzeugt
     const N = this.map.w * this.map.h;
     this.vis = new Uint8Array(N);

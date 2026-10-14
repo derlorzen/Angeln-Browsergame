@@ -5,20 +5,29 @@ import { ClientState } from '../game/client';
 import { GuestDriver, HostDriver, LocalDriver } from '../game/drivers';
 import { Game } from '../game/game';
 import { PeerLink } from '../net/peer';
-import { PROTOCOL_VERSION, parseGuestMsg, parseHostMsg, type HostMsg, type LobbyState } from '../net/protocol';
+import { PROTOCOL_VERSION, parseGuestMsg, parseHostMsg, seated, type HostMsg, type LobbyPlayer, type LobbyState } from '../net/protocol';
+import { Room, RoomError, cleanCode, formatCode } from '../net/rooms';
 import { SignalError } from '../net/signal';
 import { createRenderer } from '../render/factory';
 import type { BaseRenderer } from '../render/view';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES, portrait } from '../render/sprites';
 import { FACTIONS, FACTION_DEFS, type FactionId } from '../data/factions';
-import { MAP_IDS, MAP_INFO, REAL_MAP_IDS, type MapId } from '../sim/map';
+import { MAP_IDS, MAP_INFO, REAL_MAP_IDS, generateMap, type MapId } from '../sim/map';
 import { World } from '../sim/world';
 import { AI } from '../ai/ai';
 import { clearAutosave, loadSettings, readAutosave, readSave, saveSettings, writeAutosave, writeSave, type SaveGame, type Settings } from '../storage/save';
 import { BACKGROUND_HTML, GUIDE_HTML, NETWORK_HTML } from './texts';
 
-const slotNames = (m: MapId) =>
-  m === 'random' ? ['Startplatz A', 'Startplatz B'] : [`${MAP_INFO[m].slotNames[0]} (Norden)`, `${MAP_INFO[m].slotNames[1]} (Süden)`];
+const names4 = new Map<MapId, string[]>();
+/** Namen der Startplätze; bei drei oder vier Spielern vier Plätze (Namen der großen Karte, einmal erzeugt). */
+const slotNames = (m: MapId, players = 2): string[] => {
+  if (m === 'random') return players > 2 ? ['Platz 1', 'Platz 2', 'Platz 3', 'Platz 4'] : ['Startplatz A', 'Startplatz B'];
+  const two = [`${MAP_INFO[m].slotNames[0]} (Norden)`, `${MAP_INFO[m].slotNames[1]} (Süden)`];
+  if (players <= 2) return two;
+  if (!names4.has(m)) names4.set(m, generateMap(1, m, 4).slots.map((s) => s.name));
+  const n = names4.get(m)!;
+  return [two[0], two[1], n[2], n[3]];
+};
 const goalOptions = (sel: number) =>
   RULES.prestigeGoals.map((g) => `<option value="${g}" ${g === sel ? 'selected' : ''}>${g ? `${g}${g < RULES.prestigeGoalDefault ? ' (kurz)' : g > RULES.prestigeGoalDefault ? ' (lang)' : ''}` : 'aus – nur militärischer Sieg'}</option>`).join('');
 const autoLabel = (w: World) => {
@@ -41,10 +50,17 @@ export class Menu {
   private settings: Settings = loadSettings();
   private game: Game | null = null;
   private link: PeerLink | null = null;
+  /** Lobby sauber verlassen (Verbindungen schließen, Spielcode freigeben) */
+  private lobbyCleanup: (() => void) | null = null;
   private bg: { r: BaseRenderer | null; raf: number; alive: boolean } | null = null;
 
   start(): void {
-    this.main();
+    // Einladungslink: ?spiel=CODE öffnet direkt „Mit Spielcode beitreten“
+    const code = new URLSearchParams(location.search).get('spiel');
+    if (code) {
+      history.replaceState(null, '', location.pathname);
+      this.joinScreen(formatCode(cleanCode(code)));
+    } else this.main();
   }
 
   // ---------------------------------------------------------------- Hintergrundbild aus echten Spielgrafiken
@@ -77,9 +93,13 @@ export class Menu {
       window.addEventListener('resize', resize);
       r.cam.z = 1.2;
       const t0 = performance.now();
+      let last = 0;
       const loop = (t: number) => {
         if (!bg.alive) return;
         bg.raf = requestAnimationFrame(loop);
+        // langsamer Schwenk: 12 Bilder/s genügen und lassen Rechenzeit für Verbindungsaufbau und Lobby
+        if (t - last < 80) return;
+        last = t;
         const k = (t - t0) / 1000;
         r.centerOn(sl.x + 1.5 + Math.sin(k * 0.05) * 4, sl.y + 2.5 + Math.cos(k * 0.04) * 3);
         r.frame(t, { selected: new Set(), placement: null, drag: null, hover: 0 });
@@ -96,7 +116,7 @@ export class Menu {
     document.getElementById('menu-bg')?.remove();
   }
 
-  private show(html: string): HTMLElement {
+  private show(html: string, wide = false): HTMLElement {
     this.root.classList.remove('hidden');
     this.startBackdrop();
     let box = this.root.querySelector<HTMLElement>('.menu-box');
@@ -105,6 +125,7 @@ export class Menu {
       box.className = 'menu-box panel';
       this.root.appendChild(box);
     }
+    box.classList.toggle('wide', wide);
     box.innerHTML = html;
     box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => sound.unlock()));
     return box;
@@ -127,12 +148,12 @@ export class Menu {
         <button class="btn ${auto ? '' : 'primary'}" data-a="sp">Einzelspiel gegen die KI</button>
         <button class="btn" data-a="load" ${save ? '' : 'disabled'}>Spielstand laden${save ? ` (${new Date(save.savedAt).toLocaleString('de-DE')})` : ''}</button>
         <button class="btn" data-a="host">Mehrspieler: Spiel erstellen</button>
-        <button class="btn" data-a="join">Mehrspieler: Spiel beitreten</button>
+        <button class="btn" data-a="join">Mehrspieler: Mit Spielcode beitreten</button>
         <button class="btn" data-a="guide">Spielanleitung</button>
         <button class="btn" data-a="bg">Hintergrund &amp; Quellen</button>
         <button class="btn" data-a="settings">Einstellungen &amp; Netzwerk</button>
       </div>
-      <p class="note" style="text-align:center;margin-top:12px">Version 0.3 · Alle Grafiken und Klänge werden im Browser erzeugt · Kein Server nötig</p>`);
+      <p class="note" style="text-align:center;margin-top:12px">Version 0.4 · Alle Grafiken und Klänge werden im Browser erzeugt · bis zu vier Spieler</p>`);
     this.bind(box, {
       resume: () => this.resumeAuto(),
       sp: () => this.singleSetup(),
@@ -150,8 +171,8 @@ export class Menu {
     this.bind(box, { back: () => this.main() });
   }
 
-  private factionOptions(sel: FactionId | null): string {
-    return FACTIONS.map((x) => `<option value="${x}" ${x === sel ? 'selected' : ''}>${FACTION_DEFS[x].name} – ${FACTION_DEFS[x].focus}</option>`).join('');
+  private factionOptions(sel: FactionId | null, short = false): string {
+    return FACTIONS.map((x) => `<option value="${x}" ${x === sel ? 'selected' : ''}>${FACTION_DEFS[x].name}${short ? '' : ` – ${FACTION_DEFS[x].focus}`}</option>`).join('');
   }
 
   /** Infotafel: Dorfzentrum, Spezialeinheit, Motto, Boni. */
@@ -191,7 +212,8 @@ export class Menu {
       <div class="row"><label>Karte</label><select data-f="map">${this.mapOptions(s.map, true)}</select></div>
       <div data-mapinfo></div>
       <div class="row"><label>Startort</label><select data-f="slot"></select></div>
-      <div class="row"><label>KI-Gegner</label><select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select>
+      <div class="row"><label>KI-Gegner</label><select data-f="n"><option value="1" selected>1 Gegner</option><option value="2">2 Gegner (große Karte)</option><option value="3">3 Gegner (große Karte)</option></select>
+        <select data-f="ai"><option value="leicht">leicht (zum Kennenlernen)</option><option value="normal" selected>normal</option></select>
         <select data-f="aifac"><option value="zufall">zufällige Partei</option>${this.factionOptions(null)}</select></div>
       <div class="row"><label>Prestigeziel</label><select data-f="goal">${goalOptions(RULES.prestigeGoalDefault)}</select></div>
       <div class="row"><label>Startrohstoffe</label><select data-f="rich"><option value="0">normal</option><option value="1">reichlich</option></select></div>
@@ -207,10 +229,12 @@ export class Menu {
       box.querySelector('[data-mapinfo]')!.innerHTML = this.mapInfo(m);
       const sel = box.querySelector<HTMLSelectElement>('[data-f=slot]')!;
       const cur = sel.value || '0';
-      const names = m === 'zufall' ? ['Norden', 'Süden'] : slotNames(m);
+      const n = Number(f('n')) + 1;
+      const names = m === 'zufall' ? (n > 2 ? ['Platz 1', 'Platz 2', 'Platz 3', 'Platz 4'] : ['Norden', 'Süden']) : slotNames(m, n);
       sel.innerHTML = names.map((n, k) => `<option value="${k}" ${String(k) === cur ? 'selected' : ''}>${n}</option>`).join('');
     };
     box.querySelector('[data-f=map]')!.addEventListener('change', mapInfo);
+    box.querySelector('[data-f=n]')!.addEventListener('change', mapInfo);
     mapInfo();
     this.bind(box, {
       back: () => this.main(),
@@ -221,22 +245,32 @@ export class Menu {
         saveSettings(this.settings);
         const color = Number(f('color'));
         const slot = Number(f('slot'));
-        const aiColor = color === 1 ? 0 : 1;
+        const nAI = Number(f('n'));
         const faction = f('fac') as FactionId;
         this.settings.faction = faction;
         const mapSel = f('map') as MapId | 'zufall';
         this.settings.map = mapSel;
         saveSettings(this.settings);
         const mapId = mapSel === 'zufall' ? randomMap() : mapSel;
+        // Gegner: Parteien dürfen sich wiederholen; Farben und Startplätze werden reihum vergeben
+        const nSlots = nAI > 1 ? 4 : 2;
+        const freeColors = [0, 1, 2, 3].filter((c) => c !== color);
+        const freeSlots = Array.from({ length: nSlots }, (_, k) => k).filter((k) => k !== slot);
+        // bei drei Spielern: den gegenüberliegenden Platz zuerst vergeben
+        freeSlots.sort((a, b) => Number(a !== (slot ^ 1)) - Number(b !== (slot ^ 1)));
         const others = FACTIONS.filter((x) => x !== faction);
-        const aiFac: FactionId = f('aifac') === 'zufall' ? others[Math.floor(Math.random() * others.length)] : (f('aifac') as FactionId);
+        const used: FactionId[] = [];
+        const ais = Array.from({ length: nAI }, (_, k) => {
+          const pool = k === 0 ? others : FACTIONS;
+          const aiFac: FactionId = f('aifac') === 'zufall' ? pool[Math.floor(Math.random() * pool.length)] : (f('aifac') as FactionId);
+          const dup = used.filter((x) => x === aiFac).length;
+          used.push(aiFac);
+          return { name: AI_NAMES[aiFac] + (dup ? ` der ${['Jüngere', 'Dritte', 'Vierte'][dup - 1] ?? ''}` : ''), color: freeColors[k], slot: freeSlots[k], isAI: true, aiLevel: f('ai') as 'leicht' | 'normal', faction: aiFac };
+        });
         const world = new World({
           seed: (Math.random() * 2 ** 31) | 0,
           mapId,
-          players: [
-            { name, color, slot, isAI: false, faction },
-            { name: AI_NAMES[aiFac], color: aiColor, slot: 1 - slot, isAI: true, aiLevel: f('ai') as 'leicht' | 'normal', faction: aiFac },
-          ],
+          players: [{ name, color, slot, isAI: false, faction }, ...ais],
           prestigeGoal: Number(f('goal')),
           richStart: f('rich') === '1',
         });
@@ -386,12 +420,171 @@ export class Menu {
     }
   }
 
-  // ---------------------------------------------------------------- Mehrspieler: Erstellen (Spieler A)
+  // ---------------------------------------------------------------- Mehrspieler: Spiel erstellen (Spielcode)
   private hostScreen(): void {
     this.closeLink();
-    const box = this.show(`<h2>Spiel erstellen</h2>
-      <p class="note">Schritt 1: Einladung erzeugen und den Code (z. B. per Messenger) an den Mitspieler schicken.
-      Schritt 2: Seinen Antwortcode hier einfügen. Netzwerk: ${this.iceSummary()} – <a href="#" data-a="settings">ändern</a></p>
+    const box = this.show(`<h2>Mehrspieler: Spiel erstellen</h2>
+      <p class="note">Ihr erhaltet einen kurzen <b>Spielcode</b>. Eure Mitspieler (bis zu drei) wählen „Mit Spielcode beitreten“
+      und geben ihn ein – mehr ist nicht nötig. Freie Plätze könnt ihr mit der KI besetzen.</p>
+      <div class="row"><label>Euer Name</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
+      <div class="row"><button class="btn primary" data-a="make">Spiel eröffnen</button><span data-st class="note"></span></div>
+      <div class="row"><span data-msg></span></div>
+      <div class="row"><button class="btn" data-a="back">Zurück</button><button class="btn" data-a="manual">Ohne Server: Codes manuell austauschen</button></div>`);
+    const msg = box.querySelector<HTMLElement>('[data-msg]')!;
+    this.bind(box, {
+      back: () => this.main(),
+      manual: () => this.hostManualScreen(),
+      make: async () => {
+        const name = this.saveName(box);
+        msg.className = 'note';
+        msg.textContent = 'Eröffne das Spiel …';
+        try {
+          const room = await Room.create(name);
+          this.hostLobby({ room, name });
+        } catch (e) {
+          msg.className = 'err';
+          msg.textContent = `${(e as Error).message} Alternativ: „Ohne Server: Codes manuell austauschen“.`;
+        }
+      },
+    });
+  }
+
+  private saveName(box: HTMLElement): string {
+    const name = box.querySelector<HTMLInputElement>('[data-f=name]')!.value.trim().slice(0, 20) || 'Spieler';
+    this.settings.name = name;
+    saveSettings(this.settings);
+    return name;
+  }
+
+  // ---------------------------------------------------------------- Mehrspieler: Beitreten (Spielcode)
+  private joinScreen(prefill = ''): void {
+    this.closeLink();
+    const box = this.show(`<h2>Mehrspieler: Mit Spielcode beitreten</h2>
+      <p class="note">Gebt den Spielcode ein, den der Host euch genannt hat (z. B. <b>K7M-2QX</b>).</p>
+      <div class="row"><label>Euer Name</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
+      <div class="row"><label>Spielcode</label><input type="text" data-f="code" class="code-input" maxlength="9" autocomplete="off" spellcheck="false" placeholder="ABC-123" value="${esc(prefill)}"></div>
+      <div class="row"><button class="btn primary" data-a="join">Beitreten</button><span data-st class="note"></span></div>
+      <div class="row"><span data-msg></span></div>
+      <div class="row"><button class="btn" data-a="back">Zurück</button><button class="btn" data-a="manual">Ohne Server: Einladungscode einfügen</button></div>`);
+    const st = box.querySelector<HTMLElement>('[data-st]')!;
+    const msg = box.querySelector<HTMLElement>('[data-msg]')!;
+    const setMsg = (t: string, cls = 'err') => {
+      msg.className = cls;
+      msg.textContent = t;
+    };
+    const codeEl = box.querySelector<HTMLInputElement>('[data-f=code]')!;
+    codeEl.addEventListener('input', () => {
+      const c = cleanCode(codeEl.value);
+      const f = c.length > 3 ? `${c.slice(0, 3)}-${c.slice(3, 6)}` : c;
+      if (f !== codeEl.value) codeEl.value = f;
+    });
+    codeEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') box.querySelector<HTMLButtonElement>('[data-a=join]')!.click();
+    });
+    let busy = false;
+    let room: Room | null = null;
+    this.bind(box, {
+      back: () => {
+        room?.close();
+        this.main();
+      },
+      manual: () => {
+        room?.close();
+        this.joinManualScreen();
+      },
+      join: async () => {
+        if (busy) return;
+        busy = true;
+        setMsg('');
+        const name = this.saveName(box);
+        let done = false;
+        /** Ein Verbindungsversuch. Kein automatischer zweiter Versuch: Der Host könnte ihn nicht vom ersten unterscheiden. */
+        const attempt = async (): Promise<void> => {
+          room?.close();
+          this.closeLink();
+          st.textContent = 'Suche das Spiel …';
+          const r = await Room.join(codeEl.value, name);
+          room = r;
+          st.textContent = `Spiel von „${r.hostName || 'Host'}“ gefunden – baue die Verbindung auf …`;
+          // Geduld bei langsamen Rechnern/Netzen: nach 20 s ein Hinweis, nach 60 s eine Fehlermeldung (erneut „Beitreten“ möglich)
+          let timer = 0;
+          const slow = window.setTimeout(() => {
+            if (!done && room === r) setMsg('Der Aufbau dauert ungewöhnlich lange – bitte noch einen Moment warten …', 'note');
+          }, 20000);
+          const arm = (ms: number) => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => {
+              if (done || room !== r) return;
+              window.clearTimeout(slow);
+              st.textContent = '';
+              setMsg('Die Verbindung zum Host kam nicht zustande. Ist sein Spiel noch geöffnet? Mit „Beitreten“ erneut versuchen; bei strengen Firewalls hilft ein TURN-Server (Einstellungen).');
+              r.close();
+              this.closeLink();
+            }, ms);
+          };
+          arm(60000);
+          r.onEvent = async (ev) => {
+            if (room !== r) return;
+            if (ev.t === 'closed') {
+              window.clearTimeout(timer);
+              st.textContent = '';
+              setMsg(ev.reason);
+            } else if (ev.t === 'msg' && ev.from === 0) {
+              if (ev.data.startsWith('{')) {
+                // Fehlermeldung des Hosts (z. B. Spiel voll)
+                window.clearTimeout(timer);
+                try {
+                  setMsg(String((JSON.parse(ev.data) as { err?: string }).err ?? 'Abgelehnt.'));
+                } catch {
+                  setMsg('Abgelehnt.');
+                }
+                r.close();
+                return;
+              }
+              try {
+                st.textContent = 'Verbindungsangebot erhalten – antworte …';
+                const { link, code } = await PeerLink.join(this.settings.ice, ev.data, name);
+                if (room !== r) return link.close();
+                this.link = link;
+                // Ereignisse vor dem Absenden der Antwort festlegen: die Verbindung kann sofort aufgehen
+                link.onClose = (reason) => {
+                  if (this.link === link && !done) setMsg(reason);
+                };
+                link.onOpen = () => {
+                  window.clearTimeout(timer);
+                  window.clearTimeout(slow);
+                  r.stopListening();
+                  done = true;
+                  if (this.link === link) this.guestLobby(link, name);
+                };
+                await r.send(0, code);
+                if (link.state !== 'open') st.textContent = 'Antwort gesendet – warte auf die direkte Verbindung …';
+              } catch (e) {
+                setMsg(e instanceof SignalError || e instanceof RoomError ? e.message : `Verbindungsfehler: ${(e as Error).message}`);
+              }
+            }
+          };
+          r.listen();
+        };
+        try {
+          await attempt();
+        } catch (e) {
+          st.textContent = '';
+          setMsg((e as Error).message);
+        } finally {
+          busy = false;
+        }
+      },
+    });
+    if (prefill) codeEl.focus();
+  }
+
+  // ---------------------------------------------------------------- Mehrspieler: manueller Code-Austausch (ohne Server)
+  private hostManualScreen(): void {
+    this.closeLink();
+    const box = this.show(`<h2>Spiel erstellen (manueller Code-Austausch)</h2>
+      <p class="note">Für Server ohne Spielcode-Vermittlung, für einen Mitspieler. Schritt 1: Einladung erzeugen und den Code
+      (z. B. per Messenger) schicken. Schritt 2: Seinen Antwortcode hier einfügen. Netzwerk: ${this.iceSummary()} – <a href="#" data-a="settings">ändern</a></p>
       <div class="row"><label>Euer Name</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
       <div class="row"><button class="btn primary" data-a="make">Einladung erzeugen</button><span data-st class="note"></span></div>
       <div data-step2 class="hidden">
@@ -413,9 +606,7 @@ export class Menu {
     const make = async () => {
       this.closeLink();
       setMsg('');
-      const name = box.querySelector<HTMLInputElement>('[data-f=name]')!.value.trim().slice(0, 20) || 'Spieler';
-      this.settings.name = name;
-      saveSettings(this.settings);
+      const name = this.saveName(box);
       st.textContent = 'Sammle Verbindungswege (ICE) … das dauert einige Sekunden.';
       box.querySelector('[data-step2]')!.classList.add('hidden');
       try {
@@ -428,7 +619,7 @@ export class Menu {
           if (this.link === link) setMsg(reason);
         };
         link.onOpen = () => {
-          if (this.link === link) this.hostLobby(link, name);
+          if (this.link === link) this.hostLobby({ name, manualLink: link });
         };
       } catch (e) {
         st.textContent = '';
@@ -462,10 +653,9 @@ export class Menu {
     box.querySelector('[data-a=settings]')?.addEventListener('click', (e) => e.preventDefault());
   }
 
-  // ---------------------------------------------------------------- Mehrspieler: Beitreten (Spieler B)
-  private joinScreen(): void {
+  private joinManualScreen(): void {
     this.closeLink();
-    const box = this.show(`<h2>Spiel beitreten</h2>
+    const box = this.show(`<h2>Spiel beitreten (manueller Code-Austausch)</h2>
       <p class="note">Schritt 1: Den Einladungscode des Erstellers einfügen. Schritt 2: Den erzeugten Antwortcode zurückschicken.
       Netzwerk: ${this.iceSummary()} – <a href="#" data-a="settings">ändern</a></p>
       <div class="row"><label>Euer Name</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
@@ -506,9 +696,7 @@ export class Menu {
         busy = true;
         this.closeLink();
         setMsg('');
-        const name = box.querySelector<HTMLInputElement>('[data-f=name]')!.value.trim().slice(0, 20) || 'Spieler';
-        this.settings.name = name;
-        saveSettings(this.settings);
+        const name = this.saveName(box);
         st.textContent = 'Prüfe Einladung und sammle Verbindungswege …';
         try {
           const { link, code, offer: o } = await PeerLink.join(this.settings.ice, offer, name);
@@ -537,44 +725,202 @@ export class Menu {
   }
 
   // ---------------------------------------------------------------- Lobby
-  private lobbyHtml(st: LobbyState, me: number, isHost: boolean): string {
-    const SLOT_NAMES = slotNames(st.map);
+  private seatLabel(st: LobbyState, k: number): string {
+    const names = slotNames(st.map, seated(st).length);
+    return names[k] ?? `Platz ${k + 1}`;
+  }
+
+  private lobbyHtml(st: LobbyState, me: number, isHost: boolean, code = ''): string {
+    const n = seated(st).length;
+    const nSlots = n > 2 ? 4 : 2;
+    const slotSel = (p: LobbyPlayer, attr: string) =>
+      `<select ${attr}>${Array.from({ length: nSlots }, (_, k) => `<option value="${k}" ${k === p.slot ? 'selected' : ''}>${esc(this.seatLabel(st, k))}</option>`).join('')}</select>`;
     const rows = st.players
       .map((p, i) => {
+        const kind = p.kind ?? (i === 0 ? 'host' : 'human');
         const mine = i === me;
-        return `<tr><td>${i === 0 ? 'Host' : 'Gast'}</td><td>${mine ? `<input type="text" data-f="name" maxlength="20" value="${esc(p.name)}">` : esc(p.name)}</td>
-        <td>${mine ? `<select data-f="fac">${this.factionOptions(p.faction)}</select>` : FACTION_DEFS[p.faction].name}</td>
-        <td>${mine ? `<select data-f="color">${this.colorOptions(p.color)}</select>` : `<span class="swatch" style="background:${PLAYER_COLORS[p.color]}"></span> ${PLAYER_COLOR_NAMES[p.color]}`}</td>
-        <td>${mine ? `<select data-f="slot">${SLOT_NAMES.map((n, k) => `<option value="${k}" ${k === p.slot ? 'selected' : ''}>${n}</option>`).join('')}</select>` : SLOT_NAMES[p.slot]}</td>
-        <td>${mine ? `<label><input type="checkbox" data-f="ready" ${p.ready ? 'checked' : ''}> bereit</label>` : p.ready ? '<span class="ok">bereit</span>' : 'wählt …'}</td></tr>`;
+        const hostEdits = isHost && kind === 'ai';
+        const who = kind === 'host' ? 'Host' : kind === 'human' ? 'Mitspieler' : kind === 'ai' ? 'KI' : '';
+        if (kind === 'open' || kind === 'closed') {
+          const sel = isHost && i > 0
+            ? `<select data-seat="${i}" data-k="kind"><option value="open" ${kind === 'open' ? 'selected' : ''}>offen für Mitspieler</option><option value="ai:normal">KI (normal)</option><option value="ai:leicht">KI (leicht)</option><option value="closed" ${kind === 'closed' ? 'selected' : ''}>geschlossen</option></select>`
+            : kind === 'open' ? 'offen' : 'geschlossen';
+          return `<tr class="seat-${kind}"><td>Platz ${i + 1}</td><td colspan="4">${kind === 'open' ? '<span class="note">wartet auf Mitspieler …</span>' : '<span class="note">–</span>'}</td><td>${sel}</td></tr>`;
+        }
+        const nameCell = mine ? `<input type="text" data-f="name" maxlength="20" value="${esc(p.name)}">` : esc(p.name);
+        const facCell = mine ? `<select data-f="fac">${this.factionOptions(p.faction, true)}</select>` : hostEdits ? `<select data-seat="${i}" data-k="fac">${this.factionOptions(p.faction, true)}</select>` : FACTION_DEFS[p.faction].name;
+        const colCell = mine ? `<select data-f="color">${this.colorOptions(p.color)}</select>` : hostEdits ? `<select data-seat="${i}" data-k="color">${this.colorOptions(p.color)}</select>` : `<span class="swatch" style="background:${PLAYER_COLORS[p.color]}"></span> ${PLAYER_COLOR_NAMES[p.color]}`;
+        const slotCell = mine ? slotSel(p, 'data-f="slot"') : hostEdits ? slotSel(p, `data-seat="${i}" data-k="slot"`) : esc(this.seatLabel(st, p.slot));
+        const readyCell = kind === 'ai'
+          ? isHost ? `<select data-seat="${i}" data-k="kind"><option value="ai:normal" ${p.ai !== 'leicht' ? 'selected' : ''}>KI (normal)</option><option value="ai:leicht" ${p.ai === 'leicht' ? 'selected' : ''}>KI (leicht)</option><option value="open">Platz öffnen</option><option value="closed">schließen</option></select>` : `<span class="note">KI (${p.ai ?? 'normal'})</span>`
+          : mine ? `<label><input type="checkbox" data-f="ready" ${p.ready ? 'checked' : ''}> bereit</label>` : p.ready ? '<span class="ok">bereit</span>' : 'wählt …';
+        const kick = isHost && kind === 'human' ? ` <button class="btn small" data-kick="${i}" title="Mitspieler entfernen">✕</button>` : '';
+        return `<tr><td>${who}</td><td>${nameCell}</td><td>${facCell}</td><td>${colCell}</td><td>${slotCell}</td><td>${readyCell}${kick}</td></tr>`;
       })
       .join('');
-    const conflicts: string[] = [];
-    if (st.players.length === 2) {
-      if (st.players[0].color === st.players[1].color) conflicts.push('Beide haben dieselbe Farbe gewählt.');
-      if (st.players[0].slot === st.players[1].slot) conflicts.push('Beide haben denselben Startort gewählt.');
-    }
-    return `<h2>Lobby</h2><p class="note ok">Direkte Verbindung steht.</p>
+    const codeBox = code
+      ? `<div class="code-panel"><div class="note">Spielcode für eure Mitspieler</div><div class="game-code" data-code>${esc(formatCode(code))}</div>
+        <div><button class="btn" data-a="copycode">Code kopieren</button> <button class="btn" data-a="copylink">Einladungslink kopieren</button></div>
+        <div class="note">Mitspieler wählen „Mit Spielcode beitreten“ und geben den Code ein – oder öffnen den Link.</div></div>`
+      : '';
+    return `<h2>Lobby</h2>${codeBox}
       <table class="lobby-table"><tr><th></th><th>Name</th><th>Partei</th><th>Farbe</th><th>Startort</th><th></th></tr>${rows}</table>
+      <p class="note">Jede Partei darf mehrfach gewählt werden; Farbe und Startort müssen sich unterscheiden. ${n > 2 ? 'Mit drei oder vier Spielern wird die Karte größer (160 × 160 Kacheln) – jeder gegen jeden.' : ''}</p>
       ${st.players[me] ? this.factionInfo(st.players[me].faction, st.players[me].color) : ''}
       <div class="row"><label>Karte</label>${isHost ? `<select data-f="map">${this.mapOptions(st.map, false)}</select>` : `<b>${MAP_INFO[st.map].name}</b>`}</div>
       ${this.mapInfo(st.map)}
-      <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${goalOptions(st.goal)}</select>` : st.goal || "aus (nur militärisch)"}
+      <div class="row"><label>Prestigeziel</label>${isHost ? `<select data-f="goal">${goalOptions(st.goal)}</select>` : st.goal || 'aus (nur militärisch)'}
         <label style="min-width:0;margin-left:16px">Startrohstoffe</label>${isHost ? `<select data-f="rich"><option value="0" ${st.rich ? '' : 'selected'}>normal</option><option value="1" ${st.rich ? 'selected' : ''}>reichlich</option></select>` : st.rich ? 'reichlich' : 'normal'}</div>
-      <div class="row err">${conflicts.join(' ')}</div>
-      <div class="row">${isHost ? '<button class="btn primary" data-a="start">Partie starten</button>' : '<span class="note">Der Host startet die Partie, sobald beide bereit sind.</span>'}
+      <div class="row">${isHost ? '<button class="btn primary" data-a="start">Partie starten</button>' : '<span class="note">Der Host startet die Partie, sobald alle bereit sind.</span>'}
       <button class="btn" data-a="leave">Lobby verlassen</button></div><div class="row"><span data-msg class="err"></span></div>
       <p class="note">Hinweis: Der Browser des Hosts berechnet die Partie. Schließt der Host die Seite, endet die Sitzung.</p>`;
   }
 
-  private hostLobby(link: PeerLink, name: string): void {
+  /** Farben und Startorte eindeutig halten (der Host gleicht nach jeder Änderung an). */
+  private normalizeSeats(st: LobbyState): void {
+    const list = seated(st);
+    const nSlots = list.length > 2 ? 4 : 2;
+    const usedC = new Set<number>(), usedS = new Set<number>();
+    for (const p of list) {
+      if (usedC.has(p.color)) p.color = [0, 1, 2, 3].find((c) => !usedC.has(c)) ?? p.color;
+      usedC.add(p.color);
+      if (p.slot >= nSlots || usedS.has(p.slot)) p.slot = Array.from({ length: nSlots }, (_, k) => k).find((k) => !usedS.has(k)) ?? 0;
+      usedS.add(p.slot);
+    }
+  }
+
+  /**
+   * Lobby des Hosts. Mitspieler kommen über den Spielcode-Raum (room) oder über eine manuell aufgebaute Verbindung.
+   */
+  private hostLobby(o: { name: string; room?: Room; manualLink?: PeerLink }): void {
     const map0 = this.settings.map === 'zufall' ? randomMap() : this.settings.map;
-    const st: LobbyState = { players: [{ name, color: 0, slot: 0, ready: false, faction: this.settings.faction }], goal: RULES.prestigeGoalDefault, rich: false, map: map0 };
+    const open = (k: number): LobbyPlayer => ({ name: '', color: k, slot: k, ready: false, faction: 'angeln', kind: o.manualLink ? (k === 1 ? 'open' : 'closed') : 'open' });
+    const st: LobbyState = {
+      players: [{ name: o.name, color: 0, slot: 0, ready: false, faction: this.settings.faction, kind: 'host' }, open(1), open(2), open(3)],
+      goal: RULES.prestigeGoalDefault, rich: false, map: map0,
+    };
+    const room = o.room;
+    /** verbundene Mitspieler: Platz → Verbindung */
+    const seats = new Map<number, PeerLink>();
+    /** im Aufbau befindliche Verbindungen: Raum-ID → Verbindung */
+    const pending = new Map<number, PeerLink>();
     let started = false;
-    const broadcast = () => link.send({ t: 'lobby', st } satisfies HostMsg);
+    let note = '';
+    // für Ende-zu-Ende-Tests und Fehlersuche: Zustand der Host-Lobby
+    (window as unknown as { __lobby: unknown }).__lobby = { st, seats, pending };
+    const broadcast = () => {
+      this.normalizeSeats(st);
+      for (const l of seats.values()) l.send({ t: 'lobby', st } satisfies HostMsg);
+    };
+    const freeSeat = () => st.players.findIndex((p, k) => k > 0 && p.kind === 'open');
+    const leaveLobby = () => {
+      if (started) return;
+      for (const l of [...seats.values(), ...pending.values()]) {
+        l.send({ t: 'bye', reason: 'Der Host hat die Lobby geschlossen.' } satisfies HostMsg);
+        window.setTimeout(() => l.close(), 200);
+      }
+      room?.close(false, 'Der Host hat das Spiel geschlossen.');
+      this.lobbyCleanup = null;
+      this.main();
+    };
+    this.lobbyCleanup = leaveLobby;
+
+    const attach = (link: PeerLink) => {
+      let seat = -1;
+      link.onMessage = (raw) => {
+        const m = parseGuestMsg(raw);
+        if (!m || started) return;
+        if (m.t === 'hello') {
+          if (seat >= 0 && seats.get(seat) === link) {
+            // wiederholte Begrüßung (der Gast hat noch keine Antwort gesehen): nur erneut antworten
+            link.send({ t: 'welcome', v: PROTOCOL_VERSION, seat } satisfies HostMsg);
+            link.send({ t: 'lobby', st } satisfies HostMsg);
+            return;
+          }
+          if (m.v !== PROTOCOL_VERSION) {
+            link.send({ t: 'reject', reason: `Andere Spielversion (Host v${PROTOCOL_VERSION}, ihr v${m.v}). Bitte beide die Seite neu laden.` } satisfies HostMsg);
+            return;
+          }
+          seat = freeSeat();
+          if (seat < 0) {
+            link.send({ t: 'reject', reason: 'Das Spiel ist bereits voll.' } satisfies HostMsg);
+            window.setTimeout(() => link.close(), 300);
+            return;
+          }
+          seats.set(seat, link);
+          st.players[seat] = { name: m.name, color: seat, slot: seat, ready: false, faction: m.faction, kind: 'human' };
+          link.send({ t: 'welcome', v: PROTOCOL_VERSION, seat } satisfies HostMsg);
+          note = `${m.name} ist beigetreten.`;
+          sound.play('built');
+          broadcast();
+          render();
+        } else if (m.t === 'lset' && seat > 0 && st.players[seat]?.kind === 'human') {
+          st.players[seat] = { ...st.players[seat], name: m.name, color: m.color, slot: m.slot, ready: m.ready, faction: m.faction };
+          broadcast();
+          render();
+        } else if (m.t === 'ping') link.send({ t: 'pong', n: m.n } satisfies HostMsg);
+        else if (m.t === 'bye') gone(`${st.players[seat]?.name ?? 'Ein Mitspieler'} hat die Lobby verlassen.`);
+      };
+      const gone = (text: string) => {
+        if (started || seat < 0 || seats.get(seat) !== link) return;
+        seats.delete(seat);
+        st.players[seat] = open(seat);
+        if (st.players[seat].kind === 'closed') st.players[seat].kind = 'open';
+        note = text;
+        broadcast();
+        render();
+      };
+      link.onClose = (reason) => gone(`Verbindung zu einem Mitspieler getrennt: ${reason}`);
+    };
+
+    if (o.manualLink) {
+      attach(o.manualLink);
+    }
+    if (room) {
+      room.onEvent = async (ev) => {
+        if (started) return;
+        if (ev.t === 'join') {
+          if (freeSeat() < 0) {
+            void room.send(ev.id, JSON.stringify({ err: 'Das Spiel ist bereits voll.' })).catch(() => undefined);
+            return;
+          }
+          try {
+            const { link, code } = await PeerLink.host(this.settings.ice, o.name);
+            pending.set(ev.id, link);
+            attach(link);
+            link.onOpen = () => pending.delete(ev.id);
+            await room.send(ev.id, code);
+            note = `${ev.name} verbindet sich …`;
+            render();
+          } catch (e) {
+            note = `Verbindung zu ${ev.name} fehlgeschlagen: ${(e as Error).message}`;
+            render();
+          }
+        } else if (ev.t === 'msg') {
+          const link = pending.get(ev.from);
+          if (!link) return;
+          try {
+            await link.acceptAnswer(ev.data);
+          } catch (e) {
+            note = `Antwort eines Mitspielers ungültig: ${(e as Error).message}`;
+            render();
+          }
+        } else if (ev.t === 'leave') {
+          const link = pending.get(ev.id);
+          if (link && link.state !== 'open') link.close();
+          pending.delete(ev.id);
+        } else if (ev.t === 'closed') {
+          note = `Spielcode nicht mehr gültig: ${ev.reason}`;
+          render();
+        }
+      };
+      room.listen();
+    }
+
     const render = () => {
       if (started) return;
-      const box = this.show(this.lobbyHtml(st, 0, true));
+      const box = this.show(this.lobbyHtml(st, 0, true, room?.code), true);
+      if (note) box.querySelector<HTMLElement>('[data-msg]')!.textContent = note;
       const f = (k: string) => box.querySelector<HTMLInputElement>(`[data-f="${k}"]`);
       const update = () => {
         const me = st.players[0];
@@ -584,42 +930,93 @@ export class Menu {
         me.ready = f('ready')!.checked;
         me.faction = f('fac')!.value as FactionId;
         this.settings.faction = me.faction;
-        saveSettings(this.settings);
         st.goal = Number(f('goal')!.value);
         st.rich = f('rich')!.value === '1';
         const nm = f('map')!.value as MapId;
         if (nm !== st.map) {
           st.map = nm;
           this.settings.map = nm;
-          saveSettings(this.settings);
-          // Kartenwechsel: Bereitschaft zurücksetzen, damit beide die neue Karte bestätigen
+          // Kartenwechsel: Bereitschaft zurücksetzen, damit alle die neue Karte bestätigen
           for (const p of st.players) p.ready = false;
         }
+        saveSettings(this.settings);
+        note = '';
         broadcast();
         render();
       };
-      ['fac', 'color', 'slot', 'ready', 'goal', 'rich', 'map'].forEach((k) => f(k)?.addEventListener('change', update));
-      f('name')?.addEventListener('change', update);
+      ['fac', 'color', 'slot', 'ready', 'goal', 'rich', 'map', 'name'].forEach((k) => f(k)?.addEventListener('change', update));
+      // Plätze 2–4: KI, offen, geschlossen
+      box.querySelectorAll<HTMLSelectElement>('[data-seat]').forEach((el) =>
+        el.addEventListener('change', () => {
+          const k = Number(el.dataset.seat);
+          const p = st.players[k];
+          const v = el.value;
+          if (el.dataset.k === 'kind') {
+            if (v.startsWith('ai:')) {
+              const fac = FACTIONS[Math.floor(Math.random() * FACTIONS.length)];
+              st.players[k] = { name: AI_NAMES[fac], color: k, slot: k, ready: true, faction: fac, kind: 'ai', ai: v === 'ai:leicht' ? 'leicht' : 'normal' };
+            } else st.players[k] = { ...open(k), kind: v === 'closed' ? 'closed' : 'open' };
+          } else if (el.dataset.k === 'fac') {
+            p.faction = v as FactionId;
+            if (p.kind === 'ai') p.name = AI_NAMES[p.faction];
+          } else if (el.dataset.k === 'color') p.color = Number(v);
+          else if (el.dataset.k === 'slot') p.slot = Number(v);
+          note = '';
+          broadcast();
+          render();
+        }),
+      );
+      box.querySelectorAll<HTMLButtonElement>('[data-kick]').forEach((b) =>
+        b.addEventListener('click', () => {
+          const k = Number(b.dataset.kick);
+          const l = seats.get(k);
+          if (l) {
+            l.send({ t: 'bye', reason: 'Der Host hat euch aus der Lobby entfernt.' } satisfies HostMsg);
+            window.setTimeout(() => l.close(), 200);
+          }
+          seats.delete(k);
+          st.players[k] = open(k);
+          st.players[k].kind = 'open';
+          broadcast();
+          render();
+        }),
+      );
+      const copy = (text: string, ok: string) =>
+        void navigator.clipboard?.writeText(text).then(
+          () => (box.querySelector<HTMLElement>('[data-msg]')!.textContent = ok),
+          () => (box.querySelector<HTMLElement>('[data-msg]')!.textContent = `Bitte manuell kopieren: ${text}`),
+        );
       this.bind(box, {
-        leave: () => this.main(),
+        leave: leaveLobby,
+        copycode: () => room && copy(formatCode(room.code), 'Spielcode kopiert.'),
+        copylink: () => room && copy(`${location.origin}${location.pathname}?spiel=${room.code}`, 'Einladungslink kopiert.'),
         start: () => {
           const m = box.querySelector<HTMLElement>('[data-msg]')!;
-          if (st.players.length < 2) return void (m.textContent = 'Der Mitspieler ist noch nicht in der Lobby.');
-          if (!st.players.every((p) => p.ready)) return void (m.textContent = 'Beide Spieler müssen „bereit“ sein.');
-          if (st.players[0].color === st.players[1].color || st.players[0].slot === st.players[1].slot)
-            return void (m.textContent = 'Farbe und Startort müssen sich unterscheiden.');
+          const list = seated(st);
+          if (list.length < 2) return void (m.textContent = 'Es fehlt noch ein Gegner – wartet auf einen Mitspieler oder setzt eine KI auf einen Platz.');
+          if (!list.every((p) => p.kind === 'ai' || p.ready)) return void (m.textContent = 'Alle Spieler müssen „bereit“ sein.');
+          this.normalizeSeats(st);
           started = true;
+          this.lobbyCleanup = null;
+          room?.close(true);
+          for (const l of pending.values()) if (l.state !== 'open') l.close();
           const seed = (Math.random() * 2 ** 31) | 0;
-          link.send({ t: 'start', seed, goal: st.goal, rich: st.rich, me: 1, players: st.players, map: st.map } satisfies HostMsg);
+          const links = new Map<number, PeerLink>();
+          list.forEach((p, id) => {
+            const seatIdx = st.players.indexOf(p);
+            const l = seats.get(seatIdx);
+            if (l) links.set(id, l);
+          });
+          for (const [id, l] of links) l.send({ t: 'start', seed, goal: st.goal, rich: st.rich, me: id, players: list, map: st.map } satisfies HostMsg);
           const world = new World({
             seed,
             mapId: st.map,
-            players: st.players.map((p) => ({ name: p.name, color: p.color, slot: p.slot, isAI: false, faction: p.faction })),
+            players: list.map((p) => ({ name: p.name, color: p.color, slot: p.slot, isAI: p.kind === 'ai', aiLevel: p.ai ?? 'normal', faction: p.faction })),
             prestigeGoal: st.goal,
             richStart: st.rich,
           });
-          const driver = new HostDriver(world, link);
-          this.link = null; // gehört jetzt dem Treiber
+          const driver = new HostDriver(world, links);
+          this.link = null; // Verbindungen gehören jetzt dem Treiber
           this.enterGame(() => Game.create(driver, {
             tutorial: false,
             hints: this.settings.hints,
@@ -630,54 +1027,36 @@ export class Menu {
         },
       });
     };
-    link.onMessage = (raw) => {
-      const m = parseGuestMsg(raw);
-      if (!m || started) return;
-      if (m.t === 'hello') {
-        if (m.v !== PROTOCOL_VERSION) {
-          link.send({ t: 'reject', reason: `Andere Protokollversion (Host v${PROTOCOL_VERSION}, Gast v${m.v}).` } satisfies HostMsg);
-          return;
-        }
-        link.send({ t: 'welcome', v: PROTOCOL_VERSION } satisfies HostMsg);
-        st.players[1] = { name: m.name, color: st.players[0].color === 1 ? 0 : 1, slot: st.players[0].slot === 0 ? 1 : 0, ready: false, faction: m.faction };
-        broadcast();
-        render();
-      } else if (m.t === 'lset' && st.players[1]) {
-        st.players[1] = { name: m.name, color: m.color, slot: m.slot, ready: m.ready, faction: m.faction };
-        broadcast();
-        render();
-      } else if (m.t === 'ping') link.send({ t: 'pong', n: m.n });
-      else if (m.t === 'bye') {
-        st.players.length = 1;
-        render();
-        const box = this.root.querySelector('[data-msg]');
-        if (box) box.textContent = 'Der Mitspieler hat die Lobby verlassen.';
-      }
-    };
-    link.onClose = (reason) => {
-      if (started) return;
-      st.players.length = 1;
-      render();
-      const box = this.root.querySelector('[data-msg]');
-      if (box) box.textContent = `Verbindung getrennt: ${reason}`;
-    };
     render();
   }
 
   private guestLobby(link: PeerLink, name: string): void {
     let st: LobbyState | null = null;
     let started = false;
+    let mySeat = 1;
     const myPrefs = { name, color: 1, slot: 1, ready: false, faction: this.settings.faction };
-    link.send({ t: 'hello', v: PROTOCOL_VERSION, name, faction: this.settings.faction });
+    const hello = () => link.send({ t: 'hello', v: PROTOCOL_VERSION, name, faction: this.settings.faction });
+    hello();
+    // bis der Host antwortet, die Begrüßung wiederholen (falls sie beim Verbindungsaufbau verloren ging)
+    const helloTimer = window.setInterval(() => {
+      if (st || started || link.state !== 'open') window.clearInterval(helloTimer);
+      else hello();
+    }, 2000);
     const sendPrefs = () => link.send({ t: 'lset', ...myPrefs });
+    this.lobbyCleanup = () => {
+      link.send({ t: 'bye' });
+      window.setTimeout(() => link.close(), 200);
+      this.lobbyCleanup = null;
+      this.main();
+    };
     const render = (note = '') => {
       if (started) return;
       if (!st) {
-        const box = this.show(`<h2>Lobby</h2><p class="note">Verbunden – warte auf den Host …</p><div class="row"><button class="btn" data-a="leave">Verlassen</button></div>`);
-        this.bind(box, { leave: () => this.main() });
+        const box = this.show(`<h2>Lobby</h2><p class="note">Verbunden – warte auf den Host …</p><div class="row"><span data-msg class="err">${esc(note)}</span></div><div class="row"><button class="btn" data-a="leave">Verlassen</button></div>`);
+        this.bind(box, { leave: () => this.lobbyCleanup?.() });
         return;
       }
-      const box = this.show(this.lobbyHtml(st, 1, false));
+      const box = this.show(this.lobbyHtml(st, mySeat, false), true);
       if (note) box.querySelector('[data-msg]')!.textContent = note;
       const f = (k: string) => box.querySelector<HTMLInputElement>(`[data-f="${k}"]`);
       const update = () => {
@@ -691,31 +1070,38 @@ export class Menu {
         sendPrefs();
       };
       ['fac', 'color', 'slot', 'ready', 'name'].forEach((k) => f(k)?.addEventListener('change', update));
-      this.bind(box, { leave: () => this.main() });
+      this.bind(box, { leave: () => this.lobbyCleanup?.() });
     };
     link.onMessage = (raw) => {
       const m = parseHostMsg(raw);
       if (!m || started) return;
-      if (m.t === 'lobby') {
+      if (m.t === 'welcome') {
+        if (m.seat !== undefined) mySeat = m.seat;
+      } else if (m.t === 'lobby') {
         st = m.st;
-        const mine = st.players[1];
+        const mine = st.players[mySeat];
         if (mine) Object.assign(myPrefs, { color: mine.color, slot: mine.slot, ready: mine.ready, name: mine.name, faction: mine.faction });
         render();
       } else if (m.t === 'reject') {
+        window.clearInterval(helloTimer);
         render(m.reason);
       } else if (m.t === 'ping') link.send({ t: 'pong', n: m.n });
       else if (m.t === 'start') {
         started = true;
-        const driver = new GuestDriver(m.seed, m.me, link, m.map);
+        this.lobbyCleanup = null;
+        const driver = new GuestDriver(m.seed, m.me, link, m.map, m.players.length);
         this.link = null;
         this.enterGame(() => Game.create(driver, { tutorial: false, hints: this.settings.hints, onExit: () => this.exitGame() }, this.settings.renderer));
       } else if (m.t === 'bye') {
+        started = true;
+        this.lobbyCleanup = null;
         const box = this.show(`<h2>Lobby geschlossen</h2><p>${esc(m.reason)}</p><div class="row"><button class="btn" data-a="back">Zum Hauptmenü</button></div>`);
         this.bind(box, { back: () => this.main() });
       }
     };
     link.onClose = (reason) => {
       if (started) return;
+      this.lobbyCleanup = null;
       const box = this.show(`<h2>Verbindung getrennt</h2><p>${esc(reason)}</p><div class="row"><button class="btn" data-a="back">Zum Hauptmenü</button></div>`);
       this.bind(box, { back: () => this.main() });
     };

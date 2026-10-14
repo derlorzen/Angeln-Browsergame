@@ -111,6 +111,9 @@ an der Mühle oder „Lederwams“ in der Kaserne. Sie wirken einmalig und parte
 <p><b>Reparieren:</b> Beschädigte Gebäude mit Arbeitern rechts anklicken oder am Gebäude „Reparieren“ (Taste X) wählen.
 Kostet etwas Holz.</p>
 <p><b>Untätige Arbeiter:</b> Die Anzeige 💤 oben zählt sie; Klick darauf oder Taste „.“ springt zum nächsten.</p>
+<p><b>Mehrspieler:</b> „Spiel erstellen“ liefert einen Spielcode (z. B. K7M-2QX); bis zu drei Mitspieler geben ihn unter
+„Mit Spielcode beitreten“ ein oder öffnen den Einladungslink. Freie Plätze kann die KI übernehmen, jede Partei darf
+mehrfach vorkommen. Mit drei oder vier Spielern wird die Karte größer, jeder spielt gegen jeden.</p>
 <p><b>Sichern:</b> Die Partie wird regelmäßig automatisch gesichert. Nach versehentlichem Schließen bietet das Hauptmenü
 „Letzte Partie fortsetzen“ an.</p>
 <p><b>Kampf:</b> Kaserne bildet Späher (schnell, weite Sicht), Landsknechte (Nahkampf, stark gegen Gebäude) und
@@ -125,11 +128,11 @@ beschleunigen. Die Grabenspringer der Nordfriesen setzen über Knicks und Gräbe
 export const NETWORK_HTML = `
 <h3>Wie die direkte Verbindung funktioniert</h3>
 <div class="text note">
-<p><b>Statisches Hosting</b> liefert nur die Spieldateien aus. Es simuliert keine Partien und speichert keine Spielstände.</p>
-<p><b>Signaling</b> ist der Austausch der Verbindungsbeschreibungen (Angebot und Antwort). Hier geschieht das
-<b>manuell</b>: Ihr kopiert Einladungs- und Antwortcode selbst, z. B. per Messenger. Es gibt keinen Vermittlungsserver.
-Die Codes sind lang, weil sie die vollständige Beschreibung enthalten – ein kurzer Code könnte die Gegenstelle ohne
-Vermittlung nicht finden.</p>
+<p><b>Spielcode:</b> Der Server, der das Spiel ausliefert, vermittelt nur den Verbindungsaufbau (Angebot und Antwort,
+wenige Kilobyte). Danach läuft die Partie direkt zwischen den Browsern; der Server sieht keine Spielzüge und speichert
+nichts.</p>
+<p><b>Ohne Server</b> (rein statisches Hosting) tauscht ihr Einladungs- und Antwortcode selbst aus, z. B. per Messenger.
+Diese Codes sind lang, weil sie die vollständige Verbindungsbeschreibung enthalten.</p>
 <p><b>STUN</b> hilft jedem Browser, seine von außen sichtbare Adresse zu ermitteln. Das ist ein externer Dienst
 (standardmäßig ein öffentlicher STUN-Server), der keine Spieldaten sieht. Er ist abschaltbar.</p>
 <p><b>TURN</b> wäre ein Relay, das Daten weiterleitet, wenn keine direkte Verbindung möglich ist. Es ist <b>nicht</b>
@@ -138,6 +141,6 @@ voreingestellt; optional kann ein eigener TURN-Server eingetragen werden.</p>
 selben Heimnetz.</p>
 <p>Direktes WebRTC funktioniert nicht durch jedes NAT und jede Firewall (z. B. manche Mobilfunk- oder Firmennetze).
 Scheitert die Verbindung, zeigt das Spiel eine Meldung – eine universelle Verbindbarkeit kann nicht versprochen werden.</p>
-<p><b>Vertrauen:</b> Der Browser des Erstellers (Host) berechnet die Partie und prüft alle Befehle des Gastes. Der Gast
-kann daher nicht schummeln – gegen Manipulation durch den Host gibt es in dieser Architektur jedoch keine unabhängige Kontrolle.</p>
+<p><b>Vertrauen:</b> Der Browser des Erstellers (Host) berechnet die Partie und prüft alle Befehle der Mitspieler. Sie
+können daher nicht schummeln – gegen Manipulation durch den Host gibt es in dieser Architektur jedoch keine unabhängige Kontrolle.</p>
 </div>`;

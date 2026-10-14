@@ -37,6 +37,7 @@ const B = await newPlayer('Gast');
 try {
   // ---------- Einladung
   await A.page.click('[data-a=host]');
+  await A.page.click('[data-a=manual]'); // manueller Code-Austausch (Rückfall ohne Spielcode-Server)
   await A.page.fill('[data-f=name]', 'Anna');
   await A.page.click('[data-a=make]');
   await A.page.waitForFunction(() => document.querySelector('[data-f=offer]')?.value.length > 50, null, { timeout: 15000 });
@@ -45,6 +46,7 @@ try {
 
   // ---------- Fehlerfälle beim Beitreten
   await B.page.click('[data-a=join]');
+  await B.page.click('[data-a=manual]');
   await B.page.fill('[data-f=name]', 'Bert');
   await B.page.fill('[data-f=offer]', 'Unsinn123');
   await B.page.click('[data-a=answer]');
@@ -214,10 +216,12 @@ try {
   const G = await newPlayer('Gast2');
   try {
     await H.page.click('[data-a=host]');
+    await H.page.click('[data-a=manual]');
     await H.page.click('[data-a=make]');
     await H.page.waitForFunction(() => document.querySelector('[data-f=offer]')?.value.length > 50);
     const off = await H.page.inputValue('[data-f=offer]');
     await G.page.click('[data-a=join]');
+    await G.page.click('[data-a=manual]');
     await G.page.fill('[data-f=offer]', off);
     await G.page.click('[data-a=answer]');
     await G.page.waitForFunction(() => document.querySelector('[data-f=ans]')?.value.length > 50);

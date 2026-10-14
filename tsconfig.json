@@ -10,7 +10,7 @@
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["node"]
   },
   "include": ["src", "tests"]
 }

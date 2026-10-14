@@ -54,10 +54,10 @@ export class PeerLink {
       const s = this.pc.connectionState;
       if (s === 'failed') this.fail(this.failText());
       else if (s === 'disconnected') {
-        // kann sich erholen – kurz abwarten
+        // kann sich erholen (kurzer Netz- oder Lastaussetzer) – abwarten
         window.setTimeout(() => {
           if (this.pc.connectionState === 'disconnected') this.fail('Die Verbindung zum Mitspieler ist abgerissen.');
-        }, 6000);
+        }, 15000);
       }
     };
     this.pc.ondatachannel = (e) => this.attach(e.channel);

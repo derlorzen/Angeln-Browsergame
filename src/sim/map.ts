@@ -51,12 +51,14 @@ export interface GameMap {
   labels: { name: string; x: number; y: number }[];
 }
 
+/** Kartengröße (Kacheln je Kante) für zwei Spieler; drei oder vier Spieler bekommen eine größere Karte. */
 export const MAP_W = 128;
 export const MAP_H = 128;
-/** Maßstab gegenüber der ursprünglichen 96er-Karte: alle Kartenmaler sind in diesen Einheiten entworfen. */
-export const MAP_SC = (MAP_W - 1) / 95;
-const SC = MAP_SC;
-const D = 95 * SC; // Halbdiagonale der Raute in Kacheln
+/** größte mögliche Karte (Grenze für die Prüfung von Koordinaten in Netzwerkbefehlen) */
+export const MAP_MAX = 160;
+export function mapSizeFor(players: number): number {
+  return players > 2 ? MAP_MAX : MAP_W;
+}
 
 export function isWater(t: number): boolean {
   return t === T.WASSER || t === T.FLACH;
@@ -187,15 +189,25 @@ interface PaintResult {
   forest: number; // Schwelle für Rauschwald (höher = weniger)
   clay: number; // Schwelle für Lehmflecken (höher = weniger)
   forestOn?: number[];
+  /** Vier Spieler: Der Maler hat alle vier Startplätze selbst festgelegt */
+  fixed4?: boolean;
+  /** Vier Spieler: Namen der Startplätze 3 und 4 (bei selbst festgelegten Plätzen) */
+  names4?: [string, string];
+  /** Vier Spieler: Orte der Gegend (Name, Länge, Breite) – die frei gewählten Plätze heißen nach dem nächstgelegenen */
+  places?: [string, number, number][];
   /** nur Zufallskarte: erzeugte Namen statt der Katalogwerte */
   names?: { name: string; slotNames: string[]; marketName: string; siteName: string; siteText: string };
 }
 
 class Painter {
-  readonly w = MAP_W;
-  readonly h = MAP_H;
-  readonly terrain = new Uint8Array(MAP_W * MAP_H);
-  readonly trees = new Uint8Array(MAP_W * MAP_H);
+  readonly w: number;
+  readonly h: number;
+  /** Maßstab gegenüber der ursprünglichen 96er-Karte: alle Kartenmaler sind in diesen Einheiten entworfen. */
+  readonly SC: number;
+  /** Halbdiagonale der Raute in Kacheln */
+  readonly D: number;
+  readonly terrain: Uint8Array;
+  readonly trees: Uint8Array;
   readonly rng: Rng;
   readonly n1: (x: number, y: number) => number;
   readonly n2: (x: number, y: number) => number;
@@ -203,12 +215,17 @@ class Painter {
   /** Geografischer Bezug: Mittelpunkt und Kacheln je Breitengrad (maßstabstreu, Norden oben). */
   geo: { lon: number; lat: number; k: number; cos: number } | null = null;
   /** Maßstab für Radien und Breiten: beim Malen der Landschaft SC, für die Ausgleichsschritte danach 1 (in Kacheln abgestimmt). */
-  sc = SC;
+  sc: number;
 
-  constructor(seed: number) {
+  constructor(seed: number, size: number, readonly players: number) {
+    this.w = this.h = size;
+    this.SC = this.sc = (size - 1) / 95;
+    this.D = 95 * this.SC;
+    this.terrain = new Uint8Array(size * size);
+    this.trees = new Uint8Array(size * size);
     this.rng = new Rng(seed);
-    this.n1 = makeNoise(this.rng, this.w, this.h, 9 * SC);
-    this.n2 = makeNoise(this.rng, this.w, this.h, 5 * SC);
+    this.n1 = makeNoise(this.rng, this.w, this.h, 9 * this.SC);
+    this.n2 = makeNoise(this.rng, this.w, this.h, 5 * this.SC);
     this.n3 = makeNoise(this.rng, this.w, this.h, 4);
   }
   idx(x: number, y: number): number {
@@ -225,11 +242,11 @@ class Painter {
   }
   /** Raute: u −1 (West) … +1 (Ost), v 0 (Nord) … 1 (Süd) → Kachel */
   at(u: number, v: number): P2 {
-    const e = u * D, s = v * 2 * D;
+    const e = u * this.D, s = v * 2 * this.D;
     return { x: Math.round((s + e) / 2), y: Math.round((s - e) / 2) };
   }
   uv(x: number, y: number): { u: number; v: number } {
-    return { u: (x - y) / D, v: (x + y) / (2 * D) };
+    return { u: (x - y) / this.D, v: (x + y) / (2 * this.D) };
   }
   /**
    * Passt die Orte maßstabstreu in die Spielraute ein: Die begehbare Fläche ist ein auf der Spitze stehendes Quadrat
@@ -241,18 +258,18 @@ class Painter {
     const A = pts.map(([lo, la]) => lo * cos + la), B = pts.map(([lo, la]) => lo * cos - la);
     const ca = (Math.max(...A) + Math.min(...A)) / 2, cb = (Math.max(...B) + Math.min(...B)) / 2;
     const R = Math.max((Math.max(...A) - Math.min(...A)) / 2, (Math.max(...B) - Math.min(...B)) / 2, 0.02);
-    this.geo = { lon: (ca + cb) / 2 / cos, lat: (ca - cb) / 2, k: (D * margin) / R, cos };
+    this.geo = { lon: (ca + cb) / 2 / cos, lat: (ca - cb) / 2, k: (this.D * margin) / R, cos };
   }
   /** Länge/Breite → Kachel. */
   ll(lon: number, lat: number): P2 {
     const g = this.geo!;
-    const e = (lon - g.lon) * g.cos * g.k, s = D - (lat - g.lat) * g.k;
+    const e = (lon - g.lon) * g.cos * g.k, s = this.D - (lat - g.lat) * g.k;
     return { x: Math.round((s + e) / 2), y: Math.round((s - e) / 2) };
   }
   lonlat(x: number, y: number): { lon: number; lat: number } {
     const g = this.geo!;
     const e = x - y, s = x + y;
-    return { lon: g.lon + e / g.k / g.cos, lat: g.lat + (D - s) / g.k };
+    return { lon: g.lon + e / g.k / g.cos, lat: g.lat + (this.D - s) / g.k };
   }
   each(fn: (x: number, y: number, u: number, v: number, i: number) => void): void {
     for (let y = 0; y < this.h; y++)
@@ -357,24 +374,26 @@ const PAINTERS: Record<MapId, MapPainter> = {
   // ---------------------------------------------------------------- Schlei (Angeln)
   schlei: (p) => {
     const { n1, n2 } = p;
-    const geo = (e: number, s: number) => ({ x: Math.round((SC * (s + e)) / 2), y: Math.round((SC * (s - e)) / 2) });
+    // vier Spieler: die Schlei rückt etwas nach Westen, damit Schwansen im Osten Platz für eine Siedlung bietet
+    const four = p.players > 2;
+    const geo = (e: number, s: number) => ({ x: Math.round((p.SC * (s + e)) / 2), y: Math.round((p.SC * (s - e)) / 2) });
     p.each((x, y, _u, _v, i) => {
-      const e = (x - y) / SC, s = (x + y) / SC;
+      const e = (x - y) / p.SC, s = (x + y) / p.SC;
       const wob = Math.sin(s * 0.075) * 5 + (n1(x, y) - 0.5) * 6;
-      const thr = 49 + wob - Math.max(0, 50 - s) * 0.35;
+      const thr = (four ? 40 : 49) + wob - Math.max(0, 50 - s) * 0.35;
       let water = e > thr;
-      const eastBank = 80 + Math.sin(s * 0.11) * 4 + (n2(x, y) - 0.5) * 5;
+      const eastBank = (four ? 64 : 80) + Math.sin(s * 0.11) * 4 + (n2(x, y) - 0.5) * 5;
       if (e > eastBank && s > 70 && s < 140) water = false;
       p.terrain[i] = water ? T.WASSER : T.GRAS;
     });
-    const noor = geo(44, 96);
+    const noor = geo(four ? 36 : 44, 96);
     p.blob(noor.x, noor.y, 3.6, (x, y) => p.set(x, y, T.WASSER), 2);
-    const moor = geo(-62, 95);
+    const moor = four ? geo(-28, 128) : geo(-62, 95);
     p.blob(moor.x, moor.y, 5.2, (x, y) => p.get(x, y) === T.GRAS && p.set(x, y, T.MOOR), 4);
     // Kappeln im Norden, Arnis im Süden – weit auseinander (Entfernungen bewusst gestreckt)
-    const s0 = geo(26, 40), s1 = geo(26, 150);
+    const s0 = geo(four ? 18 : 26, 40), s1 = geo(four ? 18 : 26, 150);
     const mir = (dx0: number, dy0: number, si: number) => {
-      const dx = Math.round(dx0 * SC), dy = Math.round(dy0 * SC);
+      const dx = Math.round(dx0 * p.SC), dy = Math.round(dy0 * p.SC);
       return si === 0 ? { dx, dy } : { dx: -dy, dy: -dx };
     };
     [s0, s1].forEach((c, si) => {
@@ -382,11 +401,18 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.forestBlob(c.x + a.dx, c.y + a.dy, 3.2);
       p.forestBlob(c.x + b.dx, c.y + b.dy, 2.6);
     });
-    const m = geo(-41, 95);
-    p.forestBlob(m.x + Math.round(9 * SC), m.y - Math.round(5 * SC), 3);
-    p.forestBlob(m.x - Math.round(4 * SC), m.y + Math.round(9 * SC), 2.5);
+    const m = four ? geo(16, 95) : geo(-41, 95);
+    p.forestBlob(m.x + Math.round(9 * p.SC), m.y - Math.round(5 * p.SC), 3);
+    p.forestBlob(m.x - Math.round(4 * p.SC), m.y + Math.round(9 * p.SC), 2.5);
+    if (four) {
+      // Brücken nach Schwansen bei Missunde und Lindaunis, Wälder für die West- und Ostsiedlung
+      p.ford(geo(30, 84), geo(70, 84));
+      p.ford(geo(30, 116), geo(70, 116));
+      for (const [e, s2] of [[-52, 80], [-50, 112], [82, 82], [80, 110]] as const) p.forestBlob(geo(e, s2).x, geo(e, s2).y, 3);
+    }
     return {
-      slots: [s0, s1, geo(-18, 40), geo(-18, 150)],
+      slots: four ? [s0, s1, geo(-40, 95), geo(76, 95)] : [s0, s1, geo(-18, 40), geo(-18, 150)],
+      fixed4: four, names4: ['Satrup', 'Rieseby'],
       market: m, site: moor,
       labels: [{ name: 'Die Schlei', ...geo(62, 80) }, { name: 'Ostsee', ...geo(72, 40) }, { name: 'Schwansen', ...geo(87, 105) }],
       hedge: () => 'knick', hedgeDensity: 0.62, forest: 0.66, clay: 0.78,
@@ -411,9 +437,15 @@ const PAINTERS: Record<MapId, MapPainter> = {
     p.river([L(9.61, 54.885), L(9.64, 54.865), L(9.7, 54.852), L(9.8, 54.85), L(9.9, 54.85)], 6.5, T.WASSER, 1.5);
     const holnis = L(9.592, 54.864);
     p.blob(holnis.x, holnis.y, 2, (x, y) => p.set(x, y, T.GRAS), 0.5);
+    // vier Spieler: Fährweg Holnis–Brunsnæs und eine Furt an der Innenförde, damit alle den Markt ähnlich weit haben
+    if (p.players > 2) {
+      p.ford(L(9.588, 54.862), L(9.58, 54.9));
+      p.ford(L(9.5, 54.835), L(9.47, 54.86));
+    }
     for (const [lon, lat, r] of [[9.52, 54.815, 3], [9.47, 54.865, 3], [9.65, 54.905, 2.6], [9.63, 54.82, 2.8], [9.38, 54.78, 2.6], [9.42, 54.88, 2.4]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     return {
+      places: [['Harrislee', 9.39, 54.8], ['Glücksburg', 9.547, 54.834], ['Kruså', 9.4, 54.85], ['Broager', 9.68, 54.89], ['Langballig', 9.66, 54.82], ['Munkbrarup', 9.57, 54.8], ['Handewitt', 9.33, 54.76], ['Rinkenæs', 9.55, 54.89], ['Quern', 9.72, 54.77], ['Sörup', 9.66, 54.72], ['Tarp', 9.4, 54.66], ['Nybøl', 9.72, 54.93], ['Bov', 9.38, 54.84]],
       slots: [L(...S0), L(...S1), L(9.38, 54.87), L(9.547, 54.834)],
       market: L(...M), site: L(...F),
       labels: [
@@ -449,6 +481,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     const wallPts = [L(9.336, 54.457), L(9.4, 54.465), L(9.47, 54.474), L(9.51, 54.482), L(9.558, 54.488)];
     return {
+      places: [['Jagel', 9.54, 54.45], ['Hollingstedt', 9.34, 54.46], ['Busdorf', 9.58, 54.5], ['Fahrdorf', 9.61, 54.5], ['Jübek', 9.4, 54.55], ['Selk', 9.56, 54.47], ['Groß Rheide', 9.44, 54.44], ['Silberstedt', 9.37, 54.52], ['Fleckeby', 9.7, 54.48], ['Brekendorf', 9.62, 54.42], ['Lürschau', 9.5, 54.5], ['Owschlag', 9.6, 54.39]],
       slots: [L(...S0), L(...S1), L(9.6, 54.56), L(9.38, 54.39)],
       market: L(...M), site: L(...H),
       labels: [
@@ -483,9 +516,17 @@ const PAINTERS: Record<MapId, MapPainter> = {
     // Furt im Westen
     const fw = L(9.5, 54.305);
     p.ford({ x: fw.x - 5, y: fw.y - 5 }, { x: fw.x + 5, y: fw.y + 5 });
+    if (p.players > 2) {
+      // vier Spieler: zusätzliche Furten im Osten und Westen
+      for (const lon of [9.8, 9.38]) {
+        const f = L(lon, 54.304);
+        p.ford({ x: f.x - 5, y: f.y - 5 }, { x: f.x + 5, y: f.y + 5 });
+      }
+    }
     for (const [lon, lat, r] of [[9.56, 54.37, 3], [9.6, 54.24, 3], [9.72, 54.37, 2.6], [9.72, 54.24, 2.6], [9.5, 54.36, 2.2], [9.53, 54.255, 2.2]] as const)
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     return {
+      places: [['Hohn', 9.495, 54.3], ['Schacht-Audorf', 9.71, 54.31], ['Fockbek', 9.6, 54.3], ['Nübbel', 9.62, 54.27], ['Hamdorf', 9.5, 54.22], ['Borgstedt', 9.72, 54.34], ['Alt Duvenstedt', 9.65, 54.37], ['Bünsdorf', 9.74, 54.37], ['Brekendorf', 9.62, 54.42], ['Elsdorf-Westermühlen', 9.52, 54.27], ['Schülp', 9.65, 54.24], ['Osterrönfeld', 9.7, 54.29], ['Breiholz', 9.53, 54.2], ['Sehestedt', 9.82, 54.36], ['Nortorf', 9.85, 54.17]],
       slots: [L(...S0), L(...S1), L(9.48, 54.39), L(9.8, 54.24)],
       market: rb, site: L(...G),
       labels: [
@@ -528,6 +569,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     const dike = (pts: [number, number][]) => ({ kind: 'deich' as const, pts: pts.map(([lo, la]) => L(lo, la)) });
     return {
+      places: [['Husum', 9.058, 54.484], ['Friedrichstadt', 9.09, 54.375], ['Oldenswort', 8.93, 54.37], ['Garding', 8.78, 54.33], ['Hattstedt', 9.03, 54.53], ['Mildstedt', 9.08, 54.47], ['Viöl', 9.18, 54.57], ['Schwabstedt', 9.18, 54.4], ['Witzwort', 8.99, 54.4], ['Ostenfeld', 9.24, 54.47], ['Lunden', 9.03, 54.33], ['Drage', 9.16, 54.36], ['Bordelum', 8.93, 54.65], ['Tating', 8.7, 54.33]],
       slots: [L(...S0), L(...S1), L(8.93, 54.37), L(9.13, 54.4)],
       market: L(...M), site: L(...Rh),
       labels: [
@@ -535,8 +577,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
         { name: 'Pellworm', ...L(8.65, 54.525) }, { name: 'Eider', ...L(8.9, 54.283) }, { name: 'Hever', ...L(8.85, 54.45) },
       ],
       lines: [
-        { ...dike([[8.94, 54.515], [9.0, 54.483], [8.95, 54.443], [8.8, 54.42], [8.7, 54.394], [8.672, 54.362], [8.63, 54.33], [8.67, 54.3], [8.85, 54.311], [8.97, 54.322], [9.06, 54.31]]), gates: [L(8.79, 54.415), L(8.94, 54.448)] },
-        dike([[8.95, 54.43], [8.92, 54.38], [8.9, 54.335]]),
+        { ...dike([[8.94, 54.515], [9.0, 54.483], [8.95, 54.443], [8.8, 54.42], [8.7, 54.394], [8.672, 54.362], [8.63, 54.33], [8.67, 54.3], [8.85, 54.311], [8.97, 54.322], [9.06, 54.31]]), gates: [L(8.79, 54.415), L(8.94, 54.448), ...(p.players > 2 ? [L(8.9, 54.316), L(8.67, 54.36), L(8.99, 54.47)] : [])] },
+        { ...dike([[8.95, 54.43], [8.92, 54.38], [8.9, 54.335]]), gates: p.players > 2 ? [L(8.92, 54.38)] : undefined },
       ],
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : p.lonlat(x, y).lon < 9.03 ? 'graben' : 'knick'),
       hedgeDensity: 0.6, forest: 0.8, clay: 0.82, forestOn: [T.GRAS],
@@ -547,7 +589,8 @@ const PAINTERS: Record<MapId, MapPainter> = {
   ribe: (p) => {
     // Koordinaten per TomTom-Geocoding geprüft (Varde, Tønder, Ribe, Esbjerg, Fanø, Rømø, Mandø, Højer)
     const S0: [number, number] = [8.49, 55.65], S1: [number, number] = [8.867, 54.958], M: [number, number] = [8.765, 55.342], G: [number, number] = [9.0, 55.28];
-    p.fit([S0, S1, M, G]);
+    // vier Spieler: Ausschnitt weiter nach Osten in die Heide, damit vier Siedlungen auf das Festland passen
+    p.fit(p.players > 2 ? [S0, S1, M, G, [9.45, 55.3]] : [S0, S1, M, G]);
     const L = (lon: number, lat: number) => p.ll(lon, lat);
     // Küstenlinie (Länge je Breite) und Marschsaum
     const CO: [number, number][] = [[55.8, 8.3], [55.65, 8.36], [55.55, 8.42], [55.47, 8.46], [55.4, 8.58], [55.3, 8.64], [55.15, 8.64], [55.0, 8.66], [54.8, 8.66]];
@@ -595,6 +638,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
       p.forestBlob(L(lon, lat).x, L(lon, lat).y, r);
     const dike = (pts: [number, number][]) => ({ kind: 'deich' as const, pts: pts.map(([lo, la]) => L(lo, la)) });
     return {
+      places: [['Gram', 9.05, 55.29], ['Bramming', 8.7, 55.47], ['Holsted', 8.92, 55.51], ['Vejen', 9.15, 55.48], ['Rødding', 9.06, 55.37], ['Skærbæk', 8.76, 55.16], ['Toftlund', 9.07, 55.19], ['Løgumkloster', 8.95, 55.06], ['Brørup', 9.02, 55.48], ['Gredstedbro', 8.74, 55.4], ['Agerbæk', 8.81, 55.6], ['Esbjerg', 8.45, 55.47], ['Bredebro', 8.83, 55.06]],
       slots: [L(...S0), L(...S1), L(9.05, 55.6), L(9.05, 55.05)],
       market: L(...M), site: L(...G),
       labels: [
@@ -613,7 +657,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
     const R = new Rng((p.rng.state ^ 0x51ed270b) >>> 0);
     const pick = <X,>(a: readonly X[]): X => a[R.int(a.length)];
     // Achse der Startplätze (gegenüberliegende Ecken oder Kantenmitten der Raute)
-    const z = (v: number) => Math.round(v * SC);
+    const z = (v: number) => Math.round(v * p.SC);
     const AXES: [P2, P2][] = ([
       [{ x: 15, y: 15 }, { x: 80, y: 80 }], // Nord – Süd
       [{ x: 80, y: 15 }, { x: 15, y: 80 }], // Ost – West
@@ -628,15 +672,16 @@ const PAINTERS: Record<MapId, MapPainter> = {
     const along = (x: number, y: number) => (x - cx) * ax + (y - cy) * ay; // −… Spieler A, + Spieler B
     const across = (x: number, y: number) => (x - cx) * nx + (y - cy) * ny;
     const theme = pick(['angeln', 'angeln', 'marsch', 'geest', 'fluss'] as const);
-    const coastSide = R.next() < (theme === 'marsch' ? 1 : 0.55) ? (R.next() < 0.5 ? -1 : 1) : 0;
+    const coast0 = R.next() < (theme === 'marsch' ? 1 : 0.55) ? (R.next() < 0.5 ? -1 : 1) : 0;
+    const coastSide = p.players > 2 ? 0 : coast0; // vier Spieler: Startplätze ringsum, daher ohne Küste
     const heath = theme === 'geest' ? 0.45 : theme === 'marsch' ? 0.75 : R.range(0.62, 0.8);
     // Grundfläche, Küste parallel zur Achse (beide Seiten gleich nah am Meer)
-    const coastAt = (30 + R.range(-3, 4)) * SC;
+    const coastAt = (30 + R.range(-3, 4)) * p.SC;
     p.each((x, y, _u, _v, i) => {
       let t: number = p.n1(x + 17, y + 5) > heath ? T.HEIDE : T.GRAS;
       if (coastSide) {
-        const d = across(x, y) * coastSide - coastAt - (p.n1(x * 1.3, y * 1.3) - 0.5) * 9 * SC;
-        if (d > 0) t = theme === 'marsch' && d < 9 * SC ? T.WATT : T.WASSER;
+        const d = across(x, y) * coastSide - coastAt - (p.n1(x * 1.3, y * 1.3) - 0.5) * 9 * p.SC;
+        if (d > 0) t = theme === 'marsch' && d < 9 * p.SC ? T.WATT : T.WASSER;
       }
       p.terrain[i] = t;
     });
@@ -652,31 +697,31 @@ const PAINTERS: Record<MapId, MapPainter> = {
       }
       return pick(list);
     };
-    if (coastSide) labels.push({ name: theme === 'marsch' ? 'Wattenmeer' : pick(['Ostsee', 'Förde', 'Noor', 'Nordsee']), x: Math.round(cx + nx * coastSide * 40 * SC), y: Math.round(cy + ny * coastSide * 40 * SC) });
+    if (coastSide) labels.push({ name: theme === 'marsch' ? 'Wattenmeer' : pick(['Ostsee', 'Förde', 'Noor', 'Nordsee']), x: Math.round(cx + nx * coastSide * 40 * p.SC), y: Math.round(cy + ny * coastSide * 40 * p.SC) });
     // Fluss quer zwischen den Spielern mit Furten
     const roads: [P2, P2][] = [];
-    if (theme === 'fluss' || R.next() < 0.45) {
-      const off = R.range(-4, 4) * SC;
+    if (p.players <= 2 && (theme === 'fluss' || R.next() < 0.45)) {
+      const off = R.range(-4, 4) * p.SC;
       const pts: P2[] = [];
       for (let k0 = -60; k0 <= 60; k0 += 10) {
-        const k = k0 * SC;
-        pts.push({ x: Math.round(cx + nx * k + ax * (off + Math.sin(k0 / 13 + R.next()) * 4 * SC)), y: Math.round(cy + ny * k + ay * (off + Math.sin(k0 / 13) * 4 * SC)) });
+        const k = k0 * p.SC;
+        pts.push({ x: Math.round(cx + nx * k + ax * (off + Math.sin(k0 / 13 + R.next()) * 4 * p.SC)), y: Math.round(cy + ny * k + ay * (off + Math.sin(k0 / 13) * 4 * p.SC)) });
       }
       p.river(pts, R.range(2.2, 3.4), T.WASSER, 1.4);
       const fords = [R.range(-26, -12), R.range(12, 26)];
       if (R.next() < 0.6) fords.push(R.range(-4, 4));
       for (const f0 of fords) {
-        const f = f0 * SC;
+        const f = f0 * p.SC;
         const fx = Math.round(cx + nx * f + ax * off), fy = Math.round(cy + ny * f + ay * off);
         p.ford({ x: Math.round(fx - ax * 6), y: Math.round(fy - ay * 6) }, { x: Math.round(fx + ax * 6), y: Math.round(fy + ay * 6) });
       }
-      labels.push({ name: fresh(RIVERS), x: Math.round(cx + nx * 30 * SC + ax * (off + 3)), y: Math.round(cy + ny * 30 * SC + ay * (off + 3)) });
+      labels.push({ name: fresh(RIVERS), x: Math.round(cx + nx * 30 * p.SC + ax * (off + 3)), y: Math.round(cy + ny * 30 * p.SC + ay * (off + 3)) });
     }
     // Seen und Moore, gespiegelt verteilt (je Seite gleich viele)
     const nLakes = R.int(3), nMoors = 1 + R.int(3);
     for (let k = 0; k < nLakes + nMoors; k++) {
       const lake = k < nLakes;
-      const s = R.range(8, 26) * SC * (R.next() < 0.5 ? -1 : 1), q = R.range(-24, 24) * SC;
+      const s = R.range(8, 26) * p.SC * (R.next() < 0.5 ? -1 : 1), q = R.range(-24, 24) * p.SC;
       for (const sign of [-1, 1]) {
         const x = Math.round(cx + ax * s * sign + nx * q * sign), y = Math.round(cy + ay * s * sign + ny * q * sign);
         const r = lake ? R.range(2, 3.4) : R.range(2.6, 4.5);
@@ -687,7 +732,7 @@ const PAINTERS: Record<MapId, MapPainter> = {
     }
     // Wälder je Seite
     for (let k = 0; k < 3 + R.int(3); k++) {
-      const s = R.range(6, 30) * SC, q = R.range(-26, 26) * SC, r = R.range(2.2, 3.6);
+      const s = R.range(6, 30) * p.SC, q = R.range(-26, 26) * p.SC, r = R.range(2.2, 3.6);
       for (const sign of [-1, 1]) p.forestBlob(Math.round(cx + ax * s * sign + nx * q * sign), Math.round(cy + ay * s * sign + ny * q * sign), r);
     }
     // Deich an der Marschküste
@@ -695,22 +740,27 @@ const PAINTERS: Record<MapId, MapPainter> = {
     if (theme === 'marsch' && coastSide) {
       const pts: P2[] = [];
       for (let k0 = -70; k0 <= 70; k0 += 10) {
-        const k = k0 * SC;
+        const k = k0 * p.SC;
         pts.push({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) });
       }
-      lines.push({ kind: 'deich', pts, gates: [-30, 0, 30].map((k0) => k0 * SC).map((k) => ({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) })) });
+      lines.push({ kind: 'deich', pts, gates: [-30, 0, 30].map((k0) => k0 * p.SC).map((k) => ({ x: Math.round(cx + ax * k + nx * coastSide * (coastAt - 3)), y: Math.round(cy + ay * k + ny * coastSide * (coastAt - 3)) })) });
     }
     const hedgeKind: Hedge = theme === 'marsch' ? 'graben' : theme === 'geest' && R.next() < 0.5 ? null : 'knick';
     const towns = [fresh(TOWNS), fresh(TOWNS), fresh(TOWNS), fresh(TOWNS)];
     const marketTown = fresh(TOWNS);
     const site = pick(SITES);
-    const q = (R.next() < 0.5 ? -1 : 1) * R.range(14, 22) * SC;
+    const q = (R.next() < 0.5 ? -1 : 1) * R.range(14, 22) * p.SC;
     // Fundstelle quer zur Achse, aber nicht in der Küste
     const sq = coastSide ? -coastSide * Math.abs(q) : q;
     void along;
     return {
-      slots: [a, b, { x: Math.round(cx + nx * 34 * SC), y: Math.round(cy + ny * 34 * SC) }, { x: Math.round(cx - nx * 34 * SC), y: Math.round(cy - ny * 34 * SC) }],
-      market: { x: Math.round(cx + nx * R.range(-6, 6) * SC), y: Math.round(cy + ny * R.range(-6, 6) * SC) },
+      slots: p.players > 2
+        ? (() => {
+          const half = Math.hypot(b.x - a.x, b.y - a.y) / 2;
+          return [a, b, { x: Math.round(cx + nx * half), y: Math.round(cy + ny * half) }, { x: Math.round(cx - nx * half), y: Math.round(cy - ny * half) }];
+        })()
+        : [a, b, { x: Math.round(cx + nx * 34 * p.SC), y: Math.round(cy + ny * 34 * p.SC) }, { x: Math.round(cx - nx * 34 * p.SC), y: Math.round(cy - ny * 34 * p.SC) }],
+      market: { x: Math.round(cx + nx * R.range(-6, 6) * p.SC), y: Math.round(cy + ny * R.range(-6, 6) * p.SC) },
       site: { x: Math.round(cx + nx * sq), y: Math.round(cy + ny * sq) },
       labels, roads, lines,
       hedge: (x, y) => (p.get(x, y) === T.HEIDE ? null : hedgeKind),
@@ -724,8 +774,9 @@ const PAINTERS: Record<MapId, MapPainter> = {
 };
 
 // ------------------------------------------------------------------ gemeinsame Pipeline
-export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
-  const p = new Painter(seed);
+export function generateMap(seed: number, mapId: MapId = 'schlei', players = 2): GameMap {
+  const NS = players > 2 ? 4 : 2; // aktive Startplätze
+  const p = new Painter(seed, mapSizeFor(players), NS);
   const { w, h, terrain, trees, rng } = p;
   const variant = new Uint8Array(w * h);
   for (let i = 0; i < variant.length; i++) variant[i] = rng.int(256);
@@ -734,6 +785,52 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   p.sc = 1;
   const idx = (x: number, y: number) => y * w + x;
   const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h;
+  // Vier Spieler: die beiden weiteren Plätze ergänzen die ersten zwei zu einem Quadrat (gleiche Abstände),
+  // notfalls zur Mitte hin auf festes Land gerückt; der neutrale Markt rückt in die Mitte
+  if (NS > 2 && mapId !== 'random' && !r.fixed4) {
+    const solid = (t: number) => t === T.GRAS || t === T.HEIDE || t === T.LEHM || t === T.KNICK;
+    const landScore = (cx: number, cy: number) => {
+      let n = 0;
+      for (let dy = -6; dy <= 6; dy++)
+        for (let dx = -6; dx <= 6; dx++) if (inside(cx + dx, cy + dy) && solid(p.terrain[idx(cx + dx, cy + dy)])) n++;
+      return n / 169;
+    };
+    // Kandidaten: festes Land mit freiem Kern für Dorfzentrum und Startfeld
+    const cand: P2[] = [];
+    for (let y = 12; y < h - 12; y += 3)
+      for (let x = 12; x < w - 12; x += 3) {
+        let core = true;
+        for (let yy = -3; yy <= 5 && core; yy++)
+          for (let xx = -3; xx <= 3 && core; xx++) if (!solid(p.terrain[idx(x + xx, y + yy)])) core = false;
+        if (core && landScore(x, y) >= 0.8) cand.push({ x, y });
+      }
+    // die beiden Plätze, die den kleinsten Abstand aller vier Siedlungen am größten machen
+    const a = r.slots[0], b = r.slots[1];
+    const dist = (p1: P2, p2: P2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    const dab = dist(a, b);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, R = dab / 2;
+    // Abweichung vom gemeinsamen Abstand zur Mitte wird bestraft: alle vier sollen ähnlich weit vom Markt entfernt sein
+    const off = cand.map((c) => Math.abs(dist(c, mid) - R) * 0.8);
+    const pre = cand.map((c, i) => Math.min(dist(c, a), dist(c, b)) - off[i]);
+    let best: [P2, P2] | null = null, bs = -Infinity;
+    for (let i = 0; i < cand.length; i++) {
+      if (pre[i] <= bs) continue;
+      for (let j = i + 1; j < cand.length; j++) {
+        const sc = Math.min(dab, pre[i], pre[j], dist(cand[i], cand[j]) - off[i] - off[j]) - (off[i] + off[j]) * 0.5;
+        if (sc > bs) {
+          bs = sc;
+          best = [cand[i], cand[j]];
+        }
+      }
+    }
+    r.slots = [...r.slots];
+    if (best) {
+      // Platz 3 auf der Seite von Platz 1 (Reihenfolge stabil), Markt in die Mitte der vier
+      [r.slots[2], r.slots[3]] = best;
+      const q = r.slots.slice(0, 4);
+      r.market = { x: Math.round(q.reduce((s2, c) => s2 + c.x, 0) / 4), y: Math.round(q.reduce((s2, c) => s2 + c.y, 0) / 4) };
+    }
+  }
   const near = (x: number, y: number, pred: (t: number) => boolean) => {
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) {
@@ -756,7 +853,13 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
     for (let x = 0; x < w; x++) if (terrain[idx(x, y)] === T.WASSER && near(x, y, (q) => q === T.UFER)) terrain[idx(x, y)] = T.FLACH;
 
   const slotC = r.slots;
-  const clearZones = [...slotC.slice(0, 2).map((s) => ({ x: s.x, y: s.y, r: 7 })), { x: r.market.x, y: r.market.y, r: 6 }, { x: r.site.x, y: r.site.y, r: 4 }];
+  const act = Array.from({ length: NS }, (_, k) => k); // aktive Startplätze
+  /** Schwerpunkt der übrigen aktiven Startplätze (bei zwei Spielern: der Gegner) */
+  const othersC = (si: number): P2 => {
+    const o = act.filter((k) => k !== si);
+    return { x: o.reduce((a, k) => a + slotC[k].x, 0) / o.length, y: o.reduce((a, k) => a + slotC[k].y, 0) / o.length };
+  };
+  const clearZones = [...slotC.slice(0, NS).map((s) => ({ x: s.x, y: s.y, r: 7 })), { x: r.market.x, y: r.market.y, r: 6 }, { x: r.site.x, y: r.site.y, r: 4 }];
   const inClear = (x: number, y: number, extra = 0) => clearZones.some((z) => Math.hypot(x - z.x, y - z.y) < z.r + extra);
 
   // Lehm (Grundmoräne) und Rauschwald
@@ -828,8 +931,15 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   carveRoad(below(slotC[1], 2), below(r.market, 2));
   carveRoad(below(slotC[0], 2), below(slotC[1], 2));
   carveRoad(below(r.market, -2), r.site);
-  carveRoad(slotC[2], r.market);
-  carveRoad(slotC[3], r.market);
+  if (NS > 2) {
+    for (const k of [2, 3]) carveRoad(below(slotC[k], 2), below(r.market, 2));
+    // Ring zwischen benachbarten Startplätzen
+    carveRoad(below(slotC[0], 2), below(slotC[2], 2));
+    carveRoad(below(slotC[1], 2), below(slotC[3], 2));
+  } else {
+    carveRoad(slotC[2], r.market);
+    carveRoad(slotC[3], r.market);
+  }
   for (const [a, b] of r.roads ?? []) carveRoad(a, b);
 
   // Feldgrenzen: Knicks bzw. Gräben auf einem Raster, Tore an Wegen
@@ -909,7 +1019,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
         if (t !== T.WEG && t !== T.TOR && !isWater(t) && t !== T.WATT) terrain[i] = T.GRAS;
       }
   };
-  for (const s of slotC.slice(0, 2)) clearArea(s.x, s.y, 3);
+  for (const s of slotC.slice(0, NS)) clearArea(s.x, s.y, 3);
 
   // Fischgründe: Startplätze ohne Ufer in Baureichweite erhalten einen Fischteich
   const shoreSpots = (c: P2) => {
@@ -931,9 +1041,9 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
       }
     return n;
   };
-  for (let si = 0; si < 2; si++) {
-    const c = slotC[si], o = slotC[1 - si];
-    const need = Math.max(10, Math.round(shoreSpots(o) * 0.35));
+  for (const si of act) {
+    const c = slotC[si], o = othersC(si);
+    const need = Math.max(10, Math.round(Math.max(...act.filter((k) => k !== si).map((k) => shoreSpots(slotC[k]))) * 0.35));
     if (shoreSpots(c) >= need) continue;
     const away = Math.atan2(c.y - o.y, c.x - o.x);
     let dug = false;
@@ -990,8 +1100,19 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
     }
     return d;
   };
-  const start0 = below(slotC[0], 2), start1 = below(slotC[1], 2);
-  let d0 = bfs(start0), d1 = bfs(start1);
+  const starts = act.map((k) => below(slotC[k], 2));
+  let ds = starts.map((st) => bfs(st));
+  const rebfs = () => (ds = starts.map((st) => bfs(st)));
+  /** Spannweite der Wegelängen aller Startplätze zu Kachel i (−1: nicht von allen erreichbar) */
+  const spread = (i: number): { lo: number; hi: number } => {
+    let lo = Infinity, hi = -1;
+    for (const d of ds) {
+      if (d[i] < 0) return { lo: -1, hi: -1 };
+      lo = Math.min(lo, d[i]);
+      hi = Math.max(hi, d[i]);
+    }
+    return { lo, hi };
+  };
   /** Ort nahe dem Wunschpunkt, von beiden Startplätzen gleich weit entfernt und erreichbar. */
   const fairSpot = (want: P2, rad: number, needLand3: boolean) => {
     let best = want, bs = Infinity;
@@ -1000,8 +1121,8 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
         const x = want.x + dx, y = want.y + dy;
         if (x < 3 || y < 3 || x > w - 4 || y > h - 4) continue;
         const i = idx(x, y);
-        const a = d0[i], b = d1[i];
-        if (a < 0 || b < 0) continue;
+        const { lo: a, hi: b } = spread(i);
+        if (a < 0) continue;
         if (needLand3) {
           let ok = true;
           for (let yy = -1; yy <= 1 && ok; yy++)
@@ -1011,7 +1132,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
             }
           if (!ok) continue;
         }
-        const score = Math.abs(a - b) * 3 + Math.hypot(dx, dy) * 0.6;
+        const score = Math.abs(a - b) * 3 + Math.hypot(dx, dy) * (NS > 2 ? 0.15 : 0.6);
         if (score < bs) {
           bs = score;
           best = { x, y };
@@ -1019,20 +1140,23 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
       }
     return best;
   };
-  const balanced = (q: P2) => d0[idx(q.x, q.y)] >= 0 && d1[idx(q.x, q.y)] >= 0 && Math.abs(d0[idx(q.x, q.y)] - d1[idx(q.x, q.y)]) <= Math.max(3, 0.08 * Math.max(d0[idx(q.x, q.y)], d1[idx(q.x, q.y)]));
+  const balanced = (q: P2) => {
+    const { lo, hi } = spread(idx(q.x, q.y));
+    return lo >= 0 && hi - lo <= Math.max(3, (NS > 2 ? 0.12 : 0.08) * hi);
+  };
   let market = fairSpot(r.market, 9, true);
   if (!balanced(market)) market = fairSpot(r.market, 18, true);
   if (!balanced(market)) market = fairSpot(r.market, 30, true);
+  if (NS > 2 && !balanced(market)) market = fairSpot(r.market, w, true); // vier Spieler: ganze Karte absuchen
   clearArea(market.x, market.y, 2);
-  d0 = bfs(start0);
-  d1 = bfs(start1);
+  rebfs();
   let site = fairSpot(r.site, 9, false);
   if (!balanced(site)) site = fairSpot(r.site, 16, false);
   if (!terrainWalkable(terrain[idx(site.x, site.y)])) terrain[idx(site.x, site.y)] = T.GRAS;
   trees[idx(site.x, site.y)] = 0;
 
   // Lehm-Garantie: freie 3x3-Fläche in Baureichweite jedes Startplatzes
-  for (let si = 0; si < 2; si++) {
+  for (const si of act) {
     const { x: cx, y: cy } = slotC[si];
     for (let rr = 5, done = false; rr <= 9 && !done; rr++)
       for (let k = 0; k < 16 && !done; k++) {
@@ -1067,11 +1191,11 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
     return n;
   };
   for (let guard = 0; guard < 24; guard++) {
-    const a = woodNear(slotC[0]), b = woodNear(slotC[1]);
-    const poor = a < b ? 0 : 1;
-    const lo = Math.min(a, b), hi = Math.max(a, b);
+    const wd = act.map((k) => woodNear(slotC[k]));
+    const lo = Math.min(...wd), hi = Math.max(...wd);
+    const poor = act[wd.indexOf(lo)];
     if (lo >= 45 && lo >= hi * 0.85) break;
-    const s = slotC[poor], o = slotC[1 - poor];
+    const s = slotC[poor], o = othersC(poor);
     const ang0 = Math.atan2(s.y - o.y, s.x - o.x);
     let placed = false;
     for (let j = 0; j < 8 && !placed; j++) {
@@ -1091,10 +1215,12 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
 
   // Zu viel Holz auf einer Seite: äußere Bäume des reicheren Startplatzes lichten
   {
-    const a = woodNear(slotC[0]), b = woodNear(slotC[1]);
-    if (Math.min(a, b) < Math.max(a, b) * 0.88) {
-      const rich = a > b ? slotC[0] : slotC[1];
-      let excess = Math.max(a, b) - Math.ceil(Math.min(a, b) / 0.9);
+    const wd = act.map((k) => woodNear(slotC[k]));
+    const lo = Math.min(...wd);
+    for (const k of act) {
+      if (lo >= wd[k] * 0.88) continue;
+      const rich = slotC[k];
+      let excess = wd[k] - Math.ceil(lo / 0.9);
       const cand: { i: number; d: number }[] = [];
       for (let dy = -15; dy <= 15; dy++)
         for (let dx = -15; dx <= 15; dx++) {
@@ -1121,8 +1247,9 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
       }
     return n;
   };
-  for (const poor of [0, 1]) {
-    const a = farmNear(slotC[poor]), b = farmNear(slotC[1 - poor]);
+  const farmBest = (poor: number) => Math.max(...act.filter((k) => k !== poor).map((k) => farmNear(slotC[k])));
+  for (const poor of act) {
+    const a = farmNear(slotC[poor]), b = farmBest(poor);
     // Ausgleich zum reicheren Platz und Mindestfläche (Heide-/Moorkarten)
     let deficit = Math.max(b * 0.92 - a, 200 - a);
     const s = slotC[poor];
@@ -1140,12 +1267,12 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
         }
   }
   // Reicht das nicht (Küsten- und Waldplätze), Wald nahe dem Startplatz roden – solange genug Holz in Reichweite bleibt
-  for (const poor of [0, 1]) {
-    const a = farmNear(slotC[poor]), b = farmNear(slotC[1 - poor]);
+  for (const poor of act) {
+    const a = farmNear(slotC[poor]), b = farmBest(poor);
     let deficit = Math.max(b * 0.8 - a, 140 - a);
     if (deficit <= 0) continue;
     const s = slotC[poor];
-    let spare = woodNear(s) - Math.max(55, woodNear(slotC[1 - poor]) * 0.85);
+    let spare = woodNear(s) - Math.max(55, Math.max(...act.filter((k) => k !== poor).map((k) => woodNear(slotC[k]))) * 0.85);
     for (let rad = 3; rad <= 10 && deficit > 0 && spare > 0; rad++)
       for (let dy = -rad; dy <= rad && deficit > 0 && spare > 0; dy++)
         for (let dx = -rad; dx <= rad && deficit > 0 && spare > 0; dx++) {
@@ -1162,11 +1289,10 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   }
 
   // Nachkontrolle: Wälder und Teiche können Wege verlängert haben – Markt und Fundstelle ggf. erneut ausrichten
-  d0 = bfs(start0);
-  d1 = bfs(start1);
+  rebfs();
   for (let pass = 0; pass < 4 && !balanced(market); pass++) {
     // Freiräumen kann Gräben/Knicks öffnen und Wege verkürzen – daher mehrfach prüfen
-    for (const rad of [6, 12, 20, 30]) {
+    for (const rad of NS > 2 ? [6, 12, 20, 30, w] : [6, 12, 20, 30]) {
       const m2 = fairSpot(market, rad, true);
       if (balanced(m2)) {
         market = m2;
@@ -1174,8 +1300,7 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
       }
     }
     clearArea(market.x, market.y, 2);
-    d0 = bfs(start0);
-    d1 = bfs(start1);
+    rebfs();
   }
   for (const rad of [8, 14, 22, 48]) {
     if (balanced(site)) break;
@@ -1185,9 +1310,28 @@ export function generateMap(seed: number, mapId: MapId = 'schlei'): GameMap {
   trees[idx(site.x, site.y)] = 0;
 
   const nm = r.names ?? info;
-  const slots: Slot[] = slotC.map((c, k) => ({ name: nm.slotNames[k], x: c.x - 1, y: c.y - 1 }));
+  const names = [...nm.slotNames];
+  if (NS > 2 && r.names4) [names[2], names[3]] = r.names4;
+  else if (NS > 2 && r.places && p.geo) {
+    const used = new Set(names.slice(0, 2));
+    for (const k of [2, 3]) {
+      let bn = names[k], bd = Infinity;
+      for (const [n, lon, lat] of r.places) {
+        if (used.has(n)) continue;
+        const q = p.ll(lon, lat);
+        const d = Math.hypot(q.x - slotC[k].x, q.y - slotC[k].y);
+        if (d < bd) {
+          bd = d;
+          bn = n;
+        }
+      }
+      names[k] = bn;
+      used.add(bn);
+    }
+  }
+  const slots: Slot[] = slotC.map((c, k) => ({ name: names[k], x: c.x - 1, y: c.y - 1 }));
   const labels = [
-    ...slots.slice(0, 2).map((s) => ({ name: s.name, x: s.x + 1, y: s.y - 3 })),
+    ...slots.slice(0, NS).map((s) => ({ name: s.name, x: s.x + 1, y: s.y - 3 })),
     { name: nm.marketName, x: market.x, y: market.y - 4 },
     { name: nm.siteName, x: site.x, y: site.y + 4 },
     ...r.labels,

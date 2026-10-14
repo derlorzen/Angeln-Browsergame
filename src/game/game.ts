@@ -442,6 +442,7 @@ export class Game {
         break;
       case 'defeat':
         if (e.p !== me) this.hud.message(`${c.players[e.p]?.name ?? '?'} wurde besiegt.`, 'good');
+        else if (c.players.filter((p) => !p.defeated && p.id !== me).length > 1) this.showOut();
         break;
       case 'win':
         break;
@@ -838,6 +839,20 @@ export class Game {
     this.ended = true;
     const el = this.openDialog(`<h2>Verbindung beendet</h2><p>${text}</p><div class="btns"><button class="btn" data-x>Zum Hauptmenü</button></div>`, false);
     el.querySelector('[data-x]')!.addEventListener('click', () => this.opts.onExit());
+  }
+
+  /** Ausgeschieden, die übrigen spielen weiter (drei oder vier Spieler): zuschauen oder gehen. */
+  private showOut(): void {
+    sound.play('lose');
+    const host = this.driver.kind === 'host';
+    const el = this.openDialog(`<h2>Ihr seid ausgeschieden</h2>
+      <p>Euer Dorfzentrum ist gefallen. Die übrigen Parteien spielen weiter – ihr könnt der Partie zuschauen (die ganze Karte ist jetzt aufgedeckt).</p>
+      ${host ? '<p class="note"><b>Als Host bitte die Seite offen lassen:</b> Euer Browser berechnet die Partie für alle. Verlasst ihr sie, endet sie für die anderen.</p>' : ''}
+      <div class="btns"><button class="btn primary" data-a="watch">Zuschauen</button><button class="btn" data-a="exit">Zum Hauptmenü</button></div>`, false);
+    el.querySelector('[data-a=watch]')!.addEventListener('click', () => this.closeDialog());
+    el.querySelector('[data-a=exit]')!.addEventListener('click', () => {
+      if (!host || confirm('Die Partie endet damit für alle Mitspieler. Wirklich verlassen?')) this.opts.onExit();
+    });
   }
 
   private showEnd(): void {

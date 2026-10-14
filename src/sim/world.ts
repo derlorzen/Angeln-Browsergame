@@ -6,7 +6,7 @@ import {
 } from '../data/defs';
 import { FACTION_DEFS, fbdef, fudef, type FactionId } from '../data/factions';
 import { AGES, MAX_AGE, TECHS, isTechId, techTotals, techUnit, unitAvailable, type TechId } from '../data/ages';
-import { MAP_W, generateMap, T, isWater, terrainCost, terrainWalkable, type GameMap, type MapId } from './map';
+import { generateMap, mapSizeFor, T, isWater, terrainCost, terrainWalkable, type GameMap, type MapId } from './map';
 import { findPath, nearestPassable, type PathGrid } from './path';
 import { Rng } from './rng';
 import { checkPlacement, computeVisibility, type PlacementView, type VisionSource } from './rules';
@@ -84,7 +84,7 @@ export class World {
 
   constructor(opts: WorldOptions, skipSetup = false) {
     this.opts = opts;
-    this.map = generateMap(opts.seed, opts.mapId ?? 'schlei');
+    this.map = generateMap(opts.seed, opts.mapId ?? 'schlei', opts.players.length);
     const N = this.map.w * this.map.h;
     this.grid = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
     this.gridJump = { w: this.map.w, h: this.map.h, pass: new Uint8Array(N), cost: new Float32Array(N) };
@@ -1622,7 +1622,7 @@ export class World {
   static deserialize(json: string): World {
     const d = JSON.parse(json);
     if (!d || d.v !== 1) throw new Error('Unbekanntes Spielstandformat.');
-    if ((d.mw ?? 96) !== MAP_W) throw new Error('Der Spielstand stammt aus einer älteren Version mit kleineren Karten und passt nicht mehr.');
+    if ((d.mw ?? 96) !== mapSizeFor(d.opts?.players?.length ?? 2)) throw new Error('Der Spielstand stammt aus einer älteren Version mit kleineren Karten und passt nicht mehr.');
     const ub = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
     const w = new World(d.opts, true);
     w.tick = d.tick;
