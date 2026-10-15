@@ -1,4 +1,6 @@
 // Zeichenhilfen für isometrische Sprites (eigener Stil: späte 90er, gedeckte Farben).
+import { getArtStyle } from './artstyles';
+
 export const TW = 64; // Kachelbreite bei Zoom 1
 export const TH = 32;
 export const S = 2; // Sprites werden doppelt aufgelöst erzeugt
@@ -127,7 +129,8 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
   const m2: 'fachwerk' | 'ziegel' | 'holz' | 'stein' = mat === 'klinker' ? 'ziegel' : mat;
   mat = m2;
   const base = klinker ? '#74332a' : { fachwerk: '#e3d8bd', ziegel: '#984530', holz: '#7b5634', stein: '#8f8a7e' }[m2];
-  fillFace(g, f, shade(base, light));
+  const cartoon = getArtStyle() === 'cartoon';
+  fillFace(g, f, shade(cartoon ? shade(base, 0.16) : base, light));
   g.save();
   poly(g, [f.bl, f.br, f.tr, f.tl]);
   g.clip();
@@ -135,8 +138,8 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
   const len = Math.hypot(f.br[0] - f.bl[0], f.br[1] - f.bl[1]);
   const hgt = Math.hypot(f.tl[0] - f.bl[0], f.tl[1] - f.bl[1]);
   if (mat === 'ziegel' || mat === 'stein') {
-    const rows = Math.max(3, Math.round(hgt / (mat === 'ziegel' ? 5 : 9)));
-    g.strokeStyle = mat === 'ziegel' ? shade('#c8b597', light - 0.1) : shade('#6d685e', light);
+    const rows = Math.max(3, Math.round(hgt / (mat === 'ziegel' ? (cartoon ? 9 : 5) : (cartoon ? 13 : 9))));
+    g.strokeStyle = mat === 'ziegel' ? shade('#c8b597', light - (cartoon ? 0.34 : 0.1)) : shade('#6d685e', light);
     g.lineWidth = 1;
     for (let k = 1; k < rows; k++) {
       const v = k / rows;
@@ -145,7 +148,7 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
       g.moveTo(a[0], a[1]);
       g.lineTo(b[0], b[1]);
       g.stroke();
-      const cols = Math.max(2, Math.round(len / (mat === 'ziegel' ? 9 : 14)));
+      const cols = Math.max(2, Math.round(len / (mat === 'ziegel' ? (cartoon ? 14 : 9) : (cartoon ? 20 : 14))));
       for (let c = 0; c < cols; c++) {
         const u = (c + (k % 2) * 0.5) / cols;
         const p0 = faceAt(f, u, v), p1 = faceAt(f, u, v - 1 / rows);
@@ -156,14 +159,14 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
       }
     }
     // Farbvariation einzelner Steine
-    for (let k = 0; k < len * hgt * 0.01; k++) {
+    for (let k = 0; k < len * hgt * (cartoon ? 0.002 : 0.015); k++) {
       const u = r(), v = r();
       const p = faceAt(f, u, v);
       g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.12)' : 'rgba(255,230,200,0.10)';
       g.fillRect(p[0], p[1], 4, 2);
     }
   } else if (mat === 'holz') {
-    const n = Math.max(3, Math.round(len / 7));
+    const n = Math.max(3, Math.round(len / (cartoon ? 12 : 7)));
     for (let c = 0; c <= n; c++) {
       const a = faceAt(f, c / n, 0), b = faceAt(f, c / n, 1);
       g.strokeStyle = shade('#4a321c', light);
@@ -177,7 +180,7 @@ export function wall(g: Ctx, f: Face, mat: WallMat, light: number, seed = 1): vo
     // Fachwerk: Ständer, Riegel, Streben
     const beam = shade('#4a3222', light);
     g.strokeStyle = beam;
-    g.lineWidth = 3;
+    g.lineWidth = cartoon ? 4.2 : 3;
     const posts = Math.max(2, Math.round(len / 18));
     const line = (u0: number, v0: number, u1: number, v1: number) => {
       const a = faceAt(f, u0, v0), b = faceAt(f, u1, v1);
@@ -344,7 +347,10 @@ export function roof(
 ): void {
   const o = 0.12; // Überstand
   x0 -= o; y0 -= o; x1 += o; y1 += o;
-  const base = { reet: '#9a8552', ziegel: '#8e3a27', schindel: '#6b5a48', kupfer: '#5e9a83' }[mat];
+  const cartoon = getArtStyle() === 'cartoon';
+  const base = cartoon
+    ? { reet: '#c8ac67', ziegel: '#bc6042', schindel: '#96745c', kupfer: '#68b29d' }[mat]
+    : { reet: '#9a8552', ziegel: '#8e3a27', schindel: '#6b5a48', kupfer: '#5e9a83' }[mat];
   const planes: { pts: Pt[]; light: number }[] = [];
   if (axis === 'x') {
     const ym = (y0 + y1) / 2;
@@ -377,7 +383,7 @@ export function roof(
     const minY = Math.min(...pl.pts.map((p) => p[1])), maxY = Math.max(...pl.pts.map((p) => p[1]));
     if (mat === 'reet') {
       // Reet: viele kurze Halme
-      const n = ((maxX - minX) * (maxY - minY)) / 6;
+      const n = ((maxX - minX) * (maxY - minY)) / (cartoon ? 23 : 6);
       for (let k = 0; k < n; k++) {
         const x = minX + r() * (maxX - minX), y = minY + r() * (maxY - minY);
         g.strokeStyle = r() < 0.5 ? shade(base, pl.light - 0.25) : shade(base, pl.light + 0.18);
@@ -388,7 +394,7 @@ export function roof(
         g.stroke();
       }
       // Moosflecken und Traufkante
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < (cartoon ? 0 : 5); k++) {
         const x = minX + r() * (maxX - minX), y = minY + (0.3 + r() * 0.6) * (maxY - minY);
         const gr = g.createRadialGradient(x, y, 0, x, y, 7 + r() * 6);
         gr.addColorStop(0, 'rgba(78,102,44,0.5)');
@@ -398,23 +404,25 @@ export function roof(
       }
     } else {
       // Ziegel/Schindeln: Reihen
-      g.strokeStyle = shade(base, pl.light - 0.3);
-      g.lineWidth = 1;
-      for (let y = minY; y < maxY; y += 5) {
+      g.strokeStyle = shade(base, pl.light - (cartoon ? 0.40 : 0.3));
+      g.lineWidth = cartoon ? 1.8 : 1;
+      const stepY = cartoon ? 9 : 5;
+      const stepX = cartoon ? 13 : 8;
+      for (let y = minY; y < maxY; y += stepY) {
         g.beginPath();
         g.moveTo(minX, y);
         g.lineTo(maxX, y + (maxX - minX) * 0.0);
         g.stroke();
-        for (let x = minX + ((y / 5) % 2) * 4; x < maxX; x += 8) {
+        for (let x = minX + (Math.round(y / stepY) % 2) * stepX / 2; x < maxX; x += stepX) {
           g.beginPath();
           g.moveTo(x, y);
-          g.lineTo(x, y + 5);
+          g.lineTo(x, y + stepY);
           g.stroke();
         }
       }
     }
     g.restore();
-    poly(g, pl.pts, undefined, 'rgba(35,25,15,0.55)', 1);
+    poly(g, pl.pts, undefined, cartoon ? 'rgba(50,32,24,0.88)' : 'rgba(35,25,15,0.55)', cartoon ? 2.4 : 1);
   }
   // First
   if (mat === 'reet') {
@@ -442,7 +450,9 @@ export function shadowDiamond(g: Ctx, iso: Iso, x0: number, y0: number, x1: numb
 }
 
 export function ground(g: Ctx, iso: Iso, x0: number, y0: number, x1: number, y1: number, color: string): void {
-  poly(g, [iso.p(x0, y0), iso.p(x1, y0), iso.p(x1, y1), iso.p(x0, y1)], color);
+  const cartoon = getArtStyle() === 'cartoon';
+  poly(g, [iso.p(x0, y0), iso.p(x1, y0), iso.p(x1, y1), iso.p(x0, y1)], cartoon ? shade(color, 0.16) : color,
+    cartoon ? shade(color, -0.2) : undefined, cartoon ? 2 : 1);
 }
 
 export function flag(g: Ctx, x: number, y: number, h: number, color: string, wave = 0): void {
@@ -466,7 +476,25 @@ export function flag(g: Ctx, x: number, y: number, h: number, color: string, wav
 }
 
 export function bush(g: Ctx, x: number, y: number, r: number, color: string, rnd: () => number): void {
-  for (let k = 0; k < 5; k++) {
+  if (getArtStyle() === 'cartoon') {
+    // Kompakte kugelige Kronen mit echten Verläufen und aufgehellter Lichtseite.
+    for (const [dx, dy, scale] of [[-0.45, 0.02, 0.62], [0.42, 0.05, 0.67], [-0.03, -0.4, 0.75]]) {
+      const rr = r * scale;
+      g.fillStyle = shade(color, -0.33);
+      g.beginPath();
+      g.ellipse(x + dx * r + 1, y + dy * r + 2, rr, rr * 0.82, 0, 0, Math.PI * 2);
+      g.fill();
+      const grad = g.createRadialGradient(x + dx * r - rr * 0.3, y + dy * r - rr * 0.3, 1, x + dx * r, y + dy * r, rr);
+      grad.addColorStop(0, shade(color, 0.49));
+      grad.addColorStop(1, shade(color, -0.1));
+      g.fillStyle = grad;
+      g.beginPath();
+      g.ellipse(x + dx * r, y + dy * r, rr * 0.94, rr * 0.75, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    return;
+  }
+  for (let k = 0; k < 7; k++) {
     const a = rnd() * Math.PI * 2;
     const d = rnd() * r * 0.5;
     const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d * 0.6;
