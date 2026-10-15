@@ -71,7 +71,7 @@ export function artCanvas(source: HTMLCanvasElement, category: ArtCategory = 'sp
       } else {
         // Wärmere Materialfarbe, feinere Körnung und sanfte Licht-/Schattenstaffelung.
         const hash = (Math.imul(x + 11, 374761393) ^ Math.imul(y + 17, 668265263)) >>> 0;
-        const grain = ((hash ^ (hash >>> 13)) % 15) - 7;
+        const grain = (((hash ^ (hash >>> 13)) >>> 0) % 15) - 7;
         const contrast = 1.11;
         const shading = 1.045 - 0.08 * (y / Math.max(1, h));
         data[i] = clamp(((r - 120) * contrast + 120 + grain + 5) * shading);
