@@ -640,7 +640,8 @@ export class Game {
         this.touch.mode = 'select';
       },
     });
-    this.cleanup.push(() => this.touch.destroy());
+    const boundTouch = this.touch;
+    this.inputCleanup.push(() => boundTouch.destroy());
     this.on(document.getElementById('tooltip')!, 'click', () => this.hud.hideTip());
     this.touch.mode = 'select';
     this.touchBar.querySelectorAll<HTMLButtonElement>('[data-touch]').forEach((btn) => {
@@ -1050,8 +1051,12 @@ export class Game {
       artSelect.disabled = true;
       const style: ArtStyle = artSelect.value === 'cartoon' ? 'cartoon' : 'realistic';
       void this.changeArtStyle(style).finally(() => {
-        if (artSelect.isConnected) artSelect.disabled = false;
-        el.querySelector('[data-msg]')!.textContent = 'Grafikstil: ' + (getArtStyle() === 'cartoon' ? 'Cartoon' : 'Historisch');
+        if (artSelect.isConnected) {
+          artSelect.disabled = false;
+          artSelect.value = getArtStyle();
+          const msg = el.querySelector('[data-msg]');
+          if (msg) msg.textContent = 'Grafikstil: ' + (getArtStyle() === 'cartoon' ? 'Cartoon' : 'Historisch');
+        }
       });
     });
     el.querySelectorAll<HTMLElement>('[data-a]').forEach((b) =>
