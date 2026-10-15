@@ -5,7 +5,7 @@ import {
   wall, windowOn, type Ctx, type Face, type Pt, type RoofMat, type WallMat,
 } from './draw';
 import { FACTION_DEFS, type ArchStyle, type FactionId } from '../data/factions';
-import { artCanvas, getArtStyle } from './artstyles';
+import { artCanvas, getArtStyle, tagArtCanvas } from './artstyles';
 import { ERA_SIZE, drawEra, eraTop } from './era';
 import { animal, bands, frontispiz, spire, brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
 
@@ -264,26 +264,67 @@ export function makeTerrain(): TerrainSprites {
 // ------------------------------------------------------------------ Bäume, Knicks
 export function makeTrees(): Sprite[] {
   const out: Sprite[] = [];
+  const cartoon = getArtStyle() === 'cartoon';
   for (let v = 0; v < 6; v++) {
     const w = 56 * S, h = 76 * S;
     const [c, g] = canvas(w, h);
     const r = prng(200 + v);
     const bx = w / 2, by = h - 10 * S;
+    // Beide Stile behalten dieselben Maße und Fußpunkte.
     g.fillStyle = 'rgba(20,30,10,0.3)';
     g.beginPath();
     g.ellipse(bx + 6, by, 22, 9, 0, 0, Math.PI * 2);
     g.fill();
-    g.fillStyle = '#4b3727';
-    g.fillRect(bx - 4, by - 34, 8, 34);
-    g.fillStyle = '#3a2a1d';
-    g.fillRect(bx + 1, by - 34, 3, 34);
+    g.fillStyle = cartoon ? '#805537' : '#4b3727';
+    g.beginPath();
+    g.moveTo(bx - (cartoon ? 6 : 4), by);
+    g.lineTo(bx - (cartoon ? 5 : 3), by - 39);
+    g.lineTo(bx + (cartoon ? 5 : 4), by - 42);
+    g.lineTo(bx + (cartoon ? 7 : 4), by);
+    g.closePath();
+    g.fill();
+    g.fillStyle = cartoon ? '#aa7950' : '#725039';
+    g.fillRect(bx - 3, by - 35, cartoon ? 3 : 2, 30);
     const crown = v < 4 ? ['#3f6a2e', '#4a7534', '#36602a', '#56803a'][v] : v === 4 ? '#5b7a33' : '#456d33';
     const cy = by - 58 - r() * 10;
-    for (let k = 0; k < 9; k++) {
-      const a = r() * Math.PI * 2, d = r() * 18;
-      bush(g, bx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.7, 16 + r() * 8, crown, r);
+    if (cartoon) {
+      // Große, plastisch gerundete Blättergruppen; keine fransigen Baumkronen.
+      for (const [dx, dy, rr] of [[-16, 3, 22], [15, 0, 21], [0, -13, 24], [-1, 12, 20]]) {
+        const x = bx + dx, y = cy + dy;
+        g.fillStyle = shade(crown, -0.42);
+        g.beginPath();
+        g.ellipse(x + 2, y + 4, rr + 2, rr * 0.83, 0, 0, Math.PI * 2);
+        g.fill();
+        const gr = g.createRadialGradient(x - 7, y - 9, 2, x + 3, y + 4, rr * 1.2);
+        gr.addColorStop(0, shade(crown, 0.56));
+        gr.addColorStop(0.6, shade(crown, 0.17));
+        gr.addColorStop(1, shade(crown, -0.17));
+        g.fillStyle = gr;
+        g.beginPath();
+        g.ellipse(x, y, rr, rr * 0.78, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (let k = 0; k < 12; k++) {
+        const a = r() * Math.PI * 2, d = r() * 22;
+        const x = bx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.68;
+        g.fillStyle = shade(crown, 0.46);
+        g.beginPath();
+        g.ellipse(x - 1, y - 2, 3.5, 1.8, -0.35, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else {
+      // Kleinere unregelmäßige Ast-/Laubgruppen mit texturierter Oberfläche.
+      for (let k = 0; k < 17; k++) {
+        const a = r() * Math.PI * 2, d = r() * 21;
+        bush(g, bx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.65, 11 + r() * 10, shade(crown, (r() - 0.5) * 0.32), r);
+      }
+      for (let k = 0; k < 90; k++) {
+        const x = bx + (r() - 0.5) * 64, y = cy + (r() - 0.5) * 49;
+        g.fillStyle = r() < 0.55 ? 'rgba(182,211,116,0.27)' : 'rgba(16,48,20,0.26)';
+        g.fillRect(x, y, 1 + r() * 2, 1.5);
+      }
     }
-    bush(g, bx - 4, cy - 12, 14, shade(crown, 0.1), r);
+    tagArtCanvas(c, 'foliage');
     out.push({ c, ax: w / 2 / S, ay: (by - 6) / S });
   }
   return out;
@@ -1537,10 +1578,11 @@ export function lookAge(age: number): number {
 }
 export function buildingSprite(type: BuildingType, color: string, arch: ArchStyle = 'angeln', age = 1): BuildingSprite {
   const la = lookAge(age);
-  const k = `${type}|${color}|${arch}|${la}`;
+  const k = `${getArtStyle()}|${type}|${color}|${arch}|${la}`;
   let s = buildingCache.get(k);
   if (!s) {
     s = drawBuilding(type, color, arch, la);
+    tagArtCanvas(s.c, 'building');
     buildingCache.set(k, s);
   }
   return s;
