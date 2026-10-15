@@ -5,6 +5,7 @@ import {
   wall, windowOn, type Ctx, type Face, type Pt, type RoofMat, type WallMat,
 } from './draw';
 import { FACTION_DEFS, type ArchStyle, type FactionId } from '../data/factions';
+import { artCanvas, getArtStyle } from './artstyles';
 import { ERA_SIZE, drawEra, eraTop } from './era';
 import { animal, bands, frontispiz, spire, brickNogging, cart, chicken, chimney, crate, eyebrow, flowers, plankDoor, plinth, steppedGable, tinyPerson, wallShading, wattle, window4, woodpile } from './props';
 
@@ -1604,7 +1605,7 @@ import { unitSprites } from './units';
 // ------------------------------------------------------------------ Symbole für die Oberfläche
 const iconCache = new Map<string, string>();
 export function resIcon(r: Res | 'pop' | 'prestige'): string {
-  const k = 'res:' + r;
+  const k = getArtStyle() + ':res:' + r;
   const hit = iconCache.get(k);
   if (hit) return hit;
   const [c, g] = canvas(32, 32);
@@ -1701,7 +1702,7 @@ export function resIcon(r: Res | 'pop' | 'prestige'): string {
 }
 
 export function portrait(kind: 'b' | 'u', type: string, color: string, fac: FactionId = 'angeln', age = 1): string {
-  const k = `p:${kind}:${type}:${color}:${fac}:${kind === 'b' ? lookAge(age) : 1}`;
+  const k = `${getArtStyle()}:p:${kind}:${type}:${color}:${fac}:${kind === 'b' ? lookAge(age) : 1}`;
   const hit = iconCache.get(k);
   if (hit) return hit;
   const [c, g] = canvas(64, 64);
@@ -1710,14 +1711,14 @@ export function portrait(kind: 'b' | 'u', type: string, color: string, fac: Fact
   if (kind === 'b') {
     const s = buildingSprite(type as BuildingType, color, FACTION_DEFS[fac].arch, age);
     const sc = Math.min(60 / s.c.width, 60 / s.c.height);
-    g.drawImage(s.c, (64 - s.c.width * sc) / 2, (64 - s.c.height * sc) / 2, s.c.width * sc, s.c.height * sc);
+    g.drawImage(artCanvas(s.c), (64 - s.c.width * sc) / 2, (64 - s.c.height * sc) / 2, s.c.width * sc, s.c.height * sc);
   } else {
     const s = unitSprites(type as UnitType, color, fac)[0];
     // Figur (ohne Spieß-Überstand) formatfüllend
     const r = s.res ?? S;
     const fw = 22, fh = 30; // 1x-Ausschnitt um die Figur
     const dh = 62, dw = (dh * fw) / fh;
-    g.drawImage(s.c, (s.ax - fw / 2) * r, (s.ay - fh + 2) * r, fw * r, fh * r, (64 - dw) / 2, 1, dw, dh);
+    g.drawImage(artCanvas(s.c), (s.ax - fw / 2) * r, (s.ay - fh + 2) * r, fw * r, fh * r, (64 - dw) / 2, 1, dw, dh);
   }
   const url = c.toDataURL();
   iconCache.set(k, url);
