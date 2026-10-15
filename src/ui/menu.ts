@@ -157,7 +157,7 @@ export class Menu {
         <button class="btn" data-a="bg">Hintergrund &amp; Quellen</button>
         <button class="btn" data-a="settings">Einstellungen &amp; Netzwerk</button>
       </div>
-      <p class="note" style="text-align:center;margin-top:12px">Version 0.5 · Alle Grafiken und Klänge werden im Browser erzeugt · bis zu vier Spieler</p>`);
+      <p class="note" style="text-align:center;margin-top:12px">Alle Grafiken und Klänge werden im Browser erzeugt · bis zu vier Spieler</p>`);
     this.bind(box, {
       resume: () => this.resumeAuto(),
       sp: () => this.singleSetup(),
