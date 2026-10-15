@@ -4,7 +4,9 @@ import { sound } from '../audio/sound';
 import { BUILDINGS, LEVEL_ROMAN, RULES, UNITS, UPGRADES, type BuildingType } from '../data/defs';
 import { FACTION_DEFS } from '../data/factions';
 import { createRenderer, freshCanvas, type RendererPref } from '../render/factory';
-import { Minimap, playerColor, type Placement } from '../render/renderer';
+import { CanvasRenderer, Minimap, playerColor, type Placement } from '../render/renderer';
+import { getArtStyle, setArtStyle, type ArtStyle } from '../render/artstyles';
+import { loadSettings, saveSettings } from '../storage/save';
 import type { BaseRenderer } from '../render/view';
 import { checkPlacement } from '../sim/rules';
 import type { Command, SimEvent } from '../sim/types';
@@ -32,7 +34,7 @@ export interface GameOptions {
 
 export class Game {
   readonly client: ClientState;
-  readonly renderer: BaseRenderer;
+  renderer: BaseRenderer;
   readonly minimap: Minimap;
   readonly hud: Hud;
   readonly tutorial: Tutorial;
@@ -55,6 +57,8 @@ export class Game {
   private showPerf = false;
   private lastErrSound = 0;
   private cleanup: (() => void)[] = [];
+  private inputCleanup: (() => void)[] = [];
+  private switchingArt = false;
   private canvas: HTMLCanvasElement;
   private dialogEl = document.getElementById('dialog')!;
   private idleIdx = 0;
@@ -220,6 +224,8 @@ export class Game {
     cancelAnimationFrame(this.raf);
     this.driver.stop();
     this.renderer.destroy();
+    for (const f of this.inputCleanup) f();
+    this.inputCleanup = [];
     for (const f of this.cleanup) f();
     this.cleanup = [];
     document.getElementById('screen-game')!.classList.add('hidden');
@@ -308,6 +314,8 @@ export class Game {
     this.raf = requestAnimationFrame((tt) => this.loop(tt));
     const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
     this.lastFrame = t;
+    // Beim Wechsel der Sprite-Pakete keine zerstörte WebGL-Szene zeichnen.
+    if (this.switchingArt) return;
     this.centerHome();
     if (t - this.lastAutosave > 20000 && this.opts.autosave) this.autosaveNow();
     this.updateHint(t);
@@ -488,7 +496,7 @@ export class Game {
 
   private on<K extends keyof WindowEventMap>(t: EventTarget, type: K | string, fn: (e: never) => void, opts?: AddEventListenerOptions): void {
     t.addEventListener(type, fn as EventListener, opts);
-    this.cleanup.push(() => t.removeEventListener(type, fn as EventListener, opts));
+    this.inputCleanup.push(() => t.removeEventListener(type, fn as EventListener, opts));
   }
 
   private bindInput(): void {
@@ -982,12 +990,54 @@ export class Game {
     el.querySelector('[data-close]')!.addEventListener('click', () => this.closeDialog());
   }
 
+  /** Wechsel des Grafikpakets ohne Neustart der Partie oder der Netzwerksimulation. */
+  private async changeArtStyle(next: ArtStyle): Promise<void> {
+    if (this.switchingArt || next === getArtStyle()) return;
+    this.switchingArt = true;
+    const previous = getArtStyle();
+    const camera = { ...this.renderer.cam };
+    const rendererPref: RendererPref = this.renderer.kind === 'webgl' ? 'auto' : 'canvas';
+    this.drag = null;
+    this.pan = null;
+    this.hideHint();
+    for (const clean of this.inputCleanup) clean();
+    this.inputCleanup = [];
+
+    // PixiJS-Kontext erst freigeben, dann mit den Texturen des anderen Packs neu aufbauen.
+    this.renderer.destroy();
+    this.canvas = freshCanvas(this.canvas);
+    setArtStyle(next);
+    try {
+      this.renderer = await createRenderer(this.canvas, this.client, rendererPref);
+      const s = loadSettings();
+      s.artStyle = next;
+      saveSettings(s);
+      this.hud.message('Grafikstil: ' + (next === 'cartoon' ? 'Cartoon' : 'Historisch'));
+    } catch (e) {
+      // Notfall-Fallback: Canvas 2D und vorheriges Paket, die Partie läuft weiter.
+      setArtStyle(previous);
+      this.canvas = freshCanvas(this.canvas);
+      this.renderer = new CanvasRenderer(this.canvas, this.client);
+      this.hud.message('Grafikwechsel fehlgeschlagen: ' + String(e), 'err');
+    } finally {
+      this.renderer.cam = camera;
+      this.resize();
+      this.bindInput();
+      this.hud.update(true);
+      this.switchingArt = false;
+    }
+  }
+
   showMenu(): void {
     const local = this.driver.kind === 'local';
     const el = this.openDialog(`<h2>Menü</h2>
       <p class="note">${local ? 'Das Spiel ist pausiert.' : 'Mehrspieler: Die Partie läuft weiter.'}</p>
       <div class="menu-col">
         <button class="btn" data-a="resume">Weiterspielen</button>
+        <div class="row"><label>Grafikstil</label><select data-f="artStyle">
+          <option value="realistic" ${getArtStyle() === 'realistic' ? 'selected' : ''}>Historisch · atmosphärisch</option>
+          <option value="cartoon" ${getArtStyle() === 'cartoon' ? 'selected' : ''}>Cartoon · farbenfroh</option>
+        </select></div>
         ${this.opts.onSave ? '<button class="btn" data-a="save">Spiel speichern</button>' : ''}
         <button class="btn" data-a="help">Steuerung</button>
         <button class="btn" data-a="tut">Lehrmeister ein/aus</button>
@@ -995,6 +1045,15 @@ export class Game {
         <button class="btn" data-a="resign">Aufgeben</button>
         <button class="btn" data-a="exit">Zum Hauptmenü</button>
       </div><div class="note" data-msg></div>`);
+    const artSelect = el.querySelector<HTMLSelectElement>('[data-f=artStyle]')!;
+    artSelect.addEventListener('change', () => {
+      artSelect.disabled = true;
+      const style: ArtStyle = artSelect.value === 'cartoon' ? 'cartoon' : 'realistic';
+      void this.changeArtStyle(style).finally(() => {
+        if (artSelect.isConnected) artSelect.disabled = false;
+        el.querySelector('[data-msg]')!.textContent = 'Grafikstil: ' + (getArtStyle() === 'cartoon' ? 'Cartoon' : 'Historisch');
+      });
+    });
     el.querySelectorAll<HTMLElement>('[data-a]').forEach((b) =>
       b.addEventListener('click', () => {
         const a = b.dataset.a;
