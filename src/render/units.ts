@@ -3,6 +3,7 @@
 import type { UnitType } from '../data/defs';
 import type { FactionId } from '../data/factions';
 import { canvas, shade, type Ctx } from './draw';
+import { getArtStyle, tagArtCanvas } from './artstyles';
 import type { Sprite } from './sprites';
 
 export const UNIT_RES = 4; // Pixel je 1x-Pixel
@@ -134,6 +135,17 @@ function figure(g: Ctx, p: Pose, b: Body, hat: (hx: number, hy: number) => void,
       g.stroke();
     }
   }
+  // Im historischen Stil zusätzliche abgenutzte Stoffnähte, Cartoon zeigt große Farbflächen.
+  if (getArtStyle() === 'realistic') {
+    g.strokeStyle = shade(b.coat, 0.38);
+    g.lineWidth = 0.35;
+    g.beginPath();
+    g.moveTo(-2.5, top + 1.7);
+    g.lineTo(-2.2, bot - 2.5);
+    g.moveTo(2.6, top + 1.7);
+    g.lineTo(2.3, bot - 2.5);
+    g.stroke();
+  }
   // Gürtel mit Schnalle und Tasche
   g.fillStyle = b.belt;
   g.fillRect(-3.6, bot - 2.3, 7.3, 1.2);
@@ -144,20 +156,30 @@ function figure(g: Ctx, p: Pose, b: Body, hat: (hx: number, hy: number) => void,
   g.fillStyle = shade(SKIN, -0.15);
   g.fillRect(-0.8, top - 1.6, 1.6, 1.8);
   const hx = 0.3, hy = top - 3.6;
-  const hg = g.createRadialGradient(hx - 0.8, hy - 0.8, 0.3, hx, hy, 3);
+  const cartoon = getArtStyle() === 'cartoon';
+  const headSize = cartoon ? 3.2 : 2.6;
+  const hg = g.createRadialGradient(hx - 0.8, hy - 0.8, 0.3, hx, hy, cartoon ? 3.8 : 3);
   hg.addColorStop(0, shade(SKIN, 0.15));
   hg.addColorStop(1, shade(SKIN, -0.18));
   g.fillStyle = hg;
   g.beginPath();
-  g.arc(hx, hy, 2.6, 0, Math.PI * 2);
+  g.arc(hx, hy, headSize, 0, Math.PI * 2);
   g.fill();
   // Haare hinten, Ohr, Auge, Nase
   g.fillStyle = b.hair;
   g.beginPath();
-  g.arc(hx - 0.6, hy - 0.2, 2.6, Math.PI * 0.55, Math.PI * 1.45);
+  g.arc(hx - 0.6, hy - 0.2, headSize, Math.PI * 0.55, Math.PI * 1.45);
   g.fill();
   dot(g, hx - 0.4, hy + 0.2, 0.55, shade(SKIN, -0.25));
-  dot(g, hx + 1.3, hy - 0.4, 0.38, '#2a1d14');
+  dot(g, hx + 1.3, hy - 0.4, cartoon ? 0.56 : 0.38, '#2a1d14');
+  if (cartoon) {
+    dot(g, hx - 1.6, hy + 1.1, 0.74, '#df927b');
+    g.strokeStyle = '#9e5e42';
+    g.lineWidth = 0.44;
+    g.beginPath();
+    g.arc(hx + 0.65, hy + 1.2, 0.9, 0.12, Math.PI * 0.92);
+    g.stroke();
+  }
   g.fillStyle = shade(SKIN, -0.2);
   g.fillRect(hx + 2.3, hy - 0.1, 0.6, 0.9);
   if (b.beard) {
@@ -1014,6 +1036,7 @@ function renderFrame(type: UnitType, color: string, f: number, fac: FactionId): 
   const [fig, fg] = canvas(W1 * R, H1 * R);
   fg.scale(R, R);
   fg.translate(AX, AY);
+  if (getArtStyle() === 'cartoon') fg.scale(1.13, 1.05); // breitere, plastischere Figuren; derselbe Fußpunkt
   drawUnit(fg, type, color, f, fac);
   const [out, og] = canvas(W1 * R, H1 * R);
   const [sil, sg] = canvas(W1 * R, H1 * R);
@@ -1021,15 +1044,16 @@ function renderFrame(type: UnitType, color: string, f: number, fac: FactionId): 
   sg.globalCompositeOperation = 'source-in';
   sg.fillStyle = 'rgba(28,20,12,0.85)';
   sg.fillRect(0, 0, sil.width, sil.height);
-  const o = Math.max(1, Math.round(R * 0.45));
+  const o = Math.max(1, Math.round(R * (getArtStyle() === 'cartoon' ? 0.62 : 0.35)));
   for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [-o, -o], [o, o], [-o, o], [o, -o]]) og.drawImage(sil, dx, dy);
   og.drawImage(fig, 0, 0);
+  tagArtCanvas(out, 'unit');
   return { c: out, ax: AX, ay: AY, res: R };
 }
 
 const cache = new Map<string, Sprite[]>();
 export function unitSprites(type: UnitType, color: string, fac: FactionId = 'angeln'): Sprite[] {
-  const k = `${type}|${color}|${fac}`;
+  const k = `${getArtStyle()}|${type}|${color}|${fac}`;
   let arr = cache.get(k);
   if (!arr) {
     arr = [];
