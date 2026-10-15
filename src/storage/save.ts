@@ -13,13 +13,14 @@ export interface Settings {
   ice: IceSettings;
   tutorialDone: boolean;
   renderer: 'auto' | 'canvas';
+  artStyle: 'realistic' | 'cartoon';
   faction: FactionId;
   map: MapId | 'zufall';
   hints: boolean;
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', faction: 'angeln', map: 'schlei', hints: true };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', artStyle: 'realistic', faction: 'angeln', map: 'schlei', hints: true };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -29,6 +30,7 @@ export function loadSettings(): Settings {
       ice: { ...DEFAULT_ICE, ...(s.ice ?? {}), mode: s.ice?.mode === 'none' ? 'none' : 'stun' },
       tutorialDone: !!s.tutorialDone,
       renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
+      artStyle: s.artStyle === 'cartoon' ? 'cartoon' : 'realistic',
       faction: isFaction(s.faction) ? s.faction : 'angeln',
       map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
       hints: s.hints !== false,
