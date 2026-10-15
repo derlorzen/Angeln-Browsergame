@@ -9,6 +9,7 @@ import { PROTOCOL_VERSION, parseGuestMsg, parseHostMsg, seated, type HostMsg, ty
 import { Room, RoomError, cleanCode, formatCode } from '../net/rooms';
 import { SignalError } from '../net/signal';
 import { createRenderer } from '../render/factory';
+import { getArtStyle, setArtStyle } from '../render/artstyles';
 import type { BaseRenderer } from '../render/view';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES, portrait } from '../render/sprites';
 import { FACTIONS, FACTION_DEFS, type FactionId } from '../data/factions';
@@ -55,6 +56,7 @@ export class Menu {
   private bg: { r: BaseRenderer | null; raf: number; alive: boolean } | null = null;
 
   start(): void {
+    setArtStyle(this.settings.artStyle);
     // Einladungslink: ?spiel=CODE öffnet direkt „Mit Spielcode beitreten“
     const code = new URLSearchParams(location.search).get('spiel');
     if (code) {
@@ -137,6 +139,8 @@ export class Menu {
 
   // ---------------------------------------------------------------- Hauptmenü
   main(): void {
+    this.settings = loadSettings();
+    setArtStyle(this.settings.artStyle);
     this.closeLink();
     const save = readSave();
     const auto = readAutosave();
@@ -357,7 +361,9 @@ export class Menu {
     const ice = this.settings.ice;
     const box = this.show(`<h2>Einstellungen &amp; Netzwerk</h2>
       <div class="row"><label>Spielername</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
-      <div class="row"><label>Grafik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
+      <div class="row"><label>Grafikstil</label><select data-f="artStyle"><option value="realistic" ${this.settings.artStyle === 'realistic' ? 'selected' : ''}>Historisch · atmosphärisch</option><option value="cartoon" ${this.settings.artStyle === 'cartoon' ? 'selected' : ''}>Cartoon · farbenfroh</option></select></div>
+      <p class="note">Beide Looks nutzen eigene, zur Laufzeit erzeugte Sprite-Pakete für Gelände, Gebäude und Einheiten. Die Spielregeln bleiben gleich.</p>
+      <div class="row"><label>Grafiktechnik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
       <div class="row"><label>Geländehinweise</label><label style="min-width:0"><input type="checkbox" data-f="hints" ${this.settings.hints ? 'checked' : ''}> kurzer Text beim Verweilen mit der Maus</label></div>
       <h3>Verbindungshilfen (ICE)</h3>
       <div class="row"><label><input type="radio" name="ice" value="stun" ${ice.mode === 'stun' ? 'checked' : ''}> STUN verwenden</label>
@@ -388,11 +394,17 @@ export class Menu {
         }
         this.settings.name = v('name').slice(0, 20) || 'Spieler';
         this.settings.renderer = box.querySelector<HTMLSelectElement>('[data-f=renderer]')!.value === 'canvas' ? 'canvas' : 'auto';
+        this.settings.artStyle = box.querySelector<HTMLSelectElement>('[data-f=artStyle]')!.value === 'cartoon' ? 'cartoon' : 'realistic';
         this.settings.hints = box.querySelector<HTMLInputElement>('[data-f=hints]')!.checked;
         this.settings.ice = { mode, stunUrl: stun, turnUrl: turn, turnUser: v('tu'), turnPass: v('tp') };
         saveSettings(this.settings);
+        if (getArtStyle() !== this.settings.artStyle) {
+          setArtStyle(this.settings.artStyle);
+          this.stopBackdrop();
+          this.startBackdrop();
+        }
         msg.className = 'ok';
-        msg.textContent = 'Gespeichert.';
+        msg.textContent = 'Gespeichert. Der gewählte Grafikstil ist aktiv.';
       },
     });
   }
