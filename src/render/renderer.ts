@@ -5,6 +5,7 @@ import { T, isBarrier } from '../sim/map';
 import { barrierMask, barrierStyle, ditchMask, gateAlongX } from './terrainmask';
 import { BaseRenderer, OK, UNIT_SCALE, playerColor, type Placement, type UIOverlay } from './view';
 import { S, TH, TW } from './draw';
+import { artCanvas } from './artstyles';
 import {
   buildingSprite, drawScaffold, foundationSprite, makeGate, makeKnicks, makeTerrain,
   makeTrees, unitFrame, unitSprites, type BuildingSprite, type Sprite, type TerrainSprites,
@@ -94,12 +95,12 @@ export class CanvasRenderer extends BaseRenderer {
           default: img = ter.gras[v & 3];
         }
         if (c.fieldOcc[i]) img = ter.feld[v % 3];
-        g.drawImage(img, sx - tw / 2 - 0.5, sy - 0.5, tw + 1, th + 1);
+        g.drawImage(artCanvas(img, 'terrain'), sx - tw / 2 - 0.5, sy - 0.5, tw + 1, th + 1);
         drawn++;
-        if (t === T.GRABEN) g.drawImage(ter.ditch[ditchMask(c.map, x, y)], sx - tw / 2, sy, tw, th);
+        if (t === T.GRABEN) g.drawImage(artCanvas(ter.ditch[ditchMask(c.map, x, y)], 'terrain'), sx - tw / 2, sy, tw, th);
         if (t === T.WASSER || t === T.FLACH) {
           g.globalAlpha = t === T.FLACH ? 0.5 : 0.7;
-          g.drawImage(ter.wave[(waveFrame + v) & 3], sx - tw / 2, sy, tw, th);
+          g.drawImage(artCanvas(ter.wave[(waveFrame + v) & 3], 'terrain'), sx - tw / 2, sy, tw, th);
           g.globalAlpha = 1;
         } else if (t === T.WEG || t === T.TOR) {
           let m = 0;
@@ -112,7 +113,7 @@ export class CanvasRenderer extends BaseRenderer {
           if (road(x - 1, y)) m |= 2;
           if (road(x, y + 1)) m |= 4;
           if (road(x, y - 1)) m |= 8;
-          g.drawImage(ter.road[m], sx - tw / 2, sy, tw, th);
+          g.drawImage(artCanvas(ter.road[m], 'terrain'), sx - tw / 2, sy, tw, th);
         }
         if (c.trees[i]) this.pushObj(x + y + 1, OK.Tree, i);
         else if (isBarrier(t)) this.pushObj(x + y + 1, OK.Knick, i);
@@ -228,6 +229,7 @@ export class CanvasRenderer extends BaseRenderer {
 
   private drawSprite(s: Sprite, sx: number, sy: number, scale = 1, flip = false): void {
     const z = this.cam.z * scale;
+    const asset = artCanvas(s.c);
     const r = s.res ?? S;
     const w = (s.c.width / r) * z, h = (s.c.height / r) * z;
     if (sx + w < -50 || sx - w > this.vw + 50 || sy + h < -50 || sy - h > this.vh + 200) return;
@@ -235,9 +237,9 @@ export class CanvasRenderer extends BaseRenderer {
       this.g.save();
       this.g.translate(sx, sy);
       this.g.scale(-1, 1);
-      this.g.drawImage(s.c, -s.ax * z, -s.ay * z, w, h);
+      this.g.drawImage(asset, -s.ax * z, -s.ay * z, w, h);
       this.g.restore();
-    } else this.g.drawImage(s.c, sx - s.ax * z, sy - s.ay * z, w, h);
+    } else this.g.drawImage(asset, sx - s.ax * z, sy - s.ay * z, w, h);
   }
 
   private drawTree(i: number): void {

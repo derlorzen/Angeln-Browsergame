@@ -12,6 +12,7 @@ import {
   type Sprite as CSprite,
 } from './sprites';
 import { BaseRenderer, UNIT_SCALE, playerColor, type UIOverlay } from './view';
+import { artCanvas, type ArtCategory } from './artstyles';
 
 const HW = TW / 2, HH = TH / 2;
 const CHUNK = 8;
@@ -20,6 +21,7 @@ const isoY = (x: number, y: number) => (x + y) * HH;
 
 const texCache = new WeakMap<HTMLCanvasElement, Texture>();
 function tex(c: HTMLCanvasElement): Texture {
+  c = artCanvas(c);
   let t = texCache.get(c);
   if (!t) {
     t = Texture.from(c);
@@ -31,7 +33,8 @@ function tex(c: HTMLCanvasElement): Texture {
 }
 
 /** Einfacher Regal-Packer: viele kleine Canvas-Sprites in eine Textur (weniger Zeichenaufrufe). */
-function atlas(list: HTMLCanvasElement[]): Texture[] {
+function atlas(list: HTMLCanvasElement[], category: ArtCategory = 'sprite'): Texture[] {
+  list = list.map((c) => artCanvas(c, category));
   const W = 2048;
   let x = 0, y = 0, row = 0;
   const pos: [number, number][] = [];
@@ -138,7 +141,7 @@ export class PixiRenderer extends BaseRenderer {
     // Geländetexturen in einen Atlas packen
     const t = makeTerrain();
     const groups = [t.gras, t.lehm, t.ufer, t.moor, t.wasser, t.flach, t.feld, t.wave, t.road, t.heide, t.watt, t.ditch];
-    const all = atlas(groups.flat());
+    const all = atlas(groups.flat(), 'terrain');
     let k = 0;
     const take = (n: number) => all.slice(k, (k += n));
     this.tGround = {
