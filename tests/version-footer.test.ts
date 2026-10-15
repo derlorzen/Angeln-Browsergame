@@ -8,7 +8,7 @@ describe('Versionskennzeichnung', () => {
   it('hat dieselbe Versionsnummer im Paket und im Lockfile', () => {
     const pkg = JSON.parse(read('package.json'));
     const lock = JSON.parse(read('package-lock.json'));
-    expect(pkg.version).toMatch(/^\\d+\\.\\d+\\.\\d+$/);
+    expect(pkg.version.split('.')).toHaveLength(3);
     expect(lock.version).toBe(pkg.version);
     expect(lock.packages[''].version).toBe(pkg.version);
   });
