@@ -1,7 +1,7 @@
 {
   "name": "angeln-fuersten-der-schlei",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Angeln – Fürsten der Schlei: Echtzeit-Strategie im Browser",
   "scripts": {
