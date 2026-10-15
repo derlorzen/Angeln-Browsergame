@@ -357,12 +357,33 @@ export class Menu {
   }
 
   // ---------------------------------------------------------------- Einstellungen
+  private artPreview(): string {
+    const original = getArtStyle();
+    try {
+      return (['realistic', 'cartoon'] as const).map((style) => {
+        setArtStyle(style);
+        const building = portrait('b', 'wohnhaus', PLAYER_COLORS[0], 'angeln');
+        const worker = portrait('u', 'arbeiter', PLAYER_COLORS[0], 'angeln');
+        const name = style === 'realistic' ? 'Historisch' : 'Cartoon';
+        const hint = style === 'realistic' ? 'Feine Materialien & natürliche Proportionen' : 'Runde Formen & klare Farbakzente';
+        return '<button class="art-preview" type="button" data-art="' + style + '" aria-pressed="' +
+          (this.settings.artStyle === style) + '"><span class="art-images"><img src="' + building + '" alt="Wohnhaus ' +
+          name + '"><img src="' + worker + '" alt="Dorfbewohner ' + name + '"></span><strong>' +
+          name + '</strong><small>' + hint + '</small></button>';
+      }).join('');
+    } finally {
+      setArtStyle(original);
+    }
+  }
+
   private settingsScreen(): void {
     const ice = this.settings.ice;
+    const previews = this.artPreview();
     const box = this.show(`<h2>Einstellungen &amp; Netzwerk</h2>
       <div class="row"><label>Spielername</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
       <div class="row"><label>Grafikstil</label><select data-f="artStyle"><option value="realistic" ${this.settings.artStyle === 'realistic' ? 'selected' : ''}>Historisch · atmosphärisch</option><option value="cartoon" ${this.settings.artStyle === 'cartoon' ? 'selected' : ''}>Cartoon · farbenfroh</option></select></div>
-      <p class="note">Beide Looks nutzen eigene, zur Laufzeit erzeugte Sprite-Pakete für Gelände, Gebäude und Einheiten. Die Spielregeln bleiben gleich.</p>
+      <div class="art-preview-grid" aria-label="Grafikvorschau">${previews}</div>
+      <p class="note">Die Vorschau zeigt dieselben Einheiten und Gebäude mit unterschiedlichen Materialien und Formen. Die Spielregeln bleiben gleich.</p>
       <div class="row"><label>Grafiktechnik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
       <div class="row"><label>Geländehinweise</label><label style="min-width:0"><input type="checkbox" data-f="hints" ${this.settings.hints ? 'checked' : ''}> kurzer Text beim Verweilen mit der Maus</label></div>
       <h3>Verbindungshilfen (ICE)</h3>
@@ -374,6 +395,14 @@ export class Menu {
       <div class="row"><label>TURN Benutzer/Passwort</label><input type="text" data-f="tu" size="14" value="${esc(ice.turnUser)}"><input type="text" data-f="tp" size="14" value="${esc(ice.turnPass)}"></div>
       ${NETWORK_HTML}
       <div class="row"><button class="btn primary" data-a="save">Speichern</button><button class="btn" data-a="back">Zurück</button><span data-msg class="ok"></span></div>`);
+    const artSelect = box.querySelector<HTMLSelectElement>('[data-f=artStyle]')!;
+    const refreshArt = () => box.querySelectorAll<HTMLButtonElement>('[data-art]').forEach((btn) =>
+      btn.setAttribute('aria-pressed', String(btn.dataset.art === artSelect.value)));
+    box.querySelectorAll<HTMLButtonElement>('[data-art]').forEach((btn) => btn.addEventListener('click', () => {
+      artSelect.value = btn.dataset.art!;
+      refreshArt();
+    }));
+    artSelect.addEventListener('change', refreshArt);
     const v = (k: string) => box.querySelector<HTMLInputElement>(`[data-f="${k}"]`)!.value.trim();
     this.bind(box, {
       back: () => this.main(),
