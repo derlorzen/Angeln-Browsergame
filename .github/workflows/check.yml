@@ -2,7 +2,7 @@ name: Build und Tests
 
 on:
   push:
-    branches: [main, 'feat/dual-art-styles-main']
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -22,3 +22,30 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  # Die Veröffentlichung folgt bislang dem alten Repository-Standardbranch.
+  # Nach grünem Build wird er ohne Force-Push auf den aktuellen main-Stand gebracht.
+  sync-default:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Alten Standardbranch sicher synchronisieren
+        env:
+          LEGACY_BRANCH: claude/angeln-fuersten-schlei-game-qadoi2
+        run: |
+          git fetch origin "refs/heads/$LEGACY_BRANCH"
+          if [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD)" ]; then
+            echo "Bereits synchron."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "Standardbranch ist abgewichen; kein Force-Push." >&2
+            exit 1
+          fi
+          git push origin "HEAD:refs/heads/$LEGACY_BRANCH"
