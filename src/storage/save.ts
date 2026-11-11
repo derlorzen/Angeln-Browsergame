@@ -8,6 +8,7 @@ import { isMapId, type MapId } from '../sim/map';
 const SETTINGS_KEY = 'angeln-settings-v1';
 const SAVE_KEY = 'angeln-save-v1';
 const AUTO_KEY = 'angeln-autosave-v1';
+const ART_VERSION = 2;
 
 export interface Settings {
   name: string;
@@ -36,7 +37,7 @@ export function loadSettings(): Settings {
       // Frühere Versionen kannten nur „historisch“ und „Cartoon“; der neue Standard Retro gilt einmalig auch für sie.
       artStyle: s.artVersion === ART_VERSION ? parseArtStyle(s.artStyle) : DEFAULT_ART_STYLE,
       artVersion: ART_VERSION,
-      map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
+      faction: isFaction(s.faction) ? s.faction : 'angeln',
       map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
       hints: s.hints !== false,
     };

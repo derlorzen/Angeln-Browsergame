@@ -1012,8 +1012,9 @@ export class Game {
       this.renderer = await createRenderer(this.canvas, this.client, rendererPref);
       const s = loadSettings();
       s.artStyle = next;
+      s.artVersion = 2;
       saveSettings(s);
-      this.hud.message('Grafikstil: ' + (next === 'cartoon' ? 'Cartoon' : 'Historisch'));
+      this.hud.message('Grafikstil: ' + (next === 'retro' ? 'Retro' : next === 'cartoon' ? 'Modern (Cartoon)' : 'Modern (historisch)'));
     } catch (e) {
       // Notfall-Fallback: Canvas 2D und vorheriges Paket, die Partie läuft weiter.
       setArtStyle(previous);
@@ -1036,8 +1037,9 @@ export class Game {
       <div class="menu-col">
         <button class="btn" data-a="resume">Weiterspielen</button>
         <div class="row"><label>Grafikstil</label><select data-f="artStyle">
-          <option value="realistic" ${getArtStyle() === 'realistic' ? 'selected' : ''}>Historisch · atmosphärisch</option>
-          <option value="cartoon" ${getArtStyle() === 'cartoon' ? 'selected' : ''}>Cartoon · farbenfroh</option>
+          <option value="retro" ${getArtStyle() === 'retro' ? 'selected' : ''}>Retro · Pixel-Strategie (AoE II / RA2)</option>
+          <option value="realistic" ${getArtStyle() === 'realistic' ? 'selected' : ''}>Modern · historisch</option>
+          <option value="cartoon" ${getArtStyle() === 'cartoon' ? 'selected' : ''}>Modern · Cartoon</option>
         </select></div>
         ${this.opts.onSave ? '<button class="btn" data-a="save">Spiel speichern</button>' : ''}
         <button class="btn" data-a="help">Steuerung</button>
@@ -1049,13 +1051,13 @@ export class Game {
     const artSelect = el.querySelector<HTMLSelectElement>('[data-f=artStyle]')!;
     artSelect.addEventListener('change', () => {
       artSelect.disabled = true;
-      const style: ArtStyle = artSelect.value === 'cartoon' ? 'cartoon' : 'realistic';
+      const style: ArtStyle = artSelect.value === 'cartoon' ? 'cartoon' : artSelect.value === 'retro' ? 'retro' : 'realistic';
       void this.changeArtStyle(style).finally(() => {
         if (artSelect.isConnected) {
           artSelect.disabled = false;
           artSelect.value = getArtStyle();
           const msg = el.querySelector('[data-msg]');
-          if (msg) msg.textContent = 'Grafikstil: ' + (getArtStyle() === 'cartoon' ? 'Cartoon' : 'Historisch');
+          if (msg) msg.textContent = 'Grafikstil: ' + (getArtStyle() === 'retro' ? 'Retro' : getArtStyle() === 'cartoon' ? 'Modern (Cartoon)' : 'Modern (historisch)');
         }
       });
     });

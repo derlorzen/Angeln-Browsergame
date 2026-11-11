@@ -360,12 +360,12 @@ export class Menu {
   private artPreview(): string {
     const original = getArtStyle();
     try {
-      return (['realistic', 'cartoon'] as const).map((style) => {
+      return (['retro', 'realistic', 'cartoon'] as const).map((style) => {
         setArtStyle(style);
         const building = portrait('b', 'wohnhaus', PLAYER_COLORS[0], 'angeln');
         const worker = portrait('u', 'arbeiter', PLAYER_COLORS[0], 'angeln');
-        const name = style === 'realistic' ? 'Historisch' : 'Cartoon';
-        const hint = style === 'realistic' ? 'Feine Materialien & natürliche Proportionen' : 'Runde Formen & klare Farbakzente';
+        const name = style === 'retro' ? 'Retro' : style === 'realistic' ? 'Modern · historisch' : 'Modern · Cartoon';
+        const hint = style === 'retro' ? 'Pixelraster, Konturen & klassische RTS-Palette' : style === 'realistic' ? 'Feine Materialien & natürliche Proportionen' : 'Runde Formen & klare Farbakzente';
         return '<button class="art-preview" type="button" data-art="' + style + '" aria-pressed="' +
           (this.settings.artStyle === style) + '"><span class="art-images"><img src="' + building + '" alt="Wohnhaus ' +
           name + '"><img src="' + worker + '" alt="Dorfbewohner ' + name + '"></span><strong>' +
@@ -381,7 +381,7 @@ export class Menu {
     const previews = this.artPreview();
     const box = this.show(`<h2>Einstellungen &amp; Netzwerk</h2>
       <div class="row"><label>Spielername</label><input type="text" data-f="name" maxlength="20" value="${esc(this.settings.name)}"></div>
-      <div class="row"><label>Grafikstil</label><select data-f="artStyle"><option value="realistic" ${this.settings.artStyle === 'realistic' ? 'selected' : ''}>Historisch · atmosphärisch</option><option value="cartoon" ${this.settings.artStyle === 'cartoon' ? 'selected' : ''}>Cartoon · farbenfroh</option></select></div>
+      <div class="row"><label>Grafikstil</label><select data-f="artStyle"><option value="retro" ${this.settings.artStyle === 'retro' ? 'selected' : ''}>Retro · Pixel-Strategie (AoE II / RA2)</option><option value="realistic" ${this.settings.artStyle === 'realistic' ? 'selected' : ''}>Modern · historisch</option><option value="cartoon" ${this.settings.artStyle === 'cartoon' ? 'selected' : ''}>Modern · Cartoon</option></select></div>
       <div class="art-preview-grid" aria-label="Grafikvorschau">${previews}</div>
       <p class="note">Die Vorschau zeigt dieselben Einheiten und Gebäude mit unterschiedlichen Materialien und Formen. Die Spielregeln bleiben gleich.</p>
       <div class="row"><label>Grafiktechnik</label><select data-f="renderer"><option value="auto" ${this.settings.renderer === 'auto' ? 'selected' : ''}>WebGL (PixiJS) – empfohlen</option><option value="canvas" ${this.settings.renderer === 'canvas' ? 'selected' : ''}>Canvas 2D (Rückfall für alte Grafiktreiber)</option></select></div>
@@ -423,7 +423,9 @@ export class Menu {
         }
         this.settings.name = v('name').slice(0, 20) || 'Spieler';
         this.settings.renderer = box.querySelector<HTMLSelectElement>('[data-f=renderer]')!.value === 'canvas' ? 'canvas' : 'auto';
-        this.settings.artStyle = box.querySelector<HTMLSelectElement>('[data-f=artStyle]')!.value === 'cartoon' ? 'cartoon' : 'realistic';
+        const artValue = box.querySelector<HTMLSelectElement>('[data-f=artStyle]')!.value;
+        this.settings.artStyle = artValue === 'cartoon' ? 'cartoon' : artValue === 'retro' ? 'retro' : 'realistic';
+        this.settings.artVersion = 2;
         this.settings.hints = box.querySelector<HTMLInputElement>('[data-f=hints]')!.checked;
         this.settings.ice = { mode, stunUrl: stun, turnUrl: turn, turnUser: v('tu'), turnPass: v('tp') };
         saveSettings(this.settings);

@@ -1,12 +1,15 @@
 // Zwei echte, getrennte Zeichenstile mit gemeinsamer Sprite-Geometrie.
 // Zusätzliche geometrische Unterschiede kommen aus draw.ts, sprites.ts und units.ts.
+import { retroProcess } from './retro';
+
 export type ArtStyle = 'retro' | 'realistic' | 'cartoon';
 export const DEFAULT_ART_STYLE: ArtStyle = 'retro';
 export type ArtCategory = 'terrain' | 'building' | 'unit' | 'foliage' | 'sprite';
 
 export const ART_STYLE_NAMES: Record<ArtStyle, string> = {
-  realistic: 'Historisch · atmosphärisch',
-  cartoon: 'Cartoon · farbenfroh',
+  retro: 'Retro · Pixel-Strategie (AoE II / RA2)',
+  realistic: 'Modern · historisch, atmosphärisch',
+  cartoon: 'Modern · Cartoon, farbenfroh',
 };
 
 export function parseArtStyle(value: unknown): ArtStyle {
