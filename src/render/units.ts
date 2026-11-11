@@ -136,7 +136,7 @@ function figure(g: Ctx, p: Pose, b: Body, hat: (hx: number, hy: number) => void,
     }
   }
   // Im historischen Stil zusätzliche abgenutzte Stoffnähte, Cartoon zeigt große Farbflächen.
-  if (getArtStyle() === 'realistic') {
+  if (getArtStyle() !== 'cartoon') {
     g.strokeStyle = shade(b.coat, 0.38);
     g.lineWidth = 0.35;
     g.beginPath();

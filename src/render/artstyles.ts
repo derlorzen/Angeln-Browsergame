@@ -1,6 +1,7 @@
 // Zwei echte, getrennte Zeichenstile mit gemeinsamer Sprite-Geometrie.
 // Zusätzliche geometrische Unterschiede kommen aus draw.ts, sprites.ts und units.ts.
-export type ArtStyle = 'realistic' | 'cartoon';
+export type ArtStyle = 'retro' | 'realistic' | 'cartoon';
+export const DEFAULT_ART_STYLE: ArtStyle = 'retro';
 export type ArtCategory = 'terrain' | 'building' | 'unit' | 'foliage' | 'sprite';
 
 export const ART_STYLE_NAMES: Record<ArtStyle, string> = {
@@ -9,10 +10,10 @@ export const ART_STYLE_NAMES: Record<ArtStyle, string> = {
 };
 
 export function parseArtStyle(value: unknown): ArtStyle {
-  return value === 'cartoon' ? 'cartoon' : 'realistic';
+  return value === 'cartoon' || value === 'realistic' || value === 'retro' ? value : DEFAULT_ART_STYLE;
 }
 
-let currentStyle: ArtStyle = 'realistic';
+let currentStyle: ArtStyle = DEFAULT_ART_STYLE;
 export const getArtStyle = (): ArtStyle => currentStyle;
 export function setArtStyle(value: ArtStyle): void {
   currentStyle = parseArtStyle(value);
@@ -22,6 +23,10 @@ export function setArtStyle(value: ArtStyle): void {
 const sourceCategory = new WeakMap<HTMLCanvasElement, ArtCategory>();
 const imageCaches = new Map<string, WeakMap<HTMLCanvasElement, HTMLCanvasElement>>();
 const clamp = (n: number): number => Math.max(0, Math.min(255, n));
+
+/** Retro-Pixelgröße in Quellpixeln: Sprites sind 2x, Einheiten 4x aufgelöst. */
+const SPRITE_BLOCK = 2;
+const UNIT_BLOCK = 4;
 
 /** Ordnet prozeduralen Originalen einen Materialtyp zu (auch für beide Renderer). */
 export function tagArtCanvas<T extends HTMLCanvasElement>(source: T, category: ArtCategory): T {
@@ -50,7 +55,15 @@ export function artCanvas(source: HTMLCanvasElement, category: ArtCategory = 'sp
   g.drawImage(source, 0, 0);
   const img = g.getImageData(0, 0, output.width, output.height);
   const data = img.data;
-  const original = new Uint8ClampedArray(data);
+    if (currentStyle === 'retro') {
+    // Einheiten liegen in vierfacher, alle anderen Sprites in doppelter Auflösung vor (siehe units.ts / draw.ts S).
+    const processed = retroProcess(data, output.width, output.height, { block: material === 'unit' ? UNIT_BLOCK : SPRITE_BLOCK, category: material });
+    data.set(processed);
+    g.putImageData(img, 0, 0);
+    cache.set(source, output);
+    return output;
+  }
+const original = new Uint8ClampedArray(data);
   const w = output.width;
   const h = output.height;
   const isGround = material === 'terrain';

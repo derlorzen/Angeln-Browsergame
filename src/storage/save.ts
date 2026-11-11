@@ -1,5 +1,6 @@
 // Lokale Speicherung (localStorage): Einstellungen und ein Einzelspieler-Spielstand.
 import type { AIState } from '../ai/ai';
+import { DEFAULT_ART_STYLE, parseArtStyle, type ArtStyle } from '../render/artstyles';
 import { isFaction, type FactionId } from '../data/factions';
 import { DEFAULT_ICE, type IceSettings } from '../net/peer';
 import { isMapId, type MapId } from '../sim/map';
@@ -13,14 +14,16 @@ export interface Settings {
   ice: IceSettings;
   tutorialDone: boolean;
   renderer: 'auto' | 'canvas';
-  artStyle: 'realistic' | 'cartoon';
+  artStyle: ArtStyle;
+  /** Version der Grafikauswahl: 2 = bewusst oder per Standard (Retro) gesetzt. Ältere Stände wurden einmalig auf Retro gestellt. */
+  artVersion: number;
   faction: FactionId;
   map: MapId | 'zufall';
   hints: boolean;
 }
 
 export function loadSettings(): Settings {
-  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', artStyle: 'realistic', faction: 'angeln', map: 'schlei', hints: true };
+  const def: Settings = { name: 'Spieler', ice: { ...DEFAULT_ICE }, tutorialDone: false, renderer: 'auto', artStyle: DEFAULT_ART_STYLE, artVersion: ART_VERSION, faction: 'angeln', map: 'schlei', hints: true };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return def;
@@ -30,8 +33,10 @@ export function loadSettings(): Settings {
       ice: { ...DEFAULT_ICE, ...(s.ice ?? {}), mode: s.ice?.mode === 'none' ? 'none' : 'stun' },
       tutorialDone: !!s.tutorialDone,
       renderer: s.renderer === 'canvas' ? 'canvas' : 'auto',
-      artStyle: s.artStyle === 'cartoon' ? 'cartoon' : 'realistic',
-      faction: isFaction(s.faction) ? s.faction : 'angeln',
+      // Frühere Versionen kannten nur „historisch“ und „Cartoon“; der neue Standard Retro gilt einmalig auch für sie.
+      artStyle: s.artVersion === ART_VERSION ? parseArtStyle(s.artStyle) : DEFAULT_ART_STYLE,
+      artVersion: ART_VERSION,
+      map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
       map: isMapId(s.map) || s.map === 'zufall' ? s.map : 'schlei',
       hints: s.hints !== false,
     };

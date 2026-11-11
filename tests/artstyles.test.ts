@@ -3,8 +3,8 @@ import { ART_STYLE_NAMES, getArtStyle, parseArtStyle, setArtStyle } from '../src
 
 describe('Grafikpakete', () => {
   it('liest alte und fehlerhafte Einstellungen kompatibel', () => {
-    expect(parseArtStyle(undefined)).toBe('realistic');
-    expect(parseArtStyle('unbekannt')).toBe('realistic');
+    expect(parseArtStyle(undefined)).toBe('retro');
+    expect(parseArtStyle('unbekannt')).toBe('retro');
     expect(parseArtStyle('cartoon')).toBe('cartoon');
   });
   it('kann umschalten, ohne den Spielzustand zu verändern', () => {
@@ -15,7 +15,7 @@ describe('Grafikpakete', () => {
     expect(getArtStyle()).toBe('realistic');
     setArtStyle(before);
   });
-  it('hat Namen für beide auswählbaren Stile', () => {
-    expect(Object.keys(ART_STYLE_NAMES)).toEqual(['realistic', 'cartoon']);
+  it('hat Namen für alle auswählbaren Stile', () => {
+    expect(Object.keys(ART_STYLE_NAMES)).toEqual(['retro', 'realistic', 'cartoon']);
   });
 });
