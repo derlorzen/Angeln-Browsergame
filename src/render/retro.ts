@@ -92,8 +92,7 @@ export function retroProcess(src: Uint8ClampedArray, w: number, h: number, opt: 
   const cat = opt.category;
   const ground = cat === 'terrain';
   const outline = cat !== 'terrain';
-  // Dithering nur für Flächen mit Verläufen: Gelände und Laub. Gebäude und Figuren bleiben sauber.
-  const dither = ground ? 13 : cat === 'foliage' ? 9 : 0;
+  const dither = 0;
 
   // 1) Raster füllen
   const cr = new Uint8Array(gw * gh), cg = new Uint8Array(gw * gh), cb = new Uint8Array(gw * gh);

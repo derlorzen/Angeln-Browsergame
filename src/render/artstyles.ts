@@ -18,6 +18,7 @@ export function parseArtStyle(value: unknown): ArtStyle {
 
 let currentStyle: ArtStyle = DEFAULT_ART_STYLE;
 export const getArtStyle = (): ArtStyle => currentStyle;
+export const isRetro = (): boolean => currentStyle === 'retro';
 export function setArtStyle(value: ArtStyle): void {
   currentStyle = parseArtStyle(value);
 }
@@ -27,9 +28,12 @@ const sourceCategory = new WeakMap<HTMLCanvasElement, ArtCategory>();
 const imageCaches = new Map<string, WeakMap<HTMLCanvasElement, HTMLCanvasElement>>();
 const clamp = (n: number): number => Math.max(0, Math.min(255, n));
 
-/** Retro-Pixelgröße in Quellpixeln: Sprites sind 2x, Einheiten 4x aufgelöst. */
-const SPRITE_BLOCK = 2;
-const UNIT_BLOCK = 4;
+/** Retro-Pixelgröße je Spriteklasse; Gelände ist gröber, damit natürliche Mikrotextur nicht als Rauschen erscheint. */
+export function retroBlockSize(category: ArtCategory): number {
+  if (category === 'terrain') return 8;
+  if (category === 'unit') return 4;
+  return 4;
+}
 
 /** Ordnet prozeduralen Originalen einen Materialtyp zu (auch für beide Renderer). */
 export function tagArtCanvas<T extends HTMLCanvasElement>(source: T, category: ArtCategory): T {
@@ -60,7 +64,7 @@ export function artCanvas(source: HTMLCanvasElement, category: ArtCategory = 'sp
   const data = img.data;
     if (currentStyle === 'retro') {
     // Einheiten liegen in vierfacher, alle anderen Sprites in doppelter Auflösung vor (siehe units.ts / draw.ts S).
-    const processed = retroProcess(data, output.width, output.height, { block: material === 'unit' ? UNIT_BLOCK : SPRITE_BLOCK, category: material });
+    const processed = retroProcess(data, output.width, output.height, { block: retroBlockSize(material), category: material });
     data.set(processed);
     g.putImageData(img, 0, 0);
     cache.set(source, output);

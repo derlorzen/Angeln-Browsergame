@@ -1,9 +1,9 @@
 {
   "name": "angeln-fuersten-der-schlei",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
-  "description": "Angeln \u2013 F\u00fcrsten der Schlei: Echtzeit-Strategie im Browser",
+  "description": "Angeln – Fürsten der Schlei: Echtzeit-Strategie im Browser",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -12,7 +12,7 @@ import {
   type Sprite as CSprite,
 } from './sprites';
 import { BaseRenderer, UNIT_SCALE, playerColor, type UIOverlay } from './view';
-import { artCanvas, type ArtCategory } from './artstyles';
+import { artCanvas, isRetro, type ArtCategory } from './artstyles';
 
 const HW = TW / 2, HH = TH / 2;
 const CHUNK = 8;
@@ -25,8 +25,9 @@ function tex(c: HTMLCanvasElement): Texture {
   let t = texCache.get(c);
   if (!t) {
     t = Texture.from(c);
-    t.source.autoGenerateMipmaps = true;
-    t.source.updateMipmaps();
+    t.source.autoGenerateMipmaps = !isRetro();
+    t.source.scaleMode = isRetro() ? 'nearest' : 'linear';
+    if (!isRetro()) t.source.updateMipmaps();
     texCache.set(c, t);
   }
   return t;
@@ -51,9 +52,10 @@ function atlas(list: HTMLCanvasElement[], category: ArtCategory = 'sprite'): Tex
   const [cv, g] = mkCanvas(W, y + row + 2);
   list.forEach((c, k) => g.drawImage(c, pos[k][0], pos[k][1]));
   const base = Texture.from(cv);
-  // Mipmaps: saubere Verkleinerung beim Herauszoomen (Sprites liegen doppelt aufgelöst vor)
-  base.source.autoGenerateMipmaps = true;
-  base.source.updateMipmaps();
+  // Historische Stile nutzen Mipmaps für weiches Zoomen; Retro sampelt nearest-neighbor ohne Glättung.
+  base.source.autoGenerateMipmaps = !isRetro();
+  base.source.scaleMode = isRetro() ? 'nearest' : 'linear';
+  if (!isRetro()) base.source.updateMipmaps();
   return list.map((c, k) => new Texture({ source: base.source, frame: new Rectangle(pos[k][0], pos[k][1], c.width, c.height) }));
 }
 

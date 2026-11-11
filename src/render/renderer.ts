@@ -5,7 +5,7 @@ import { T, isBarrier } from '../sim/map';
 import { barrierMask, barrierStyle, ditchMask, gateAlongX } from './terrainmask';
 import { BaseRenderer, OK, UNIT_SCALE, playerColor, type Placement, type UIOverlay } from './view';
 import { S, TH, TW } from './draw';
-import { artCanvas } from './artstyles';
+import { artCanvas, isRetro } from './artstyles';
 import {
   buildingSprite, drawScaffold, foundationSprite, makeGate, makeKnicks, makeTerrain,
   makeTrees, unitFrame, unitSprites, type BuildingSprite, type Sprite, type TerrainSprites,
@@ -54,7 +54,7 @@ export class CanvasRenderer extends BaseRenderer {
     const c = this.c;
     const z = this.cam.z;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    g.imageSmoothingEnabled = true;
+    g.imageSmoothingEnabled = !isRetro();
     g.fillStyle = '#0b0d08';
     g.fillRect(0, 0, this.vw, this.vh);
 
@@ -177,7 +177,7 @@ export class CanvasRenderer extends BaseRenderer {
       (TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr, -(TW / 2) * z * this.dpr, (TH / 2) * z * this.dpr,
       (-this.cam.x * z + this.vw / 2) * this.dpr, (-this.cam.y * z + this.centerY) * this.dpr,
     );
-    g.imageSmoothingEnabled = true;
+    g.imageSmoothingEnabled = !isRetro();
     g.drawImage(this.fog, 0, 0);
     g.restore();
 

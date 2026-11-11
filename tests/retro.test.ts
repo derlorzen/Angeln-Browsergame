@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { retroProcess } from '../src/render/retro';
+import { retroBlockSize } from '../src/render/artstyles';
 
 describe('Retro-Pipeline', () => {
+  it('vergröbert das Gelände stärker als Objekt-Sprites für klare Pixelkacheln', () => {
+    expect(retroBlockSize('terrain')).toBe(8);
+    expect(retroBlockSize('building')).toBe(4);
+    expect(retroBlockSize('unit')).toBe(4);
+  });
   it('erhält Bildgröße und transparente Bereiche bei der Pixelrasterung', () => {
     const input = new Uint8ClampedArray(4 * 4 * 4);
     // Ein 2×2-Block mit deckender Farbe; der Rest bleibt transparent.
