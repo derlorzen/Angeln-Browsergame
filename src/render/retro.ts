@@ -65,7 +65,7 @@ function nearest(r: number, g: number, b: number): number {
   let best = 0, bestD = Infinity;
   for (let i = 0; i < RETRO_PALETTE.length; i++) {
     const p = RETRO_PALETTE[i];
-    const rm = (p[0] + cr) / 2; // „redmean“-Abstand: näher an der Wahrnehmung als reines RGB
+    const rm = (p[0] + cr) / 2; // "redmean"-Abstand: näher an der Wahrnehmung als reines RGB
     const dr = p[0] - cr, dg = p[1] - cg, db = p[2] - cb;
     const d = (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
     if (d < bestD) {
@@ -131,7 +131,7 @@ export function retroProcess(src: Uint8ClampedArray, w: number, h: number, opt: 
         continue;
       }
       if (ca[gi] === 2 || ground) {
-        // Kontrast und Sättigung leicht anheben: kräftigere, „gemalte“ Farben
+        // Kontrast und Sättigung leicht anheben: kräftigere, "gemalte" Farben
         const l2 = lum;
         r = l2 + (r - l2) * 1.14;
         g = l2 + (g - l2) * 1.14;
@@ -168,7 +168,7 @@ export function retroProcess(src: Uint8ClampedArray, w: number, h: number, opt: 
       for (let gx = 0; gx < gw; gx++) {
         const gi = gy * gw + gx;
         if (ca[gi] !== 2) continue;
-        // Kontur dort, wo ein deckendes Pixel an „leer“ oder an einen Schatten grenzt.
+        // Kontur dort, wo ein deckendes Pixel an "leer" oder an einen Schatten grenzt.
         const left = gx > 0 && ca[gi - 1] === 2, right = gx + 1 < gw && ca[gi + 1] === 2;
         const up = gy > 0 && ca[gi - gw] === 2, down = gy + 1 < gh && ca[gi + gw] === 2;
         if (!left || !right || !up || !down) edge[gi] = 1;
@@ -197,6 +197,61 @@ export function retroProcess(src: Uint8ClampedArray, w: number, h: number, opt: 
       out[o + 1] = pg[gi];
       out[o + 2] = pb[gi];
       out[o + 3] = t === 2 ? 255 : 105;
+    }
+  }
+  return out;
+}
+
+/** Malen im Realistic-Stil: subtile Textur, weiches Licht, feine Kornstruktur.
+ *  Keine harten Kanten, aber klare Beleuchtung und natürliche Materialfarben. */
+export function paintRealistic(data: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(data.length);
+  const clamp8 = (n: number): number => Math.max(0, Math.min(255, n));
+  const hash = (x: number, y: number): number => (Math.imul(x + 11, 374761393) ^ Math.imul(y + 17, 668265263)) >>> 0;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      const i = row + x * 4;
+      const a = data[i + 3];
+      if (a === 0) continue;
+      let r = data[i], g = data[i + 1], b = data[i + 2];
+      const lum = r * 0.299 + g * 0.587 + b * 0.114;
+      // Feine, deterministische Körnung statt grobem Dithering
+      const grain = (((hash(x, y) ^ (hash(x, y) >>> 13)) >>> 0) % 9) - 4;
+      // Warme Lichtkante oben/links, kühle Abschattung rechts/unten
+      const shadeTop = 1.04 - 0.04 * (y / Math.max(1, h));
+      const shadeSide = 1.02 - 0.05 * (x / Math.max(1, w));
+      r = clamp8(((r - 118) * 1.08 + 118 + grain + 4) * shadeTop * shadeSide);
+      g = clamp8(((g - 118) * 1.08 + 118 + grain * 0.7 + 2) * shadeTop * shadeSide);
+      b = clamp8(((b - 118) * 1.08 + 118 + grain * 0.4 - 2) * shadeTop * shadeSide);
+      out[i] = r; out[i + 1] = g; out[i + 2] = b; out[i + 3] = a;
+    }
+  }
+  return out;
+}
+
+/** Malen im Cartoon-Stil: große zusammenhängende Farbflächen, klare Licht/Schatten-Trennung.
+ *  Keine Körnung, kräftige aber abgestimmte Farben, klare Konturen. */
+export function paintCartoon(data: Uint8ClampedArray, w: number, h: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(data.length);
+  const clamp8 = (n: number): number => Math.max(0, Math.min(255, n));
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      const i = row + x * 4;
+      const a = data[i + 3];
+      if (a === 0) continue;
+      let r = data[i], g = data[i + 1], b = data[i + 2];
+      const lum = r * 0.299 + g * 0.587 + b * 0.114;
+      // Grobe Quantisierung: 3 Stufen pro Kanal statt feiner Verläufe
+      const step = 32;
+      const quant = (v: number): number => clamp8(Math.round(clamp8(v) / step) * step);
+      // Klare Licht-Schatten-Trennung: oben links hell, rechts unten dunkel
+      const light = 1.06 - 0.07 * (y / Math.max(1, h)) - 0.03 * (x / Math.max(1, w));
+      r = quant((r * 1.18 + 6) * light);
+      g = quant((g * 1.18 + 6) * light);
+      b = quant((b * 1.18 + 6) * light);
+      out[i] = r; out[i + 1] = g; out[i + 2] = b; out[i + 3] = a;
     }
   }
   return out;

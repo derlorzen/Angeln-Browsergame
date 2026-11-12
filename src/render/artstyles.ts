@@ -63,66 +63,27 @@ export function artCanvas(source: HTMLCanvasElement, category: ArtCategory = 'sp
   const img = g.getImageData(0, 0, output.width, output.height);
   const data = img.data;
     if (currentStyle === 'retro') {
-    // Einheiten liegen in vierfacher, alle anderen Sprites in doppelter Auflösung vor (siehe units.ts / draw.ts S).
-    const processed = retroProcess(data, output.width, output.height, { block: retroBlockSize(material), category: material });
-    data.set(processed);
-    g.putImageData(img, 0, 0);
-    cache.set(source, output);
-    return output;
-  }
-const original = new Uint8ClampedArray(data);
-  const w = output.width;
-  const h = output.height;
-  const isGround = material === 'terrain';
-  const isFoliage = material === 'foliage';
-  const steps = isGround ? 18 : isFoliage ? 25 : 28;
-
-  for (let y = 0; y < h; y++) {
-    const row = y * w * 4;
-    for (let x = 0; x < w; x++) {
-      const i = row + x * 4;
-      if (original[i + 3] === 0) continue;
-      const r = original[i], gr = original[i + 1], b = original[i + 2];
-      const light = r * 0.299 + gr * 0.587 + b * 0.114;
-      if (cartoon) {
-        // Warmes, gut lesbares 3D-Cartoon-Material: saubere Farbflächen,
-        // deutliche Lichter und kräftige, aber nicht zugelaufene Schatten.
-        const sat = isGround ? 1.13 : 1.28;
-        const surfaceLight = (1.085 - 0.06 * (y / Math.max(h, 1)));
-        const quant = (v: number) => clamp(Math.round(clamp(v) / steps) * steps);
-        data[i] = quant(((r - light) * sat + light + 7) * surfaceLight);
-        data[i + 1] = quant(((gr - light) * sat + light + 9) * surfaceLight);
-        data[i + 2] = quant(((b - light) * sat + light + 10) * surfaceLight);
-        // Richtungslicht oben/links auf freigestellten Gegenständen.
-        if (!isGround) {
-          const left = x > 0 ? original[i - 1 * 4 + 3] : 0;
-          const up = y > 0 ? original[i - w * 4 + 3] : 0;
-          const right = x + 1 < w ? original[i + 4 + 3] : 0;
-          const down = y + 1 < h ? original[i + w * 4 + 3] : 0;
-          if (original[i + 3] > 160 && (!left || !up)) {
-            data[i] = clamp(data[i] + 22);
-            data[i + 1] = clamp(data[i + 1] + 16);
-            data[i + 2] = clamp(data[i + 2] + 10);
-          } else if (original[i + 3] > 160 && (!right || !down)) {
-            data[i] *= 0.65;
-            data[i + 1] *= 0.65;
-            data[i + 2] *= 0.65;
-          }
-        }
-      } else {
-        // Historische Materialoberflächen: dezente Alterung, warme Lichtkante,
-        // kühle Abschattung und feinere, deterministische Textur.
-        const hash = (Math.imul(x + 11, 374761393) ^ Math.imul(y + 17, 668265263)) >>> 0;
-        const grain = (((hash ^ (hash >>> 13)) >>> 0) % 13) - 6;
-        const contrast = isGround ? 1.065 : 1.13;
-        const shading = 1.065 - 0.095 * (y / Math.max(1, h));
-        data[i] = clamp(((r - 120) * contrast + 120 + grain + 5) * shading);
-        data[i + 1] = clamp(((gr - 120) * contrast + 120 + grain * 0.72 + 2) * shading);
-        data[i + 2] = clamp(((b - 120) * contrast + 120 + grain * 0.45 - 3) * shading);
-      }
+      // Retro: harte Kanten, blockiges Dithering, harte Alphakanten
+      const processed = retroProcess(data, output.width, output.height, { block: retroBlockSize(material), category: material });
+      data.set(processed);
+      g.putImageData(img, 0, 0);
+      cache.set(source, output);
+      return output;
     }
-  }
-  g.putImageData(img, 0, 0);
-  cache.set(source, output);
-  return output;
+    else if (currentStyle === 'realistic') {
+      // Realistic: subtile Textur, feine Kornstruktur, warme Lichtkante
+      const processed = paintRealistic(data, output.width, output.height);
+      data.set(processed);
+      g.putImageData(img, 0, 0);
+      cache.set(source, output);
+      return output;
+    }
+    else {
+      // Cartoon: große Farbflächen, klare Licht/Schatten-Trennung, keine Körnung
+      const processed = paintCartoon(data, output.width, output.height);
+      data.set(processed);
+      g.putImageData(img, 0, 0);
+      cache.set(source, output);
+      return output;
+    }
 }
